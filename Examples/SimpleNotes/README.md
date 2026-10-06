@@ -1,6 +1,7 @@
 # SimpleNotes
 
-A small Apple Notes: folders, notes in rich text, search, pinning. It runs
+A small Apple Notes: folders, notes in rich text, search, pinning,
+Recently Deleted, and moving notes between folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
@@ -23,7 +24,7 @@ merges it through `TTSyncResolver`. The note is not settled for one side.
 | The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard) |
 | The server | `Server/SNServer.m` | ODataKit's server (HTTPServerKit, ODataService) with ODataSync's part of it |
 | The model | `SimpleNotes.xcdatamodeld` | `Folder` and `Note`; the classes' properties are generated as each target builds (Codegen: Category/Extension), by Xcode or by FreeCoreData's momc |
-| Tests | `Tests/` | The device against the service in one process; the text view's binding; two devices through the running server; each app driven from within |
+| Tests | `Tests/` | The device against the service in one process; the text view's binding; migration from an older model; two devices through the running server; each app driven from within |
 
 The device, in `Shared/`:
 
@@ -41,6 +42,62 @@ The device, in `Shared/`:
 - **`SNResolver`**: merges a note's body; its title becomes the merged first
   line. Other properties are taken from whichever side changed them, or from
   the later writer if both did. An edit outlives a deletion that didn't see it.
+- **`SNMigration`**: brings a store made by an older version of the model up
+  to date when it opens (see "Model versions" below).
+
+## Recently Deleted
+
+Deleting a note moves it to Recently Deleted, as in Apple Notes:
+
+- It leaves its folder's list and search. In Recently Deleted it's read-only
+  and shows how many days it has left.
+- **Recover** puts it back in its folder, or in All Notes if the folder is
+  gone. Moving it to a folder also recovers it.
+- **Delete Immediately**, or **Delete All**, removes it for good, on every
+  device.
+- After 30 days it's removed for good. Each device checks when it opens and
+  after every sync.
+- Deleting a folder moves its notes to Recently Deleted.
+
+Deleting is an ordinary change to the note (its `deletedAt`), so it syncs and
+merges like any other edit. A note deleted on one device while edited on
+another ends up deleted on both, with the edit kept, ready to recover.
+
+## Moving notes
+
+On the Mac and GNUstep, use **File > Move To**, or drag a note onto a folder.
+Dropping it on Recently Deleted deletes it. On iOS, swipe the note and choose
+**Move**.
+
+## Model versions
+
+`SimpleNotes.xcdatamodeld` holds every version of the model; version 2 added
+`Note.deletedAt`. To add another:
+
+1. Add a version in Xcode (or copy the latest `.xcdatamodel` and name it
+   `SimpleNotes 3.xcdatamodel`), and give it the next
+   `userDefinedModelVersionIdentifier`.
+2. Make it current in `.xccurrentversion`.
+3. Run `Scripts/xcodeproj.py`.
+
+Keep each change additive (new optional attributes, new entities), so a
+lightweight migration covers it.
+
+What happens when a store opens:
+
+- **On a device**, `SNNotes` migrates its SQLite store to the current
+  version before opening it. The migration keeps what ODataSync needs: the
+  store's metadata (including its replica ID) and its history. So a change
+  saved before the update and not yet sent still goes at the next sync. The
+  previous store is kept beside the new one, as `.old`.
+- **On the server**, a SQLite store is migrated the same way. A PostgreSQL or
+  MariaDB store migrates itself, in place.
+- **Devices not yet updated** keep syncing: they name their model's version
+  with every request, and the server accepts their writes as they are.
+
+Core Data's automatic migration can't do the device's part, because a store
+holding ODataSync's entities wasn't made from any of the compiled models as
+they are. `SNMigration` finds the right version and migrates it explicitly.
 
 ## Running it
 
@@ -128,6 +185,5 @@ typed into it at the same time.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Attachments, checklists, moving a note between folders in the AppKit app,
-  and undo across a merge (the undo stack is cleared when a sync changes
-  the open note).
+- Attachments, checklists, nested folders, and undo across a merge (the undo
+  stack is cleared when a sync changes the open note).

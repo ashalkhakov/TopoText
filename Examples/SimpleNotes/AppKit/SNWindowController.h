@@ -9,7 +9,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate>
+@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSMenuDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 @property (nonatomic, strong) IBOutlet NSTableView *folderTable;
 @property (nonatomic, strong) IBOutlet NSTableView *noteTable;
@@ -21,12 +21,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)closeEditor;
 // The note of that title chosen in the list, as a click would (the self-test).
 - (BOOL)selectNoteTitled:(NSString *)title;
+// All Notes, or Recently Deleted, chosen in the folder list.
+- (void)showAllNotes;
+- (void)showRecentlyDeleted;
+// What the window shows, in words: the folder chosen and the notes listed
+// (a self-test's failures say it).
+- (NSString *)shownText;
 
 // The menus' actions (the window's delegate is in the responder chain).
 - (IBAction)newNote:(nullable id)sender;
 - (IBAction)newFolder:(nullable id)sender;
 - (IBAction)deleteNote:(nullable id)sender;
 - (IBAction)deleteFolder:(nullable id)sender;
+// Recently Deleted: a note back, or gone for good; all of them gone.
+- (IBAction)recoverNote:(nullable id)sender;
+- (IBAction)emptyRecentlyDeleted:(nullable id)sender;
+// The Move To menu's items: the note into the folder an item names.
+- (IBAction)moveNoteToFolder:(nullable id)sender;
 - (IBAction)renameFolder:(nullable id)sender;
 - (IBAction)togglePinned:(nullable id)sender;
 - (IBAction)sync:(nullable id)sender;

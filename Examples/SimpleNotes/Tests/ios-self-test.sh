@@ -11,7 +11,12 @@ here=$(cd "$(dirname "$0")" && pwd)
 udid=$(xcrun simctl list devices available | grep -F "    $device (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
 [ -n "$udid" ] || { echo "no simulator named $device"; exit 1; }
 echo "simulator: $device ($udid)"
-xcrun simctl boot "$udid" 2>/dev/null; xcrun simctl bootstatus "$udid" -b >/dev/null
+# Booted, and up: simctl's bootstatus -b can wait for ever, so this polls.
+xcrun simctl boot "$udid" 2>/dev/null
+for i in $(seq 1 120); do
+  xcrun simctl list devices | grep -F "($udid) (Booted)" >/dev/null && xcrun simctl spawn "$udid" launchctl print system >/dev/null 2>&1 && break
+  sleep 1
+done
 log=$(mktemp)
 "$server" -StoreURL Temporary -Port "$port" -AccessLog NO > "$log" 2>&1 &
 pid=$!
@@ -25,7 +30,7 @@ python3 "$here/seed.py" "$root" || exit 1
 xcrun simctl install "$udid" "$app" || exit 1
 id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
 out=$(mktemp)
-xcrun simctl launch --console-pty --terminate-running-process "$udid" "$id" --self-test "$root" 2>&1 | tee "$out" | grep -E "^(PASS|FAIL|self-test)"
+xcrun simctl launch --console-pty --terminate-running-process "$udid" "$id" --self-test "$root" 2>&1 | tee "$out" | grep --line-buffered -E "^(PASS|FAIL|self-test)"
 grep -q "^self-test: passed" "$out"; status=$?
 rm -f "$out"
 exit $status

@@ -27,7 +27,9 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 @interface SNNotes : NSObject
 
 // The store at storeURL, made the first time, of the compiled model at
-// modelURL (nil: the main bundle's SimpleNotes.momd).
+// modelURL (nil: the main bundle's SimpleNotes.momd). One an older version
+// of the model made is migrated first (SNMigration.h); what it had not
+// sent yet goes at the next sync.
 - (nullable instancetype)initWithStoreURL:(NSURL *)storeURL modelURL:(nullable NSURL *)modelURL
                                     error:(NSError **)error NS_DESIGNATED_INITIALIZER;
 - (nullable instancetype)initWithStoreURL:(NSURL *)storeURL error:(NSError **)error;
@@ -67,19 +69,36 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // By name.
 - (NSArray<SNFolder *> *)folders;
 // Of a folder (nil: all of them), whose text has text in it (nil: all),
-// pinned first, then the latest changed.
+// pinned first, then the latest changed; none deleted.
 - (NSArray<SNNote *> *)notesInFolder:(nullable SNFolder *)folder matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesInFolder:(nullable SNFolder *)folder;
+// Recently Deleted: the notes deleted, and not yet for good, the latest
+// deleted first.
+- (NSArray<SNNote *> *)deletedNotesMatching:(nullable NSString *)text;
+- (NSUInteger)countOfDeletedNotes;
 
 #pragma mark Changing (saved at once)
 
 - (SNFolder *)addFolderNamed:(NSString *)name;
 - (void)renameFolder:(SNFolder *)folder to:(NSString *)name;
-// Its notes stay, in no folder.
+// Its notes go to Recently Deleted, as Apple Notes does.
 - (void)deleteFolder:(SNFolder *)folder;
 - (SNNote *)addNoteInFolder:(nullable SNFolder *)folder;
+// To Recently Deleted, where it stays SNRecentlyDeletedDays, and can be
+// recovered meanwhile. Deleted elsewhere, it is so here too: a deletion is
+// a change like any other, and syncs.
 - (void)deleteNote:(SNNote *)note;
+// Back from Recently Deleted, into its folder (or none, its folder gone).
+- (void)recoverNote:(SNNote *)note;
+// Gone for good, everywhere: from Recently Deleted (Delete Immediately).
+- (void)deleteNoteImmediately:(SNNote *)note;
+// Every note in Recently Deleted, gone for good.
+- (void)emptyRecentlyDeleted;
+// The notes deleted more than SNRecentlyDeletedDays before now, gone for
+// good; done when the notes open and after each sync. How many.
+- (NSUInteger)removeNotesDeletedBefore:(NSDate *)date;
 - (void)setNote:(SNNote *)note pinned:(BOOL)pinned;
+// Into another folder (nil: none); one in Recently Deleted is recovered so.
 - (void)moveNote:(SNNote *)note toFolder:(nullable SNFolder *)folder;
 // What the context has, saved (later, when a sync is running).
 - (void)save;
@@ -110,6 +129,11 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Flushed, and no longer kept up to date.
 - (void)close;
 @end
+
+// How long Recently Deleted keeps a note: 30 days, as Apple Notes.
+FOUNDATION_EXPORT const NSInteger SNRecentlyDeletedDays;
+// A deleted note's days left in Recently Deleted (0 on its last).
+FOUNDATION_EXPORT NSInteger SNDaysLeft(SNNote *note);
 
 // Text a sync's outcome is said in.
 FOUNDATION_EXPORT NSString *SNDateText(NSDate *date);

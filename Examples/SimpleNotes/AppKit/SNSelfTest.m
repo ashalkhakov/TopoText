@@ -38,7 +38,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
     [NSTimer scheduledTimerWithTimeInterval:0.5 target:test selector:@selector(fire:) userInfo:nil repeats:NO];
     test.run = ^{
         SNSay(SNWait(30, ^BOOL { return notes.lastSync != nil && !notes.syncing; }), @"the app syncs with the server");
-        SNSay([window selectNoteTitled:@"Groceries"], @"the note is in the list, and chosen");
+        SNSay([window selectNoteTitled:@"Groceries"], [NSString stringWithFormat:@"the note is in the list, and chosen (%@)", [window shownText]]);
         NSTextView *tv = window.textView;
         SNSay([tv.string hasPrefix:@"Groceries"], @"its text is in the window's text view");
         [window.window makeFirstResponder:tv];
@@ -65,6 +65,24 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         for (SNNote *n in [other notesInFolder:nil matching:@"Groceries"]) there = n;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
+
+        /* Deleted from the window, into Recently Deleted on the other device;
+           recovered from Recently Deleted, back there too. */
+        [window showAllNotes];
+        [window selectNoteTitled:@"Groceries"];
+        [tv tryToPerform:@selector(deleteNote:) with:nil];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNSay([other notesInFolder:nil matching:@"Groceries"].count == 0 && [other deletedNotesMatching:@"Groceries"].count == 1,
+              @"a note deleted here is in Recently Deleted there");
+        [window showRecentlyDeleted];
+        SNSay([window selectNoteTitled:@"Groceries"] && !tv.isEditable, @"in Recently Deleted, read only");
+        [tv tryToPerform:@selector(recoverNote:) with:nil];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNSay([other notesInFolder:nil matching:@"Groceries"].count == 1, @"recovered here, back there");
         for (NSString *suffix in @[ @"", @"-wal", @"-shm" ])
             [[NSFileManager defaultManager] removeItemAtPath:[path stringByAppendingString:suffix] error:NULL];
         SNFinish();

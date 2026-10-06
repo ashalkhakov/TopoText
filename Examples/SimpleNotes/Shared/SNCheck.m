@@ -68,10 +68,15 @@ int SNRunCheck(NSURL *root, NSURL *modelURL) {
             SNExpect([na.title isEqual:@"My Checklist"], @"the title is the merged first line");
             SNExpect([[na.text attributesAtIndex:5 effectiveRange:NULL][@"bold"] boolValue], @"the bold made on the other device");
             [a deleteNote:na];
-            [a deleteFolder:a.folders.firstObject];
             sync(a, @"a");
             sync(b, @"b");
-            SNExpect(!SNFind(b, identifier), @"a deletion reaches the other device");
+            SNExpect(!SNFind(b, identifier) && [b deletedNotesMatching:@"Checklist"].count == 1,
+                     @"a note deleted there is in Recently Deleted here");
+            [b deleteNoteImmediately:[b deletedNotesMatching:@"Checklist"].firstObject];
+            [b deleteFolder:b.folders.firstObject];
+            sync(b, @"b");
+            sync(a, @"a");
+            SNExpect(a.countOfDeletedNotes == 0 && a.folders.count == 0, @"deleted for good, gone everywhere");
         }
     }
     [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];

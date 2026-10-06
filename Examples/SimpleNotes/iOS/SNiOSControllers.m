@@ -33,6 +33,18 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     [c presentViewController:a animated:YES completion:nil];
 }
 
+static void SNConfirm(UIViewController *c, NSString *title, NSString *message, NSString *action, void (^done)(void)) {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [a addAction:[UIAlertAction actionWithTitle:action style:UIAlertActionStyleDestructive handler:^(UIAlertAction *x) { done(); }]];
+    [c presentViewController:a animated:YES completion:nil];
+}
+
+static NSString *SNDaysLeftText(SNNote *note) {
+    NSInteger left = SNDaysLeft(note);
+    return left == 1 ? @"1 day" : [NSString stringWithFormat:@"%ld days", (long)left];
+}
+
 #pragma mark folders
 
 @implementation SNFoldersViewController {
@@ -108,9 +120,11 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     });
 }
 
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)t { return 2; }
+/* All Notes; the folders; Recently Deleted, when it has notes. */
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)t { return 3; }
 
 - (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section {
+    if (section == 2) return _notes.countOfDeletedNotes ? 1 : 0;
     return section ? (NSInteger)_folders.count : 1;
 }
 
@@ -121,6 +135,13 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
 - (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)ip {
     UITableViewCell *cell = [t dequeueReusableCellWithIdentifier:@"folder"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"folder"];
+    if (ip.section == 2) {
+        cell.textLabel.text = @"Recently Deleted";
+        cell.imageView.image = [UIImage systemImageNamed:@"trash"];
+        cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)_notes.countOfDeletedNotes];
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
     SNFolder *f = ip.section ? _folders[(NSUInteger)ip.row] : nil;
     cell.textLabel.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
     cell.imageView.image = [UIImage systemImageNamed:f ? @"folder" : @"tray.full"];
@@ -130,16 +151,23 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
 }
 
 - (void)tableView:(UITableView *)t didSelectRowAtIndexPath:(NSIndexPath *)ip {
+    if (ip.section == 2) {
+        [self.navigationController pushViewController:[[SNNotesViewController alloc] initRecentlyDeletedWithNotes:_notes] animated:YES];
+        return;
+    }
     SNFolder *f = ip.section ? _folders[(NSUInteger)ip.row] : nil;
     [self.navigationController pushViewController:[[SNNotesViewController alloc] initWithNotes:_notes folder:f] animated:YES];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
-    if (!ip.section) return nil;
+    if (ip.section != 1) return nil;
     SNFolder *f = _folders[(NSUInteger)ip.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            [self->_notes deleteFolder:f];
+            SNConfirm(self, [NSString stringWithFormat:@"Delete “%@”?", f.name ?: @""],
+                      @"Its notes go to Recently Deleted, where they can be recovered for 30 days.", @"Delete", ^{
+                [self->_notes deleteFolder:f];
+            });
             done(YES);
         }];
     UIContextualAction *rename = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Rename"
@@ -159,6 +187,7 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
 @implementation SNNotesViewController {
     SNNotes *_notes;
     SNFolder *_folder;
+    BOOL _deleted;
     NSArray<SNNote *> *_list;
     UISearchController *_search;
 }
@@ -173,14 +202,23 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     return self;
 }
 
+- (instancetype)initRecentlyDeletedWithNotes:(SNNotes *)notes {
+    if ((self = [self initWithNotes:notes folder:nil])) {
+        _deleted = YES;
+        self.title = @"Recently Deleted";
+    }
+    return self;
+}
+
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCompose
-                                                                                           target:self action:@selector(newNote:)];
+    self.navigationItem.rightBarButtonItem = _deleted
+        ? [[UIBarButtonItem alloc] initWithTitle:@"Delete All" style:UIBarButtonItemStylePlain target:self action:@selector(deleteAll:)]
+        : [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCompose target:self action:@selector(newNote:)];
     _search = [[UISearchController alloc] initWithSearchResultsController:nil];
     _search.searchResultsUpdater = self;
     _search.obscuresBackgroundDuringPresentation = NO;
@@ -196,9 +234,10 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
 }
 
 - (void)reload {
-    _list = [_notes notesInFolder:_folder matching:_search.searchBar.text];
+    _list = _deleted ? [_notes deletedNotesMatching:_search.searchBar.text] : [_notes notesInFolder:_folder matching:_search.searchBar.text];
     [self.tableView reloadData];
     SNShowStatus(self, _notes);
+    self.navigationItem.rightBarButtonItem.enabled = !_deleted || _list.count;
 }
 
 - (void)changed:(NSNotification *)n {
@@ -219,6 +258,28 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     [self reload];
 }
 
+- (void)deleteAll:(id)sender {
+    SNConfirm(self, @"Delete every note in Recently Deleted?", @"They are deleted on every device, and cannot be recovered.", @"Delete All", ^{
+        [self->_notes emptyRecentlyDeleted];
+    });
+}
+
+/* A sheet of the folders (and none), for a note to go into. */
+- (void)move:(SNNote *)note from:(UIView *)view {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Move to" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"No Folder" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        [self->_notes moveNote:note toFolder:nil];
+    }]];
+    for (SNFolder *f in _notes.folders)
+        [sheet addAction:[UIAlertAction actionWithTitle:f.name.length ? f.name : @"Untitled" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+            [self->_notes moveNote:note toFolder:f];
+        }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = view;
+    sheet.popoverPresentationController.sourceRect = view.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
 - (void)newNote:(id)sender {
     SNNote *note = [_notes addNoteInFolder:_folder];
     [self.navigationController pushViewController:[[SNEditorViewController alloc] initWithNotes:_notes note:note] animated:YES];
@@ -234,7 +295,7 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     SNNote *note = _list[(NSUInteger)ip.row];
     cell.textLabel.text = note.title ?: @"New Note";
     cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-    cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  %@", SNDateText(note.updated), note.snippet];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  %@", note.deletedAt ? SNDaysLeftText(note) : SNDateText(note.updated), note.snippet];
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     cell.imageView.image = note.isPinned ? [UIImage systemImageNamed:@"pin.fill"] : nil;
     return cell;
@@ -247,16 +308,42 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
     SNNote *note = _list[(NSUInteger)ip.row];
+    if (_deleted) {
+        UIContextualAction *gone = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
+            handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+                SNConfirm(self, [NSString stringWithFormat:@"Delete “%@” immediately?", note.title ?: @"New Note"],
+                          @"It is deleted on every device, and cannot be recovered.", @"Delete", ^{
+                    [self->_notes deleteNoteImmediately:note];
+                });
+                done(YES);
+            }];
+        return [UISwipeActionsConfiguration configurationWithActions:@[ gone ]];
+    }
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
             [self->_notes deleteNote:note];
             done(YES);
         }];
-    return [UISwipeActionsConfiguration configurationWithActions:@[ delete ]];
+    UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Move"
+        handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            [self move:note from:[t cellForRowAtIndexPath:ip] ?: t];
+            done(YES);
+        }];
+    move.backgroundColor = [UIColor systemIndigoColor];
+    return [UISwipeActionsConfiguration configurationWithActions:@[ delete, move ]];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
     SNNote *note = _list[(NSUInteger)ip.row];
+    if (_deleted) {
+        UIContextualAction *recover = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Recover"
+            handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+                [self->_notes recoverNote:note];
+                done(YES);
+            }];
+        recover.backgroundColor = [UIColor systemBlueColor];
+        return [UISwipeActionsConfiguration configurationWithActions:@[ recover ]];
+    }
     UIContextualAction *pin = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal
         title:note.isPinned ? @"Unpin" : @"Pin"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
@@ -302,12 +389,34 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     _textView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [_formatBar sizeToFit];
     _textView.inputAccessoryView = _formatBar;
+    [self followDeletion];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(followDeletion)
+                                                 name:SNNotesDidChangeNotification object:_notes];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+/* In Recently Deleted (here, or by a sync), a note is read, not written:
+   Recover first. */
+- (void)followDeletion {
+    BOOL deleted = _note.deletedAt != nil;
+    _textView.editable = !deleted;
+    self.navigationItem.rightBarButtonItem = deleted
+        ? [[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]
+        : nil;
+}
+
+- (void)recover:(id)sender {
+    [_notes recoverNote:_note];
+    [self followDeletion];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     self.navigationController.toolbarHidden = YES;
-    if (!_textView.text.length) [_textView becomeFirstResponder];
+    if (!_textView.text.length && !_note.deletedAt) [_textView becomeFirstResponder];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {

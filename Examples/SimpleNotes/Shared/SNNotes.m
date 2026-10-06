@@ -1,8 +1,16 @@
 #import "SNNotes.h"
 #import "SNModel.h"
 #import "SNResolver.h"
+#import "SNMigration.h"
 
 NSNotificationName const SNNotesDidChangeNotification = @"SNNotesDidChange";
+const NSInteger SNRecentlyDeletedDays = 30;
+
+NSInteger SNDaysLeft(SNNote *note) {
+    if (!note.deletedAt) return SNRecentlyDeletedDays;
+    NSTimeInterval gone = -[note.deletedAt timeIntervalSinceNow];
+    return MAX(0, SNRecentlyDeletedDays - (NSInteger)floor(gone / 86400));
+}
 
 NSString *SNDateText(NSDate *date) {
     if (!date) return @"";
@@ -27,6 +35,7 @@ NSString *SNDateText(NSDate *date) {
 @implementation SNNotes {
     NSPersistentStoreCoordinator *_coordinator;
     NSHashTable<SNNoteEditor *> *_editors;
+    BOOL _deletes;   /* the model has Recently Deleted (version 2 on) */
     BOOL _savePending;
     NSTimer *_timer;
 }
@@ -44,6 +53,11 @@ NSString *SNDateText(NSDate *date) {
 
 - (instancetype)initWithStoreURL:(NSURL *)storeURL modelURL:(NSURL *)modelURL error:(NSError **)error {
     if (!(self = [super init])) return nil;
+    /* An older version's store, brought to this one, history and all. */
+    NSURL *momd = modelURL ?: SNModelURLInBundle([NSBundle mainBundle]);
+    if ([momd.pathExtension isEqual:@"momd"] &&
+        !SNMigrateStore(storeURL, momd, ^(NSManagedObjectModel *m) { [ODataSyncEngine addBookkeepingToModel:m configuration:nil]; }, error))
+        return nil;
     NSManagedObjectModel *model = modelURL ? SNModelAt(modelURL) : SNModel();
     if (!model) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError
@@ -59,10 +73,13 @@ NSString *SNDateText(NSDate *date) {
     _context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
     _context.persistentStoreCoordinator = _coordinator;
     _context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy;
+    NSEntityDescription *note = model.entitiesByName[SNNoteEntity];  /* typed: FreeCoreData's dictionaries are not */
+    _deletes = [note.attributesByName objectForKey:@"deletedAt"] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
     _status = @"Not synced yet.";
+    [self removeExpiredNotes];
     return self;
 }
 
@@ -131,6 +148,7 @@ NSString *SNDateText(NSDate *date) {
     for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
     for (SNNoteEditor *e in _editors.allObjects) [e flush];
     if (_savePending) [self saveNow];
+    [self removeExpiredNotes];
     if (!ok) {
         [self say:[NSString stringWithFormat:@"Not synced: %@ Changes wait here.", error.localizedDescription ?: @"no answer."] synced:NO];
         return;
@@ -202,8 +220,10 @@ NSString *SNDateText(NSDate *date) {
     }];
 }
 
-- (NSPredicate *)predicateForFolder:(SNFolder *)folder matching:(NSString *)text {
+- (NSPredicate *)predicateForFolder:(SNFolder *)folder matching:(NSString *)text deleted:(BOOL)deleted {
     NSMutableArray *parts = [NSMutableArray array];
+    if (_deletes) [parts addObject:[NSPredicate predicateWithFormat:deleted ? @"deletedAt != nil" : @"deletedAt == nil"]];
+    else if (deleted) return [NSPredicate predicateWithValue:NO];
     if (folder) [parts addObject:[NSPredicate predicateWithFormat:@"folder == %@", folder]];
     NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if (t.length) [parts addObject:[NSPredicate predicateWithFormat:@"body CONTAINS[c] %@ OR title CONTAINS[c] %@", t, t]];
@@ -211,7 +231,7 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSArray<SNNote *> *)notesInFolder:(SNFolder *)folder matching:(NSString *)text {
-    NSArray *notes = [self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text] sortedBy:nil];
+    NSArray *notes = [self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text deleted:NO] sortedBy:nil];
     /* Sorted here: the same on every Core Data, nil dates and all. */
     return [notes sortedArrayUsingComparator:^NSComparisonResult(SNNote *a, SNNote *b) {
         BOOL pa = a.isPinned, pb = b.isPinned;
@@ -221,11 +241,26 @@ NSString *SNDateText(NSDate *date) {
     }];
 }
 
-- (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
+- (NSUInteger)count:(NSPredicate *)predicate {
     NSFetchRequest *f = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
-    f.predicate = [self predicateForFolder:folder matching:nil];
+    f.predicate = predicate;
     NSUInteger n = [_context countForFetchRequest:f error:NULL];
     return n == NSNotFound ? 0 : n;
+}
+
+- (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
+    return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
+}
+
+- (NSArray<SNNote *> *)deletedNotesMatching:(NSString *)text {
+    NSArray *notes = [self fetch:SNNoteEntity where:[self predicateForFolder:nil matching:text deleted:YES] sortedBy:nil];
+    return [notes sortedArrayUsingComparator:^NSComparisonResult(SNNote *a, SNNote *b) {
+        return [b.deletedAt compare:a.deletedAt];
+    }];
+}
+
+- (NSUInteger)countOfDeletedNotes {
+    return [self count:[self predicateForFolder:nil matching:nil deleted:YES]];
 }
 
 #pragma mark changing
@@ -281,8 +316,12 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (void)deleteFolder:(SNFolder *)folder {
-    /* Its notes stay: each changed (no folder), and sent so. */
-    for (SNNote *n in folder.notes.allObjects) n.folder = nil;
+    /* Its notes to Recently Deleted: each changed, and sent so. */
+    NSDate *now = [NSDate date];
+    for (SNNote *n in folder.notes.allObjects) {
+        n.folder = nil;
+        if (!n.deletedAt) n.deletedAt = now;
+    }
     [_context deleteObject:folder];
     [self save];
 }
@@ -298,11 +337,53 @@ NSString *SNDateText(NSDate *date) {
     return n;
 }
 
-- (void)deleteNote:(SNNote *)note {
+- (void)closeEditorsOf:(SNNote *)note {
     for (SNNoteEditor *e in _editors.allObjects)
         if ([e.noteID isEqual:note.objectID]) [e close];
+}
+
+- (void)deleteNote:(SNNote *)note {
+    if (note.deletedAt) return;
+    [self closeEditorsOf:note];
+    note.deletedAt = [NSDate date];
+    note.pinned = @NO;
+    [self save];
+}
+
+- (void)recoverNote:(SNNote *)note {
+    if (!note.deletedAt) return;
+    note.deletedAt = nil;
+    if (note.folder.isDeleted) note.folder = nil;
+    [self save];
+}
+
+- (void)deleteNoteImmediately:(SNNote *)note {
+    [self closeEditorsOf:note];
     [_context deleteObject:note];
     [self save];
+}
+
+- (void)emptyRecentlyDeleted {
+    for (SNNote *n in [self deletedNotesMatching:nil]) {
+        [self closeEditorsOf:n];
+        [_context deleteObject:n];
+    }
+    [self save];
+}
+
+- (NSUInteger)removeNotesDeletedBefore:(NSDate *)date {
+    if (!_deletes) return 0;
+    NSArray *expired = [self fetch:SNNoteEntity where:[NSPredicate predicateWithFormat:@"deletedAt != nil AND deletedAt < %@", date] sortedBy:nil];
+    for (SNNote *n in expired) {
+        [self closeEditorsOf:n];
+        [_context deleteObject:n];
+    }
+    if (expired.count) [self save];
+    return expired.count;
+}
+
+- (void)removeExpiredNotes {
+    [self removeNotesDeletedBefore:[NSDate dateWithTimeIntervalSinceNow:-(NSTimeInterval)SNRecentlyDeletedDays * 86400]];
 }
 
 - (void)setNote:(SNNote *)note pinned:(BOOL)pinned {
@@ -312,6 +393,7 @@ NSString *SNDateText(NSDate *date) {
 
 - (void)moveNote:(SNNote *)note toFolder:(SNFolder *)folder {
     note.folder = folder;
+    note.deletedAt = nil;
     [self save];
 }
 

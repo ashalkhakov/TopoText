@@ -37,6 +37,7 @@
 #include <dlfcn.h>
 #import <ODataSync/ODataSyncService.h>
 #import "SNModel.h"
+#import "SNMigration.h"
 
 @interface SNServerConfiguration : HSConfiguration
 @end
@@ -114,10 +115,23 @@ static NSURL *SNURL(id value) {
         url = [NSURL fileURLWithPath:SNTemporaryStore];
         atexit(SNRemoveTemporaryStore);
     }
-    /* History: delta links are read from it. */
+    /* An older version's store brought to this one: a SQLite file by the
+       migrator (SNMigration.h), a database by FreeCoreData's SQL store
+       itself, in place. */
+    NSMutableDictionary *options = [@{ NSPersistentHistoryTrackingKey: @YES } mutableCopy];
     NSError *failure = nil;
-    if (![coordinator addPersistentStoreWithType:type configuration:nil URL:url
-                                         options:@{ NSPersistentHistoryTrackingKey: @YES } error:&failure]) {
+    if (sqlite) {
+        if ([modelURL.pathExtension isEqual:@"momd"] &&
+            !SNMigrateStore(url, modelURL, ^(NSManagedObjectModel *m) { [ODataSyncService addBookkeepingToModel:m configuration:nil]; }, &failure)) {
+            if (error) *error = failure;
+            return NO;
+        }
+    } else {
+        options[@"CDSQLStoreMigrateSchema"] = @YES;
+        options[NSIgnorePersistentStoreVersioningOption] = @YES;
+    }
+    /* History: delta links are read from it. */
+    if (![coordinator addPersistentStoreWithType:type configuration:nil URL:url options:options error:&failure]) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreOpenError
                                             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"the %@ store at %@ does not open: %@",
                                                                                     type, url ?: @"(none)", failure.localizedDescription] }];
@@ -128,6 +142,11 @@ static NSURL *SNURL(id value) {
                                                             (unsigned long)c.port]];
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
+    /* Devices not yet updated write in their model's version: each version
+       only adds to the one before, so what they send is taken as it is. */
+    _service.upgradeBody = ^NSDictionary *(NSDictionary *body, NSString *version, NSEntityDescription *entity, ODataRequest *request, NSError **e) {
+        return body;
+    };
     _histories = [[ODataSyncService alloc] initWithService:_service];
     return YES;
 }
