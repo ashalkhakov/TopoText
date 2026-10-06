@@ -1,0 +1,9 @@
+{
+    ApplicationDescription = "Notes that sync, and merge what was written apart";
+    ApplicationName = SimpleNotes;
+    ApplicationRelease = "1.0";
+    NSExecutable = SimpleNotes;
+    NSMainNibFile = "MainMenu.xib";
+    NSPrincipalClass = NSApplication;
+    NSRole = Application;
+}

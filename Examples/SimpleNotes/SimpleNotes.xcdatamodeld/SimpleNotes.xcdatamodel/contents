@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="24G720" minimumToolsVersion="Automatic" sourceLanguage="Objective-C" userDefinedModelVersionIdentifier="1">
+    <entity name="Folder" representedClassName="SNFolder" codeGenerationType="category" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="String" preserveAfterDeletion="YES">
+            <userInfo>
+                <entry key="OData.key" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="created" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modified" optional="YES" attributeType="String"/>
+        <attribute name="versions" optional="YES" attributeType="String"/>
+        <relationship name="notes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Note" inverseName="folder" inverseEntity="Note"/>
+        <userInfo>
+            <entry key="OData.entitySet" value="Folders"/>
+            <entry key="ODataSync.direction" value="both"/>
+            <entry key="ODataSync.modified" value="modified"/>
+            <entry key="ODataSync.versions" value="versions"/>
+        </userInfo>
+    </entity>
+    <entity name="Note" representedClassName="SNNote" codeGenerationType="category" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="String" preserveAfterDeletion="YES">
+            <userInfo>
+                <entry key="OData.key" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="body" optional="YES" attributeType="String"/>
+        <attribute name="bodyText" optional="YES" attributeType="Binary">
+            <userInfo>
+                <entry key="TopoText.text" value="YES"/>
+                <entry key="TopoText.string" value="body"/>
+            </userInfo>
+        </attribute>
+        <attribute name="created" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="updated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="pinned" optional="YES" attributeType="Boolean" usesScalarValueType="NO"/>
+        <attribute name="modified" optional="YES" attributeType="String"/>
+        <attribute name="versions" optional="YES" attributeType="String"/>
+        <relationship name="folder" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Folder" inverseName="notes" inverseEntity="Folder"/>
+        <userInfo>
+            <entry key="OData.entitySet" value="Notes"/>
+            <entry key="ODataSync.direction" value="both"/>
+            <entry key="ODataSync.modified" value="modified"/>
+            <entry key="ODataSync.versions" value="versions"/>
+        </userInfo>
+    </entity>
+</model>

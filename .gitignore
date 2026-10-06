@@ -1,6 +1,8 @@
 build/
 obj/
 *.bundle/
-Tests/obj/
-.DS_Store
+*.app/
 *.dSYM/
+.DS_Store
+xcuserdata/
+Local.xcconfig

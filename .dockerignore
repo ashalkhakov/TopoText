@@ -2,3 +2,5 @@ build
 obj
 Tests/obj
 **/.DS_Store
+**/obj
+**/*.app

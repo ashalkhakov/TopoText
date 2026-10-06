@@ -1,0 +1,56 @@
+// SimpleNotes on iOS: the app's delegate, its window, a sync on opening.
+
+#import <UIKit/UIKit.h>
+#import "SNiOSControllers.h"
+#import "SNiOSSelfTest.h"
+
+@interface SNiOSAppDelegate : UIResponder <UIApplicationDelegate>
+@property (nonatomic, strong) UIWindow *window;
+@property (nonatomic, strong) SNNotes *notes;
+@end
+
+@implementation SNiOSAppDelegate
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
+    NSError *error = nil;
+    NSArray *args = [NSProcessInfo processInfo].arguments;
+    NSUInteger i = [args indexOfObject:@"--self-test"];
+    if (i != NSNotFound && i + 1 < args.count) SNSelfTestRoot = [NSURL URLWithString:args[i + 1]];
+    /* A self-test runs on a store of its own. */
+    NSURL *store = SNSelfTestRoot ? [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                                [NSString stringWithFormat:@"sn-selftest-app-%@.sqlite", [NSProcessInfo processInfo].globallyUniqueString]]]
+                                  : [SNNotes defaultStoreURLNamed:@"SimpleNotes"];
+    _notes = [[SNNotes alloc] initWithStoreURL:store error:&error];
+    if (!_notes) NSLog(@"SimpleNotes: the notes do not open: %@", error);
+    NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
+    if (server.length) _notes.serviceRoot = [NSURL URLWithString:server];
+    if (SNSelfTestRoot) _notes.serviceRoot = SNSelfTestRoot;
+    else _notes.syncInterval = 30;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[SNFoldersViewController alloc] initWithNotes:_notes]];
+    nav.navigationBar.prefersLargeTitles = YES;
+    _window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    _window.rootViewController = nav;
+    [_window makeKeyAndVisible];
+    if (SNSelfTestRoot) {
+        [_notes sync];
+        SNStartSelfTest(_notes, nav);
+    }
+    return YES;
+}
+
+/* Opened, or back: the server's changes met, what waits sent. */
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    if (_notes.serviceRoot && !_notes.syncing) [_notes sync];
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    [_notes saveAll];
+}
+
+@end
+
+int main(int argc, char *argv[]) {
+    @autoreleasepool {
+        return UIApplicationMain(argc, argv, nil, NSStringFromClass([SNiOSAppDelegate class]));
+    }
+}

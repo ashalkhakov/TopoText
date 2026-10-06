@@ -1,0 +1,133 @@
+# SimpleNotes
+
+A small Apple Notes: folders, notes in rich text, search, pinning. It runs
+on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
+Every note is kept on the device and works offline. Notes sync with a
+server, `simplenotes-server`, which serves them over OData.
+
+When the same note is edited on two devices that couldn't reach each other,
+both edits end up in the note. The note's body is a [TopoText](../../README.md),
+and [ODataSync](https://github.com/ashalkhakov/ODataKit/tree/master/Source/ODataSync)
+merges it through `TTSyncResolver`. The note is not settled for one side.
+
+| The AppKit app, on GNUstep | On iOS |
+|---|---|
+| ![SimpleNotes on GNUstep](Screenshots/gnustep.png) | <img src="Screenshots/ios.png" width="240" alt="SimpleNotes on iOS"> |
+
+## What there is
+
+| Part | Where | What |
+|---|---|---|
+| The device | `Shared/` | Foundation and Core Data only, shared by every app |
+| The AppKit app | `AppKit/` | macOS and GNUstep: `MainMenu.xib`, `NotesWindow.xib` (folders, notes, the note), `TextPanel.xib` |
+| The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard) |
+| The server | `Server/SNServer.m` | ODataKit's server (HTTPServerKit, ODataService) with ODataSync's part of it |
+| The model | `SimpleNotes.xcdatamodeld` | `Folder` and `Note`; the classes' properties are generated as each target builds (Codegen: Category/Extension), by Xcode or by FreeCoreData's momc |
+| Tests | `Tests/` | The device against the service in one process; the text view's binding; two devices through the running server; each app driven from within |
+
+The device, in `Shared/`:
+
+- **`SNNotes`**: the store (SQLite, with persistent history), the ODataSync
+  engine, and the queries and changes the views make. A sync runs on its own
+  thread while the views carry on. Saves made in the meantime wait for it
+  to finish.
+- **`SNNoteEditor`**: one open note's TopoText, a session with its own
+  replica. Before the note is written again, the editor merges in what the
+  last sync brought, and hands the resulting edits to the view.
+- **`SNTextBinding`**: keeps a text view's `NSTextStorage` (AppKit's or
+  UIKit's) and the editor's TopoText the same, in both directions. What the
+  user types goes into the text as they type. What a sync merged comes into
+  the storage as edits, and the selection moves along with them.
+- **`SNResolver`**: merges a note's body; its title becomes the merged first
+  line. Other properties are taken from whichever side changed them, or from
+  the later writer if both did. An edit outlives a deletion that didn't see it.
+
+## Running it
+
+The server, on this machine:
+
+```sh
+make -C Examples/SimpleNotes           # macOS: build/; GNUstep: obj/
+build/simplenotes-server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+python3 Tests/seed.py http://127.0.0.1:8080/odata/      # a few notes to start with
+```
+
+Its settings are ois-serve's (`Port`, `Localhost`, sign-in through
+`TrustedUserHeader` or `JWTIssuer`, and the rest of HTTPServerKit's). In
+addition:
+
+- `StoreType` can be `SQLite` (the default), `PostgreSQL`, or `MySQL` /
+  `MariaDB`, using FreeCoreData's SQL stores. Give `StoreURL` as the
+  database's URL:
+
+  ```sh
+  obj/simplenotes-server -StoreType PostgreSQL -StoreURL postgresql://notes:secret@db/notes
+  ```
+
+  Delta links need persistent history. FreeCoreData's SQL stores keep it on
+  GNUstep, but not on Apple's Core Data, so a server on macOS uses SQLite.
+- `StoreURL Temporary` is a throwaway store, for trying things out.
+- `AllowAnonymous NO` refuses requests that don't say who they're from,
+  once a sign-in is set. Every device syncs every note: one shared notebook.
+
+The apps:
+
+- **macOS**: open `TopoText.xcworkspace` (ODataKit checked out beside this
+  repository, at `../ODataKit`) and run the **SimpleNotes** scheme. Then
+  choose **SimpleNotes > Server…** and give `http://127.0.0.1:8080/odata/`.
+- **iPhone or iPad**: the **SimpleNotes-iOS** scheme. Set the address with
+  the server button at the top left. The simulator reaches the Mac at
+  `127.0.0.1`. To run on a device, put `DEVELOPMENT_TEAM = <your team>` in
+  `iOS/Local.xcconfig`.
+- **GNUstep**, with TopoText, ODataKit and FreeCoreData installed:
+
+  ```sh
+  make -C Examples/SimpleNotes && openapp Examples/SimpleNotes/SimpleNotes.app
+  ```
+
+To try two devices on one Mac or Linux machine, give a second instance a
+store of its own: `SimpleNotes -SNStore /tmp/second.sqlite`.
+
+## Checked
+
+```sh
+make -C Examples/SimpleNotes check
+```
+
+This runs four things:
+
+- **The tests.** Two devices and the service run in one process: edits made
+  apart, a deletion against an edit, an open editor merged while its own
+  typing is kept, and the text view's binding both ways.
+- **Two devices through the server, over HTTP**
+  (`Tests/serve-and-check.sh`, `SimpleNotes --check`). With `SN_STORE_ARGS`,
+  the server stores in PostgreSQL or MariaDB instead.
+- **The AppKit app driven from within** (`SimpleNotes --self-test`, under
+  `xvfb-run` where there's no display). A note is chosen in the list, text
+  is typed into the window's text view, and Bold is sent up the responder
+  chain. Then a second device must see both.
+- **The iOS app's self-test, in a simulator** (`Tests/ios-self-test.sh`;
+  macOS only). It does the same through the iOS view controllers.
+
+CI runs all of these: macOS and iOS against Apple's Core Data, and GNUstep
+against FreeCoreData, SQLite, PostgreSQL and MariaDB.
+
+## Rich text
+
+A note's text uses `bold`, `italic`, `underline`, `strike`, and `style`
+(`title` or `heading`). These are plain values that sync and merge the same
+way everywhere. `SNRichText` turns them into each system's fonts and back.
+
+Formatting is per character, and the last writer wins per attribute, as in
+TopoText. Bold applied to a line does not spread to text someone else
+typed into it at the same time.
+
+## Not yet
+
+- **One shared notebook.** A notebook per user means a handler on the
+  server (an `ODataSyncSetHandler` that filters by the signed-in user).
+- **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
+  ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
+- Attachments, checklists, moving a note between folders in the AppKit app,
+  and undo across a merge (the undo stack is cleared when a sync changes
+  the open note).

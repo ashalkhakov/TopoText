@@ -15,6 +15,12 @@ the service or directly between peers.
 | `TopoText` | The text: edits, attributes, positions, merging, deltas, the wire format. Foundation only. |
 | `TopoTextSync` | Its part in an ODataSync store: a conflict resolver that merges texts, and `NSManagedObject` helpers. |
 
+[SimpleNotes](Examples/SimpleNotes/README.md) is a small Apple Notes built on
+both. It runs on macOS, on GNUstep and on iOS, keeps every note on the
+device, and syncs through an OData server built on ODataKit, which can
+store its data in SQLite, PostgreSQL or MariaDB. Notes edited apart on two
+devices come out with both edits.
+
 ```objc
 TopoText *mine = [TopoText text];                       // a replica of its own
 [mine insertString:@"Hello world" atIndex:0 attributes:nil];
@@ -134,7 +140,12 @@ resolver loses one side's edit.
 
 ## Building
 
-**macOS** (Xcode, with ODataKit checked out beside this repository):
+**Xcode**: `TopoText.xcworkspace` has the frameworks (`TopoText.xcodeproj`, for
+macOS and iOS), SimpleNotes, and ODataKit's project from `../ODataKit`. The
+projects are written by `Scripts/xcodeproj.py`: change that script and run
+it, rather than editing the projects by hand.
+
+**macOS without Xcode's projects** (with ODataKit checked out beside this repository):
 
 ```sh
 make odatakit          # ODataKit's frameworks, by its workspace, into build/ODataKit
@@ -179,6 +190,8 @@ TopoText builds alone.
 | `Sources/TopoText/TTInternal.h` | Runs, registers, payloads, shared by both |
 | `Sources/TopoTextSync/` | `TTSyncResolver`, `NSManagedObject (TopoText)` |
 | `Tests/` | Unit tests, the convergence fuzz, ODataSync end to end |
+| `Examples/SimpleNotes/` | The notes app and its server |
+| `Scripts/xcodeproj.py` | The Xcode projects and workspace, written |
 
 The wire format is described at the top of `TTCoding.m`. Text is WTF-8,
 because a run split by a remote insert between the two halves of a surrogate

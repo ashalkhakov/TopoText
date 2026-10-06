@@ -1,0 +1,603 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		19F9CD990CBDE33176F40644 /* TopoText.h in Headers */ = {
+			isa = PBXBuildFile;
+			fileRef = 2BADAAB2A08E26268BC93E10;
+			settings = {
+				ATTRIBUTES = (
+					Public,
+				);
+			};
+		};
+		35BC712523A5D965AC8B00BD /* TTInternal.h in Headers */ = {
+			isa = PBXBuildFile;
+			fileRef = 1662602902F46AA2F6704BFD;
+		};
+		4FDA7364E48D4FAAABE03EA0 /* ODataKit.framework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 347C854B35A734E70F2656EA;
+		};
+		521092704420AC7F8C36E5E4 /* TopoText.framework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 515993F8858B85D4E55083DF;
+		};
+		90834DB971D67B6CDEA6CC0B /* TTCoding.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = D0B40C2B20EF04636BE16429;
+		};
+		94EB7AB6D891AF9CCF722377 /* TTSyncResolver.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 20572AA6A11E182B835B0476;
+		};
+		DFD300DA2EDA848287F99541 /* TopoText.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 2F53ECBD97F866E69A41DA12;
+		};
+		EEEE90F466D8DC52BEDB7353 /* ODataSync.framework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 52542F566BF9256A1C2190AA;
+		};
+		FC18911D831273A760AF5569 /* TopoTextSync.h in Headers */ = {
+			isa = PBXBuildFile;
+			fileRef = 0F0021534A3E598E7E0C9C22;
+			settings = {
+				ATTRIBUTES = (
+					Public,
+				);
+			};
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		4762AFE7E1D61620D5BEB19C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 747CA6429987EEC4598737C9;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000006;
+			remoteInfo = ODataKit;
+		};
+		54FC3BEBD04BDB95B642F4C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 747CA6429987EEC4598737C9;
+			proxyType = 2;
+			remoteGlobalIDString = 5C30F5597E6C2517354354B7;
+			remoteInfo = ODataSync;
+		};
+		60DE367165F6293969C77414 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7C4F16420FCCAF5436F9A67B;
+			proxyType = 1;
+			remoteGlobalIDString = C839008E10C63F4A3A7690DB;
+			remoteInfo = TopoText;
+		};
+		7827991C62FB03BED70615FE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 747CA6429987EEC4598737C9;
+			proxyType = 1;
+			remoteGlobalIDString = 7F1CE30E03D845ACEF6B15CD;
+			remoteInfo = ODataSync;
+		};
+		D3130B5044A6402260541401 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 747CA6429987EEC4598737C9;
+			proxyType = 2;
+			remoteGlobalIDString = AA0000000000000000000007;
+			remoteInfo = ODataKit;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0F0021534A3E598E7E0C9C22 /* TopoTextSync.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Sources/TopoTextSync/include/TopoTextSync/TopoTextSync.h;
+			sourceTree = "<group>";
+			name = TopoTextSync.h;
+		};
+		1662602902F46AA2F6704BFD /* TTInternal.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Sources/TopoText/TTInternal.h;
+			sourceTree = "<group>";
+			name = TTInternal.h;
+		};
+		20572AA6A11E182B835B0476 /* TTSyncResolver.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Sources/TopoTextSync/TTSyncResolver.m;
+			sourceTree = "<group>";
+			name = TTSyncResolver.m;
+		};
+		2BADAAB2A08E26268BC93E10 /* TopoText.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Sources/TopoText/include/TopoText/TopoText.h;
+			sourceTree = "<group>";
+			name = TopoText.h;
+		};
+		2F53ECBD97F866E69A41DA12 /* TopoText.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Sources/TopoText/TopoText.m;
+			sourceTree = "<group>";
+			name = TopoText.m;
+		};
+		4E5967ACFBC35EA68105BF44 /* Common.xcconfig */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Xcode/Configs/Common.xcconfig;
+			sourceTree = "<group>";
+			name = Common.xcconfig;
+		};
+		515993F8858B85D4E55083DF /* TopoText.framework */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.framework;
+			includeInIndex = 0;
+			path = TopoText.framework;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		747CA6429987EEC4598737C9 /* ODataKit.xcodeproj */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = "wrapper.pb-project";
+			name = ODataKit.xcodeproj;
+			path = ../ODataKit/ODataKit.xcodeproj;
+			sourceTree = "<group>";
+		};
+		A22BA84B1B8A24432D0B43E8 /* Release.xcconfig */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Xcode/Configs/Release.xcconfig;
+			sourceTree = "<group>";
+			name = Release.xcconfig;
+		};
+		A265821E2EAD27509A38D869 /* TopoTextSync.framework */ = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.framework;
+			includeInIndex = 0;
+			path = TopoTextSync.framework;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		D0B40C2B20EF04636BE16429 /* TTCoding.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Sources/TopoText/TTCoding.m;
+			sourceTree = "<group>";
+			name = TTCoding.m;
+		};
+		F1067FDDD1727FCC50DAA84D /* Debug.xcconfig */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Xcode/Configs/Debug.xcconfig;
+			sourceTree = "<group>";
+			name = Debug.xcconfig;
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		382EC4F044E6F676F82AB010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				521092704420AC7F8C36E5E4,
+				4FDA7364E48D4FAAABE03EA0,
+				EEEE90F466D8DC52BEDB7353,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CE3B54D57595B0885B2F349E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		190A7664ACD1CC970DC5E7AD /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F07E9158E4A6A6CFFF1C1839,
+				83CC7E68B7A03C6AA19EA003,
+			);
+			sourceTree = "<group>";
+			name = Sources;
+		};
+		7E8886880B44E89BC1E3F316 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				4E5967ACFBC35EA68105BF44,
+				F1067FDDD1727FCC50DAA84D,
+				A22BA84B1B8A24432D0B43E8,
+			);
+			sourceTree = "<group>";
+			name = Configs;
+		};
+		83CC7E68B7A03C6AA19EA003 /* TopoTextSync-files */ = {
+			isa = PBXGroup;
+			children = (
+				20572AA6A11E182B835B0476,
+				0F0021534A3E598E7E0C9C22,
+			);
+			sourceTree = "<group>";
+			name = TopoTextSync;
+		};
+		A0819EA5063AC8CC4B2B9F25 /* Libraries */ = {
+			isa = PBXGroup;
+			children = (
+				747CA6429987EEC4598737C9,
+			);
+			sourceTree = "<group>";
+			name = Libraries;
+		};
+		A94D56C4B5B548D54485A1A2 /* TopoText */ = {
+			isa = PBXGroup;
+			children = (
+				190A7664ACD1CC970DC5E7AD,
+				7E8886880B44E89BC1E3F316,
+				A0819EA5063AC8CC4B2B9F25,
+				DCB591B277BE5870DC5B1595,
+			);
+			sourceTree = "<group>";
+			name = TopoText;
+		};
+		DCB591B277BE5870DC5B1595 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				515993F8858B85D4E55083DF,
+				A265821E2EAD27509A38D869,
+			);
+			sourceTree = "<group>";
+			name = Products;
+		};
+		EFF227B306E45B50ECB27E55 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				347C854B35A734E70F2656EA,
+				52542F566BF9256A1C2190AA,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F07E9158E4A6A6CFFF1C1839 /* TopoText-files */ = {
+			isa = PBXGroup;
+			children = (
+				2F53ECBD97F866E69A41DA12,
+				D0B40C2B20EF04636BE16429,
+				1662602902F46AA2F6704BFD,
+				2BADAAB2A08E26268BC93E10,
+			);
+			sourceTree = "<group>";
+			name = TopoText;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		1CEE2E8C5A268764ADC0A55C /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				19F9CD990CBDE33176F40644,
+				35BC712523A5D965AC8B00BD,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		346C7562C723C056EB3D803D /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC18911D831273A760AF5569,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		48E5481FBF59DE9D1AB7998F /* TopoTextSync */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 62C3E1BEB5B59A47CB05782E;
+			buildPhases = (
+				346C7562C723C056EB3D803D,
+				ECCFA880D07255439EBFC3CA,
+				382EC4F044E6F676F82AB010,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1F213C32EE1DDEFBDD80C56B,
+				AF19834D01A13D2C6693D9A7,
+				43817BF9E4C8486E328E8CCD,
+			);
+			name = TopoTextSync;
+			productName = TopoTextSync;
+			productReference = A265821E2EAD27509A38D869;
+			productType = "com.apple.product-type.framework";
+		};
+		C839008E10C63F4A3A7690DB /* TopoText */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B6F61E4564A1B3DB18B4E571;
+			buildPhases = (
+				1CEE2E8C5A268764ADC0A55C,
+				44D23F30F1E8A067B173A1DC,
+				CE3B54D57595B0885B2F349E,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = TopoText;
+			productName = TopoText;
+			productReference = 515993F8858B85D4E55083DF;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7C4F16420FCCAF5436F9A67B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 37C5D0A740428F0B7F75E146;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A94D56C4B5B548D54485A1A2;
+			productRefGroup = DCB591B277BE5870DC5B1595;
+			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = EFF227B306E45B50ECB27E55;
+					ProjectRef = 747CA6429987EEC4598737C9;
+				},
+			);
+			projectRoot = "";
+			targets = (
+				C839008E10C63F4A3A7690DB,
+				48E5481FBF59DE9D1AB7998F,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXReferenceProxy section */
+		347C854B35A734E70F2656EA /* ODataKit.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = ODataKit.framework;
+			remoteRef = D3130B5044A6402260541401;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		52542F566BF9256A1C2190AA /* ODataSync.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = ODataSync.framework;
+			remoteRef = 54FC3BEBD04BDB95B642F4C3;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+/* End PBXReferenceProxy section */
+
+/* Begin PBXSourcesBuildPhase section */
+		44D23F30F1E8A067B173A1DC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DFD300DA2EDA848287F99541,
+				90834DB971D67B6CDEA6CC0B,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ECCFA880D07255439EBFC3CA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94EB7AB6D891AF9CCF722377,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1F213C32EE1DDEFBDD80C56B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C839008E10C63F4A3A7690DB;
+			targetProxy = 60DE367165F6293969C77414;
+		};
+		43817BF9E4C8486E328E8CCD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ODataSync;
+			targetProxy = 7827991C62FB03BED70615FE;
+		};
+		AF19834D01A13D2C6693D9A7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ODataKit;
+			targetProxy = 4762AFE7E1D61620D5BEB19C;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		01A7F1E94C71A791B64ED36F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				SKIP_INSTALL = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/..",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphone*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				INFOPLIST_KEY_NSHumanReadableCopyright = TopoText;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.TopoTextSync;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/TopoTextSync/include/TopoTextSync",
+				);
+			};
+			name = Release;
+		};
+		063B39550C4DB5F22244F7C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+			baseConfigurationReference = A22BA84B1B8A24432D0B43E8;
+		};
+		3052501FA5905773733BD0D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+			baseConfigurationReference = F1067FDDD1727FCC50DAA84D;
+		};
+		6381D7DFE5196502A4A6D97D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				SKIP_INSTALL = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/..",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphone*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				INFOPLIST_KEY_NSHumanReadableCopyright = TopoText;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.TopoText;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/TopoText",
+					"$(SRCROOT)/Sources/TopoText/include/TopoText",
+				);
+			};
+			name = Debug;
+		};
+		C03DDB84C1C2B187CC9F9F91 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				SKIP_INSTALL = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/..",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphone*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				INFOPLIST_KEY_NSHumanReadableCopyright = TopoText;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.TopoTextSync;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/TopoTextSync/include/TopoTextSync",
+				);
+			};
+			name = Debug;
+		};
+		D2D6033418382B6CF4A775D5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = NO;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				SKIP_INSTALL = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+					"@loader_path/..",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphone*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				INFOPLIST_KEY_NSHumanReadableCopyright = TopoText;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.TopoText;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Sources/TopoText",
+					"$(SRCROOT)/Sources/TopoText/include/TopoText",
+				);
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		37C5D0A740428F0B7F75E146 /* Build configuration list for project */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3052501FA5905773733BD0D2,
+				063B39550C4DB5F22244F7C2,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		62C3E1BEB5B59A47CB05782E /* Build configuration list for TopoTextSync */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C03DDB84C1C2B187CC9F9F91,
+				01A7F1E94C71A791B64ED36F,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B6F61E4564A1B3DB18B4E571 /* Build configuration list for TopoText */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6381D7DFE5196502A4A6D97D,
+				D2D6033418382B6CF4A775D5,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7C4F16420FCCAF5436F9A67B /* Project object */;
+}

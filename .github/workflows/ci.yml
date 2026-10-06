@@ -1,8 +1,9 @@
 name: CI
 
-# Ported from ODataKit's CI: the same suite on Apple's Foundation and Core
-# Data, and on GNUstep with FreeCoreData, both against ODataKit (whose
-# ODataSync TopoTextSync is a part of); and the libraries compiled for iOS.
+# Ported from ODataKit's CI: TopoText and SimpleNotes on Apple's Foundation
+# and Core Data (macOS, and iOS in a simulator), and on GNUstep with
+# FreeCoreData, all against ODataKit (whose ODataSync TopoTextSync is a part
+# of, and whose server SimpleNotes' is).
 #
 # pull_request fires for a PR against any branch, with the workflow from the
 # PR's head; workflow_dispatch only offers "Run workflow" once this file is
@@ -33,7 +34,7 @@ jobs:
   macos:
     name: macOS and iOS
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
@@ -51,30 +52,60 @@ jobs:
       - name: Show toolchain
         run: xcodebuild -version
 
+      # The Xcode projects are written by Scripts/xcodeproj.py: what is
+      # committed must be what it writes.
+      - name: The Xcode projects are up to date
+        run: |
+          python3 Scripts/xcodeproj.py
+          git diff --exit-code -- '*.xcodeproj' '*.xcworkspace' \
+            || { echo "::error::run Scripts/xcodeproj.py and commit what it writes"; exit 1; }
+
       # ODataKit's frameworks, by its own Xcode workspace, for macOS and for
-      # the iOS simulator.
+      # the iOS simulator: what the make builds use.
       - name: Build ODataKit
         run: |
           make odatakit ODATAKIT=../ODataKit
           make odatakit-ios ODATAKIT=../ODataKit
 
-      # Built first and on its own, so a compile error in the library is
-      # reported as that rather than as a test failure.
       - name: Build the libraries
         run: make
 
       - name: Unit tests (against Apple's Foundation and CoreData)
         run: make test
 
-      # More seeds of the convergence test than a push's run can afford
-      # everywhere: here, where it is cheapest to read a failure.
       - name: Convergence, long
         run: TOPOTEXT_SEEDS=2000 xcrun xctest -XCTest TopoTextFuzzTests build/TopoTextTests.xctest
 
-      # No iOS simulator test run (yet): the libraries compiled for a device
-      # and for the simulator, TopoTextSync against ODataKit's iOS frameworks.
       - name: Build for iOS
         run: make ios
+
+      # SimpleNotes' devices and server: its tests, and two devices syncing
+      # through the server over HTTP.
+      - name: SimpleNotes, its tests and two devices through its server
+        run: make -C Examples/SimpleNotes check
+
+      # The apps and the server, as Xcode builds them, from TopoText.xcworkspace
+      # (ODataKit's project beside it).
+      - name: Build the apps
+        run: |
+          for scheme in SimpleNotes simplenotes-server; do
+            xcodebuild -workspace TopoText.xcworkspace -scheme "$scheme" -destination 'platform=macOS' \
+              -configuration Debug -derivedDataPath "$RUNNER_TEMP/DerivedData" build
+          done
+          xcodebuild -workspace TopoText.xcworkspace -scheme SimpleNotes-iOS -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug -derivedDataPath "$RUNNER_TEMP/DerivedData-iOS" build
+
+      # Each app driven from within (--self-test): a note chosen, text typed,
+      # Bold, synced, and a second device that sees it.
+      - name: The macOS app's self-test
+        run: |
+          products="$RUNNER_TEMP/DerivedData/Build/Products/Debug"
+          Examples/SimpleNotes/Tests/self-test.sh "$products/simplenotes-server" "$products/SimpleNotes.app/Contents/MacOS/SimpleNotes"
+
+      - name: The iOS app's self-test, in a simulator
+        run: |
+          Examples/SimpleNotes/Tests/ios-self-test.sh "$RUNNER_TEMP/DerivedData/Build/Products/Debug/simplenotes-server" \
+            "$RUNNER_TEMP/DerivedData-iOS/Build/Products/Debug-iphonesimulator/SimpleNotes.app"
 
   ########################### GNUstep / Linux ###########################
   # A patched stack built by gnustep-patches, FreeCoreData as the Core Data
@@ -92,19 +123,49 @@ jobs:
       CXX: clang++
       LIBRARY_COMBO: ng-gnu-gnu
       RUNTIME_VERSION: gnustep-2.0
-      # Foundation for the libraries, tools-xctest for the suite; gui and
-      # back for the Notes example app to come (in the recipe now, so the
-      # cached stack does not change when it lands).
+      # Foundation for the libraries, gui and back for SimpleNotes,
+      # tools-xctest for the suites.
       COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back tools-xctest
       # libobjc2 and libdispatch land in the prefix's plain lib/, which the
       # gnustep layout does not treat as a library root.
       LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
-      # The pins ODataKit's CI builds with, at ODATAKIT_REF.
+      # ODataKit's pin of the stack. FreeCoreData after #62: its momc reads
+      # Preserve After Deletion as Xcode writes it (preserveAfterDeletion),
+      # which SimpleNotes' model needs for deletions to be sent.
       GNUSTEP_PATCHES_REF: 00a9c890134abe3e752d49545556a228cb8b7122
-      FREECOREDATA_REF: 1a65bfb9a19e2e957b05e7253962ef7a4b40cbe7
+      FREECOREDATA_REF: 65b3ebb409cf5a8d9f75f07df8056d173ce2ceeb
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
+
+    # SimpleNotes' server on real databases, through FreeCoreData's SQL
+    # stores, as ODataKit's CI runs its own pair tests.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: notes
+          POSTGRES_DB: notes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: notes
+          MARIADB_DATABASE: notes
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -134,10 +195,11 @@ jobs:
           sudo apt-get -q -y install \
             pkg-config libgnutls28-dev libffi-dev libicu-dev libxml2-dev libxslt1-dev \
             libssl-dev zlib1g-dev libcurl4-gnutls-dev libgmp-dev libsqlite3-dev \
-            libavahi-compat-libdnssd-dev libpthread-workqueue-dev \
+            libavahi-compat-libdnssd-dev libpthread-workqueue-dev libpq-dev libmariadb-dev \
             libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev \
             libfreetype-dev libfontconfig1-dev libxrender-dev \
-            libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev
+            libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
+            xvfb fonts-dejavu-core fonts-dejavu-extra
           # The gnustep-2.0 runtime needs ld.gold or lld; ld.gold is gone
           # from binutils on newer Ubuntu.
           if [ -x /usr/bin/ld.gold ]; then
@@ -186,6 +248,9 @@ jobs:
           make install
           make -C Tools/momc
           make -C Tools/momc install
+          for backend in PostgreSQL MySQL; do
+            make -C Backends/$backend && make -C Backends/$backend install
+          done
 
       - name: Build and install ODataKit
         working-directory: ${{ github.workspace }}/ODataKit
@@ -194,27 +259,42 @@ jobs:
           make -j"$(nproc)"
           make install
 
-      - name: Build the libraries
-        run: |
-          . $PREFIX/System/Library/Makefiles/GNUstep.sh
-          make -j"$(nproc)"
-
       # TopoText alone needs nothing but Foundation: kept so.
       - name: Build TopoText alone
         run: |
           . $PREFIX/System/Library/Makefiles/GNUstep.sh
-          make clean
           make WITH_SYNC=no
           make clean
+
+      - name: Build and install the libraries
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
           make -j"$(nproc)"
+          make install
+          test -f "$(gnustep-config --variable=GNUSTEP_LOCAL_HEADERS)/TopoText/TopoText.h"
 
       - name: Unit tests
         run: |
           . $PREFIX/System/Library/Makefiles/GNUstep.sh
           make test
 
-      - name: Install
+      - name: Build SimpleNotes
         run: |
           . $PREFIX/System/Library/Makefiles/GNUstep.sh
-          make install
-          test -f "$(gnustep-config --variable=GNUSTEP_LOCAL_HEADERS)/TopoText/TopoText.h"
+          make -C Examples/SimpleNotes -j"$(nproc)"
+
+      # Its tests, two devices through its server over HTTP, and the app
+      # driven from within (--self-test) under xvfb-run.
+      - name: SimpleNotes, checked
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make -C Examples/SimpleNotes check
+
+      - name: SimpleNotes' server on PostgreSQL and MariaDB
+        working-directory: ${{ github.workspace }}/source/Examples/SimpleNotes
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          SN_STORE_ARGS="-StoreType PostgreSQL -StoreURL postgresql://postgres:notes@127.0.0.1:5432/notes" \
+            Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+          SN_STORE_ARGS="-StoreType MariaDB -StoreURL mysql://root:notes@127.0.0.1:3306/notes" SN_CHECK_PORT=18081 \
+            Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check

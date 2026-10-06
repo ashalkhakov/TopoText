@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="24127" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+    <dependencies>
+        <deployment identifier="macosx"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24127"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
+            <connections>
+                <outlet property="delegate" destination="SNa-pp-del" id="SNa-cn-001"/>
+            </connections>
+        </customObject>
+        <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customObject id="SNa-pp-del" customClass="SNAppController"/>
+        <menu title="Main Menu" systemMenu="main" id="SNm-mn-000">
+            <items>
+                <menuItem title="SimpleNotes" id="SNm-mi-100">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="SimpleNotes" systemMenu="apple" id="SNm-mn-100">
+                        <items>
+                            <menuItem title="About SimpleNotes" id="SNm-mi-101">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="orderFrontStandardAboutPanel:" target="-1" id="SNm-ac-101"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-102"/>
+                            <menuItem title="Server…" keyEquivalent="," id="SNm-mi-103">
+                                <connections>
+                                    <action selector="chooseServer:" target="SNa-pp-del" id="SNm-ac-103"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-104"/>
+                            <menuItem title="Hide SimpleNotes" keyEquivalent="h" id="SNm-mi-105">
+                                <connections>
+                                    <action selector="hide:" target="-1" id="SNm-ac-105"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Hide Others" keyEquivalent="h" id="SNm-mi-106">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="hideOtherApplications:" target="-1" id="SNm-ac-106"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Show All" id="SNm-mi-107">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="unhideAllApplications:" target="-1" id="SNm-ac-107"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-108"/>
+                            <menuItem title="Quit SimpleNotes" keyEquivalent="q" id="SNm-mi-109">
+                                <connections>
+                                    <action selector="terminate:" target="-1" id="SNm-ac-109"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="File" id="SNm-mi-200">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="File" id="SNm-mn-200">
+                        <items>
+                            <menuItem title="New Note" keyEquivalent="n" id="SNm-mi-201">
+                                <connections>
+                                    <action selector="newNote:" target="-1" id="SNm-ac-201"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="New Folder" keyEquivalent="N" id="SNm-mi-202">
+                                <connections>
+                                    <action selector="newFolder:" target="-1" id="SNm-ac-202"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Rename Folder…" id="SNm-mi-203">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="renameFolder:" target="-1" id="SNm-ac-203"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-204"/>
+                            <menuItem title="Pin Note" keyEquivalent="p" id="SNm-mi-205">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="togglePinned:" target="-1" id="SNm-ac-205"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Delete Note" id="SNm-mi-206">
+                                <string key="keyEquivalent" base64-UTF8="YES">CA</string>
+                                <connections>
+                                    <action selector="deleteNote:" target="-1" id="SNm-ac-206"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Delete Folder…" id="SNm-mi-207">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="deleteFolder:" target="-1" id="SNm-ac-207"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-208"/>
+                            <menuItem title="Close" keyEquivalent="w" id="SNm-mi-209">
+                                <connections>
+                                    <action selector="performClose:" target="-1" id="SNm-ac-209"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Edit" id="SNm-mi-300">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Edit" id="SNm-mn-300">
+                        <items>
+                            <menuItem title="Undo" keyEquivalent="z" id="SNm-mi-301">
+                                <connections>
+                                    <action selector="undo:" target="-1" id="SNm-ac-301"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Redo" keyEquivalent="Z" id="SNm-mi-302">
+                                <connections>
+                                    <action selector="redo:" target="-1" id="SNm-ac-302"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-303"/>
+                            <menuItem title="Cut" keyEquivalent="x" id="SNm-mi-304">
+                                <connections>
+                                    <action selector="cut:" target="-1" id="SNm-ac-304"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Copy" keyEquivalent="c" id="SNm-mi-305">
+                                <connections>
+                                    <action selector="copy:" target="-1" id="SNm-ac-305"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Paste" keyEquivalent="v" id="SNm-mi-306">
+                                <connections>
+                                    <action selector="paste:" target="-1" id="SNm-ac-306"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Select All" keyEquivalent="a" id="SNm-mi-307">
+                                <connections>
+                                    <action selector="selectAll:" target="-1" id="SNm-ac-307"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-308"/>
+                            <menuItem title="Find" keyEquivalent="f" id="SNm-mi-309">
+                                <connections>
+                                    <action selector="findNote:" target="-1" id="SNm-ac-309"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Format" id="SNm-mi-400">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Format" id="SNm-mn-400">
+                        <items>
+                            <menuItem title="Title" keyEquivalent="t" id="SNm-mi-401">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="styleTitle:" target="-1" id="SNm-ac-401"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Heading" keyEquivalent="h" id="SNm-mi-402">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="styleHeading:" target="-1" id="SNm-ac-402"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Body" keyEquivalent="b" id="SNm-mi-403">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="styleBody:" target="-1" id="SNm-ac-403"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-404"/>
+                            <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-405">
+                                <connections>
+                                    <action selector="toggleBold:" target="-1" id="SNm-ac-405"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Italic" keyEquivalent="i" id="SNm-mi-406">
+                                <connections>
+                                    <action selector="toggleItalic:" target="-1" id="SNm-ac-406"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Underline" keyEquivalent="u" id="SNm-mi-407">
+                                <connections>
+                                    <action selector="toggleUnderline:" target="-1" id="SNm-ac-407"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Strikethrough" keyEquivalent="x" id="SNm-mi-408">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-408"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Sync" id="SNm-mi-500">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Sync" id="SNm-mn-500">
+                        <items>
+                            <menuItem title="Sync Now" keyEquivalent="r" id="SNm-mi-501">
+                                <connections>
+                                    <action selector="sync:" target="-1" id="SNm-ac-501"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Server…" id="SNm-mi-502">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="chooseServer:" target="SNa-pp-del" id="SNm-ac-502"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+                <menuItem title="Window" id="SNm-mi-600">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="Window" systemMenu="window" id="SNm-mn-600">
+                        <items>
+                            <menuItem title="Minimize" keyEquivalent="m" id="SNm-mi-601">
+                                <connections>
+                                    <action selector="performMiniaturize:" target="-1" id="SNm-ac-601"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Notes" keyEquivalent="1" id="SNm-mi-602">
+                                <connections>
+                                    <action selector="showNotes:" target="SNa-pp-del" id="SNm-ac-602"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
+            </items>
+        </menu>
+    </objects>
+</document>

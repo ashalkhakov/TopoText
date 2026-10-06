@@ -1,0 +1,28 @@
+// SimpleNotes for iOS 15 and later, iPhone and iPad. The shared settings
+// (Debug.xcconfig or Release.xcconfig) come first, in the project.
+//
+// On a device it is signed with your team: Xcode's Signing & Capabilities
+// pane, or DEVELOPMENT_TEAM = <your team ID> in Local.xcconfig beside this
+// file (git ignores it). The simulator needs neither.
+
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+TARGETED_DEVICE_FAMILY = 1,2
+PRODUCT_NAME = SimpleNotes
+PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.SimpleNotes
+INFOPLIST_FILE = iOS/Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = SimpleNotes
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES
+INFOPLIST_KEY_NSLocalNetworkUsageDescription = SimpleNotes syncs with your notes server, which may be on the local network.
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
+HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/iOS
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+CODE_SIGNING_REQUIRED[sdk=iphoneos*] = YES
+
+#include? "Local.xcconfig"
