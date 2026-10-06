@@ -1,0 +1,6 @@
+build/
+obj/
+*.bundle/
+Tests/obj/
+.DS_Store
+*.dSYM/

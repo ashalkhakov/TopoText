@@ -1,0 +1,220 @@
+name: CI
+
+# Ported from ODataKit's CI: the same suite on Apple's Foundation and Core
+# Data, and on GNUstep with FreeCoreData, both against ODataKit (whose
+# ODataSync TopoTextSync is a part of); and the libraries compiled for iOS.
+#
+# pull_request fires for a PR against any branch, with the workflow from the
+# PR's head; workflow_dispatch only offers "Run workflow" once this file is
+# on the default branch.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A push and the PR for the same branch share one group: the later run
+# supersedes the earlier (and macOS minutes bill at 10x on a private
+# repository).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
+  ODATAKIT_REF: caa7ed52e134da7a83583c1aadbbe8207d74d9a8
+
+jobs:
+  ########################### macOS / Cocoa, iOS ###########################
+  # Apple's Foundation and Core Data: what GNUstep and FreeCoreData port. A
+  # test red here and green on GNUstep is wrong about Foundation.
+  macos:
+    name: macOS and iOS
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/source
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/ODataKit
+          ref: ${{ env.ODATAKIT_REF }}
+          path: ODataKit
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      # ODataKit's frameworks, by its own Xcode workspace, for macOS and for
+      # the iOS simulator.
+      - name: Build ODataKit
+        run: |
+          make odatakit ODATAKIT=../ODataKit
+          make odatakit-ios ODATAKIT=../ODataKit
+
+      # Built first and on its own, so a compile error in the library is
+      # reported as that rather than as a test failure.
+      - name: Build the libraries
+        run: make
+
+      - name: Unit tests (against Apple's Foundation and CoreData)
+        run: make test
+
+      # More seeds of the convergence test than a push's run can afford
+      # everywhere: here, where it is cheapest to read a failure.
+      - name: Convergence, long
+        run: TOPOTEXT_SEEDS=2000 xcrun xctest -XCTest TopoTextFuzzTests build/TopoTextTests.xctest
+
+      # No iOS simulator test run (yet): the libraries compiled for a device
+      # and for the simulator, TopoTextSync against ODataKit's iOS frameworks.
+      - name: Build for iOS
+        run: make ios
+
+  ########################### GNUstep / Linux ###########################
+  # A patched stack built by gnustep-patches, FreeCoreData as the Core Data
+  # underneath, ODataKit installed into it: as ODataKit's own CI.
+  gnustep:
+    name: Ubuntu (GNUstep, FreeCoreData, clang, gnustep-2.0)
+    runs-on: ubuntu-latest
+    # The stack build is the long pole; with the cache, minutes.
+    timeout-minutes: 90
+    env:
+      SRC_PATH: ${{ github.workspace }}/source
+      PREFIX: ${{ github.workspace }}/build
+      SOURCES: ${{ github.workspace }}/dependencies
+      CC: clang
+      CXX: clang++
+      LIBRARY_COMBO: ng-gnu-gnu
+      RUNTIME_VERSION: gnustep-2.0
+      # Foundation for the libraries, tools-xctest for the suite; gui and
+      # back for the Notes example app to come (in the recipe now, so the
+      # cached stack does not change when it lands).
+      COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back tools-xctest
+      # libobjc2 and libdispatch land in the prefix's plain lib/, which the
+      # gnustep layout does not treat as a library root.
+      LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
+      # The pins ODataKit's CI builds with, at ODATAKIT_REF.
+      GNUSTEP_PATCHES_REF: 00a9c890134abe3e752d49545556a228cb8b7122
+      FREECOREDATA_REF: 1a65bfb9a19e2e957b05e7253962ef7a4b40cbe7
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/source
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/gnustep-patches
+          ref: ${{ env.GNUSTEP_PATCHES_REF }}
+          path: gnustep-patches
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/FreeCoreData
+          ref: ${{ env.FREECOREDATA_REF }}
+          path: FreeCoreData
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/ODataKit
+          ref: ${{ env.ODATAKIT_REF }}
+          path: ODataKit
+
+      - name: Install packages
+        run: |
+          ./.github/scripts/apt-update.sh
+          sudo apt-get -q -y install \
+            pkg-config libgnutls28-dev libffi-dev libicu-dev libxml2-dev libxslt1-dev \
+            libssl-dev zlib1g-dev libcurl4-gnutls-dev libgmp-dev libsqlite3-dev \
+            libavahi-compat-libdnssd-dev libpthread-workqueue-dev \
+            libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev \
+            libfreetype-dev libfontconfig1-dev libxrender-dev \
+            libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev
+          # The gnustep-2.0 runtime needs ld.gold or lld; ld.gold is gone
+          # from binutils on newer Ubuntu.
+          if [ -x /usr/bin/ld.gold ]; then
+            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 10
+          else
+            sudo apt-get -q -y install lld
+            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld 10
+          fi
+          ld --version | head -1
+
+      # The recipe hash covers the build script, COMPONENTS, the toolchain and
+      # every patch: it changes exactly when the prefix would.
+      - name: GNUstep recipe
+        id: recipe
+        run: echo "hash=$(../gnustep-patches/Scripts/build-gnustep.sh --print-recipe-hash)" >> "$GITHUB_OUTPUT"
+
+      # Restored and saved apart, so the save holds the stack before
+      # FreeCoreData, ODataKit or TopoText is installed into it.
+      - name: Restore GNUstep
+        id: gnustep-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-${{ runner.os }}-${{ steps.recipe.outputs.hash }}
+
+      - name: Build GNUstep
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: ../gnustep-patches/Scripts/build-gnustep.sh
+
+      - name: Save GNUstep
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-${{ runner.os }}-${{ steps.recipe.outputs.hash }}
+
+      - name: Verify GNUstep
+        if: steps.gnustep-cache.outputs.cache-hit == 'true'
+        run: ../gnustep-patches/Scripts/build-gnustep.sh --verify-only
+
+      - name: Build and install FreeCoreData
+        working-directory: ${{ github.workspace }}/FreeCoreData
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make -j"$(nproc)"
+          make install
+          make -C Tools/momc
+          make -C Tools/momc install
+
+      - name: Build and install ODataKit
+        working-directory: ${{ github.workspace }}/ODataKit
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make -j"$(nproc)"
+          make install
+
+      - name: Build the libraries
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make -j"$(nproc)"
+
+      # TopoText alone needs nothing but Foundation: kept so.
+      - name: Build TopoText alone
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make clean
+          make WITH_SYNC=no
+          make clean
+          make -j"$(nproc)"
+
+      - name: Unit tests
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make test
+
+      - name: Install
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          make install
+          test -f "$(gnustep-config --variable=GNUSTEP_LOCAL_HEADERS)/TopoText/TopoText.h"

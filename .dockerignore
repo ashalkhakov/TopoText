@@ -1,0 +1,4 @@
+build
+obj
+Tests/obj
+**/.DS_Store

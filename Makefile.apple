@@ -1,0 +1,114 @@
+# TopoText on Apple's Foundation and Core Data: clang, and Xcode's xctest.
+# The GNUmakefile includes this when GNUSTEP_MAKEFILES is not set.
+#
+#   make                 build/libTopoText.dylib, and build/libTopoTextSync.dylib
+#                        when ODataKit's frameworks are there
+#   make test            the suites, by xctest
+#   make ios             both libraries compiled for iOS and its simulator
+#
+# TopoTextSync builds against ODataKit's frameworks, as its Xcode workspace
+# builds them:
+#   xcodebuild -workspace ../ODataKit/ODataKit.xcworkspace -scheme ODataSync \
+#     -destination 'platform=macOS' -derivedDataPath build/ODataKit build
+# which is where ODATAKIT_FRAMEWORKS looks first. Without them TopoTextSync
+# and its tests are left out.
+
+BUILD ?= build
+ODATAKIT ?= ../ODataKit
+ODATAKIT_FRAMEWORKS ?= $(firstword $(wildcard $(BUILD)/ODataKit/Build/Products/Debug) \
+	$(patsubst %/ODataSync.framework,%,$(wildcard $(HOME)/Library/Developer/Xcode/DerivedData/ODataKit-*/Build/Products/Debug/ODataSync.framework)))
+
+CC = clang
+MACOS_MIN ?= 14.0
+IOS_MIN ?= 15.0
+WARN = -Wall -Wextra -Wno-unused-parameter
+OBJCFLAGS = -fobjc-arc -fblocks -g $(WARN)
+TT_INC = -ISources/TopoText/include -ISources/TopoText/include/TopoText -ISources/TopoText
+SYNC_INC = -ISources/TopoTextSync/include -ISources/TopoTextSync/include/TopoTextSync
+TT_SRCS = $(wildcard Sources/TopoText/*.m)
+SYNC_SRCS = $(wildcard Sources/TopoTextSync/*.m)
+TT_HDRS = $(wildcard Sources/TopoText/*.h Sources/TopoText/include/TopoText/*.h)
+SYNC_HDRS = $(wildcard Sources/TopoTextSync/include/TopoTextSync/*.h)
+
+DEVELOPER := $(shell xcode-select -p)
+XCTEST_FRAMEWORKS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/Library/Frameworks
+XCTEST_LIBS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/usr/lib
+ABS_BUILD = $(abspath $(BUILD))
+
+LIBS = $(BUILD)/libTopoText.dylib
+BUNDLES = $(BUILD)/TopoTextTests.xctest
+ifneq ($(ODATAKIT_FRAMEWORKS),)
+LIBS += $(BUILD)/libTopoTextSync.dylib
+BUNDLES += $(BUILD)/TopoTextSyncTests.xctest
+ODATAKIT_FLAGS = -F$(ODATAKIT_FRAMEWORKS) -Wl,-rpath,$(abspath $(ODATAKIT_FRAMEWORKS))
+endif
+
+.PHONY: all test ios clean odatakit odatakit-ios
+all: $(LIBS)
+
+$(BUILD)/libTopoText.dylib: $(TT_SRCS) $(TT_HDRS)
+	@mkdir -p $(BUILD)
+	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) -dynamiclib $(TT_SRCS) \
+	  -install_name @rpath/libTopoText.dylib -framework Foundation -o $@
+
+$(BUILD)/libTopoTextSync.dylib: $(SYNC_SRCS) $(SYNC_HDRS) $(BUILD)/libTopoText.dylib
+	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) $(SYNC_INC) $(ODATAKIT_FLAGS) -dynamiclib $(SYNC_SRCS) \
+	  -install_name @rpath/libTopoTextSync.dylib -L$(BUILD) -lTopoText \
+	  -framework ODataSync -framework ODataKit -framework CoreData -framework Foundation -o $@
+
+# A test bundle: the suite's objects, an Info.plist, run by xctest.
+define tt_bundle
+	@mkdir -p $@/Contents/MacOS
+	printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>$(1)</string><key>CFBundleIdentifier</key><string>io.github.ashalkhakov.$(1)</string><key>CFBundlePackageType</key><string>BNDL</string><key>CFBundleName</key><string>$(1)</string></dict></plist>\n' > $@/Contents/Info.plist
+endef
+
+$(BUILD)/TopoTextTests.xctest: Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m $(BUILD)/libTopoText.dylib
+	$(call tt_bundle,TopoTextTests)
+	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) -bundle Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m \
+	  -F$(XCTEST_FRAMEWORKS) -framework XCTest -Wl,-rpath,$(XCTEST_FRAMEWORKS) -Wl,-rpath,$(XCTEST_LIBS) \
+	  -L$(BUILD) -lTopoText -Wl,-rpath,$(ABS_BUILD) -framework Foundation -o $@/Contents/MacOS/TopoTextTests
+
+$(BUILD)/TopoTextSyncTests.xctest: Tests/TopoTextSyncTests.m $(BUILD)/libTopoTextSync.dylib
+	$(call tt_bundle,TopoTextSyncTests)
+	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) $(SYNC_INC) $(ODATAKIT_FLAGS) -bundle Tests/TopoTextSyncTests.m \
+	  -F$(XCTEST_FRAMEWORKS) -framework XCTest -Wl,-rpath,$(XCTEST_FRAMEWORKS) -Wl,-rpath,$(XCTEST_LIBS) \
+	  -L$(BUILD) -lTopoTextSync -lTopoText -Wl,-rpath,$(ABS_BUILD) \
+	  -framework ODataSync -framework ODataService -framework ODataKit -framework CoreData -framework Foundation \
+	  -o $@/Contents/MacOS/TopoTextSyncTests
+
+test: $(BUNDLES)
+ifeq ($(ODATAKIT_FRAMEWORKS),)
+	@echo "warning: no ODataKit frameworks (make odatakit): TopoTextSync is not tested"
+endif
+	@set -e; for b in $(BUNDLES); do xcrun xctest $$b; done
+
+# ODataKit's frameworks, for TopoTextSync, from the checkout at ODATAKIT.
+odatakit:
+	xcodebuild -workspace $(ODATAKIT)/ODataKit.xcworkspace -scheme ODataSync -destination 'platform=macOS' \
+	  -configuration Debug -derivedDataPath $(BUILD)/ODataKit build
+
+odatakit-ios:
+	xcodebuild -workspace $(ODATAKIT)/ODataKit.xcworkspace -scheme ODataSync -destination 'generic/platform=iOS Simulator' \
+	  -configuration Debug -derivedDataPath $(BUILD)/ODataKit-iOS build
+
+# iOS has no xctest to run here: the libraries compiled for a device and the
+# simulator, so what does not build there is found here. TopoTextSync needs
+# ODataKit's iOS frameworks (make odatakit-ios), IOS_ODATAKIT_FRAMEWORKS.
+IOS_ODATAKIT_FRAMEWORKS ?= $(wildcard $(BUILD)/ODataKit-iOS/Build/Products/Debug-iphonesimulator)
+ios:
+	@mkdir -p $(BUILD)/ios
+	set -e; for sdk in iphoneos iphonesimulator; do \
+	  target=arm64-apple-ios$(IOS_MIN); [ $$sdk = iphonesimulator ] && target=$$target-simulator; \
+	  for f in $(TT_SRCS); do \
+	    xcrun -sdk $$sdk $(CC) -target $$target $(OBJCFLAGS) $(TT_INC) -c $$f -o $(BUILD)/ios/$$sdk-$$(basename $$f .m).o; \
+	  done; \
+	done
+ifneq ($(IOS_ODATAKIT_FRAMEWORKS),)
+	set -e; for f in $(SYNC_SRCS); do \
+	  xcrun -sdk iphonesimulator $(CC) -target arm64-apple-ios$(IOS_MIN)-simulator $(OBJCFLAGS) $(TT_INC) $(SYNC_INC) \
+	    -F$(IOS_ODATAKIT_FRAMEWORKS) -c $$f -o $(BUILD)/ios/sync-$$(basename $$f .m).o; \
+	done
+endif
+
+clean:
+	rm -rf $(BUILD)/*.dylib $(BUILD)/*.dSYM $(BUILD)/*.xctest $(BUILD)/ios
