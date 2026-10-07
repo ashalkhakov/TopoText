@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 // The text stored: its state, its plain text, its title.
 - (void)setText:(TopoText *)text;
 - (BOOL)isPinned;
+// When it was last edited: edited, on a store of an older version of the
+// model updated (read as stored: key-value coding's "updated" is
+// NSManagedObject's -isUpdated on Apple's Core Data).
+@property (nonatomic, nullable) NSDate *lastEdited;
 // What a list shows under the title.
 @property (nonatomic, readonly) NSString *snippet;
 @end

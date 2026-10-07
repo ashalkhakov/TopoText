@@ -83,7 +83,8 @@ class Project:
 
 
 FILETYPES = {'.m': 'sourcecode.c.objc', '.h': 'sourcecode.c.h', '.xib': 'file.xib', '.plist': 'text.plist.xml',
-             '.xcconfig': 'text.xcconfig', '.py': 'text.script.python', '.md': 'net.daringfireball.markdown'}
+             '.xcconfig': 'text.xcconfig', '.py': 'text.script.python', '.md': 'net.daringfireball.markdown',
+             '.icns': 'image.icns', '.png': 'image.png'}
 
 
 def file_ref(p, path, name=None):
@@ -283,6 +284,7 @@ def simplenotes(topotext_ids):
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m',
                                      'SNEditorViewController.xib', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
+    icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
     server = {n: F('Server/' + n) for n in ('SNServer.m',)}
     tests = {n: F('Tests/' + n) for n in ('seed.py',)}
 
@@ -314,7 +316,8 @@ def simplenotes(topotext_ids):
     targets = []
     mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
-                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib']), appkit['SimpleNotes-macOS.xcconfig'])
+                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
+                     appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],
                                                                       appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')

@@ -9,6 +9,8 @@
 #                            the app driven from within (--self-test)
 #   openapp ./SimpleNotes.app
 #   ./obj/simplenotes-server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+#   make SN_SERVER_ONLY=yes  the server alone, on Foundation only (no
+#                            gnustep-gui: Docker/server.Dockerfile)
 #
 # macOS: the same commands without GNUSTEP_MAKEFILES set go to
 # Makefile.apple (the server and the tests; the apps are the Xcode
@@ -33,14 +35,16 @@ SN_INCLUDES = -IShared -IAppKit
 SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
 	-lOTelKit -lODataKit -lCoreData -ldispatch
 
+ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
+endif
 SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNSelfTest.m Shared/SNCheck.m \
 	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNMigration.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS)
 SimpleNotes_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
-SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib
+SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib Icons/SimpleNotes.png
 # SNNote+CoreDataProperties, SNFolder+CoreDataProperties: generated from
 # the model as it builds (Codegen: Category/Extension), as Xcode does.
 SimpleNotes_COREDATA_CODEGEN = yes
@@ -56,7 +60,9 @@ simplenotes-server_TOOL_LIBS += $(SN_SYNC_LIBS)
 include $(GNUSTEP_MAKEFILES)/coredata-model.make
 
 -include GNUmakefile.preamble
+ifneq ($(SN_SERVER_ONLY),yes)
 include $(GNUSTEP_MAKEFILES)/application.make
+endif
 include $(GNUSTEP_MAKEFILES)/tool.make
 -include GNUmakefile.postamble
 

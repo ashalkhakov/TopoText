@@ -18,11 +18,29 @@ static BOOL SNWait(NSTimeInterval seconds, BOOL (^done)(void)) {
     return done();
 }
 
+/* The window drawn into a picture (the README's screenshots). */
+static void SNSnapshot(UIView *v, NSString *path) {
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithBounds:v.bounds];
+    UIImage *image = [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
+        [v drawViewHierarchyInRect:v.bounds afterScreenUpdates:YES];
+    }];
+    SNSay([UIImagePNGRepresentation(image) writeToFile:path atomically:YES], [NSString stringWithFormat:@"a snapshot in %@", path]);
+}
+
 @interface SNSelfTest : NSObject
 @property (nonatomic, copy) void (^run)(void);
 @end
 @implementation SNSelfTest
-- (void)fire:(NSTimer *)timer { self.run(); }
+/* An exception is a failure, not a hang: a timer would swallow it, and
+   the test never finish. */
+- (void)fire:(NSTimer *)timer {
+    @try {
+        self.run();
+    } @catch (NSException *e) {
+        fprintf(stderr, "FAIL %s: %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String);
+        exit(1);
+    }
+}
 @end
 
 void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
@@ -33,7 +51,8 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNNotesViewController *list = [[SNNotesViewController alloc] initWithNotes:notes folder:nil];
         [navigation pushViewController:list animated:NO];
         SNWait(0.5, ^BOOL { return NO; });
-        SNSay([list.tableView numberOfRowsInSection:0] == 4, @"the four notes are in the list");
+        NSArray *listed = [[list shownRows] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"NOT SELF BEGINSWITH '## '"]];
+        SNSay(listed.count == 4, [NSString stringWithFormat:@"the four notes are in the list (%@)", [[list shownRows] componentsJoinedByString:@", "]]);
         SNNote *groceries = [notes notesInFolder:nil matching:@"Groceries"].firstObject;
         SNEditorViewController *editor = [[SNEditorViewController alloc] initWithNotes:notes note:groceries];
         [navigation pushViewController:editor animated:NO];
@@ -88,12 +107,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         if (snapshot) {
             [wtv resignFirstResponder];
             SNWait(1, ^BOOL { return NO; });
-            UIView *v = navigation.view.window;
-            UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithBounds:v.bounds];
-            UIImage *image = [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
-                [v drawViewHierarchyInRect:v.bounds afterScreenUpdates:YES];
-            }];
-            SNSay([UIImagePNGRepresentation(image) writeToFile:@(snapshot) atomically:YES], @"a snapshot");
+            SNSnapshot(navigation.view.window, @(snapshot));
         }
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
@@ -108,6 +122,39 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         }
         SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [wt.string hasSuffix:@"water the plants"],
               [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+
+        /* Folders in folders and tags, in the folder list. */
+        [navigation popToRootViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        UITableViewController *root = (UITableViewController *)navigation.viewControllers.firstObject;
+        [root viewWillAppear:NO];
+        UITableView *ft = root.tableView;
+        NSMutableArray *folders = [NSMutableArray array];
+        for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
+            UITableViewCell *c = [root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]];
+            [folders addObject:[NSString stringWithFormat:@"%ld %@", (long)c.indentationLevel,
+                                                          ((UIListContentConfiguration *)c.contentConfiguration).text]];
+        }
+        SNSay([folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
+              [NSString stringWithFormat:@"Projects under Work (%@)", [folders componentsJoinedByString:@", "]]);
+        SNSay([ft numberOfRowsInSection:3] == 3, @"the tags listed");
+        const char *folderShot = getenv("SN_SELF_TEST_SNAPSHOT");
+        if (folderShot) SNSnapshot(navigation.view.window, [[@(folderShot) stringByDeletingPathExtension] stringByAppendingString:@"-folders.png"]);
+        SNNotesViewController *tagged = [[SNNotesViewController alloc] initWithNotes:notes tag:@"work"];
+        [navigation pushViewController:tagged animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay([[tagged shownRows] containsObject:@"Ideas"] && [[tagged shownRows] containsObject:@"Standup notes"] && ![[tagged shownRows] containsObject:@"Weekend"],
+              [NSString stringWithFormat:@"#work lists its notes (%@)", [[tagged shownRows] componentsJoinedByString:@", "]]);
+        /* Sort By Title, as its menu's command goes: up the chain from the list. */
+        SNSortOrder order = notes.sortOrder;
+        id target = [tagged targetForAction:@selector(sortByTitle:) withSender:nil];
+        [target sortByTitle:nil];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay(target == tagged && [[tagged shownRows] isEqual:(@[ @"Ideas", @"Standup notes" ])],
+              [NSString stringWithFormat:@"sorted by title (%@)", [[tagged shownRows] componentsJoinedByString:@", "]]);
+        notes.sortOrder = order;
+        [navigation popToRootViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
 
         /* Deleted, into Recently Deleted on the other device; recovered
            from the editor's Recover, back there too. */

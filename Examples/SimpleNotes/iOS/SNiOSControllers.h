@@ -18,6 +18,15 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>
 // A folder's notes (nil: all of them).
 - (instancetype)initWithNotes:(SNNotes *)notes folder:(nullable SNFolder *)folder;
+// The notes tagged so.
+- (instancetype)initWithNotes:(SNNotes *)notes tag:(NSString *)tag;
+// Sort By and Group By Date (its ... menu's).
+- (IBAction)sortByDateEdited:(nullable id)sender;
+- (IBAction)sortByDateCreated:(nullable id)sender;
+- (IBAction)sortByTitle:(nullable id)sender;
+- (IBAction)toggleGroupByDate:(nullable id)sender;
+// The groups listed: their headings and notes' titles, as in shownRows.
+- (NSArray<NSString *> *)shownRows;
 // Recently Deleted: recovered, or deleted for good, from here.
 - (instancetype)initRecentlyDeletedWithNotes:(SNNotes *)notes;
 @end

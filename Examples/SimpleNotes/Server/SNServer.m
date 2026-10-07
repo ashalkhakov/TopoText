@@ -143,9 +143,9 @@ static NSURL *SNURL(id value) {
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
     /* Devices not yet updated write in their model's version: each version
-       only adds to the one before, so what they send is taken as it is. */
+       adds to the one before, and renames Updated Edited (SNUpgradeBody). */
     _service.upgradeBody = ^NSDictionary *(NSDictionary *body, NSString *version, NSEntityDescription *entity, ODataRequest *request, NSError **e) {
-        return body;
+        return SNUpgradeBody(body, entity);
     };
     _histories = [[ODataSyncService alloc] initWithService:_service];
     return YES;

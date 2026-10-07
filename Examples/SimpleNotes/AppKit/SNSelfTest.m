@@ -29,7 +29,16 @@ static void SNFinish(void) {
 @property (nonatomic, copy) void (^run)(void);
 @end
 @implementation SNSelfTest
-- (void)fire:(NSTimer *)timer { self.run(); }
+/* An exception is a failure, not a hang: a timer would swallow it, and
+   the test never finish. */
+- (void)fire:(NSTimer *)timer {
+    @try {
+        self.run();
+    } @catch (NSException *e) {
+        fprintf(stderr, "FAIL %s: %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String);
+        exit(1);
+    }
+}
 @end
 
 void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
@@ -100,13 +109,45 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         }
         SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [weekend.body hasSuffix:@"water the plants"],
               [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+        /* Folders in folders, and tags, in the sidebar. */
+        NSArray *sidebar = [window sidebarRows];
+        SNSay([sidebar containsObject:@"Work"] && [sidebar containsObject:@"  Projects"],
+              [NSString stringWithFormat:@"Projects in Work in the sidebar (%@)", [sidebar componentsJoinedByString:@" | "]]);
+        SNSay([sidebar containsObject:@"Tags"] && [sidebar containsObject:@"  #family"] && [sidebar containsObject:@"  #work"],
+              @"the tags in the notes, under Tags");
+        SNSay([window showTag:@"work"] && [[window shownText] hasPrefix:@"#work chosen"] && [[window shownRows] containsObject:@"Standup notes"] && [[window shownRows] containsObject:@"Ideas"] && ![[window shownRows] containsObject:@"Weekend"],
+              [NSString stringWithFormat:@"#work lists its notes (%@)", [window shownText]]);
+        SNSay([window showFolderNamed:@"Projects"] && [[[window shownRows] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"NOT SELF BEGINSWITH '## '"]] isEqual:@[ @"Ideas" ]],
+              [NSString stringWithFormat:@"a folder in a folder lists its notes (%@)", [window shownText]]);
+        /* Projects to the top, here; there too. */
+        SNFolder *projects = nil;
+        for (SNFolder *f in notes.folders) if ([f.name isEqual:@"Projects"]) projects = f;
+        SNSay([notes moveFolder:projects toFolder:nil] && [[window sidebarRows] containsObject:@"Projects"], @"Projects moved to the top");
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNSay([[[other foldersInFolder:nil] valueForKey:@"name"] containsObject:@"Projects"], @"and on the second device");
+        /* Sorted by title, grouped: pinned first. */
+        SNSortOrder order = notes.sortOrder;
+        BOOL grouped = notes.groupsByDate;
+        [window showAllNotes];
+        SNSay([tv tryToPerform:@selector(sortByTitle:) with:nil] &&
+              [[window shownRows] isEqual:(@[ @"## Pinned", @"Groceries", @"## Notes", @"Ideas", @"Standup notes", @"Weekend" ])],
+              [NSString stringWithFormat:@"Sort By Title from the menu (%@)", [[window shownRows] componentsJoinedByString:@" | "]]);
+        notes.sortOrder = order;
+        notes.groupsByDate = grouped;
+        [window showAllNotes];
+        [window selectNoteTitled:@"Weekend"];
+
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             tv.selectedRange = NSMakeRange(tv.string.length, 0);
             NSView *v = window.window.contentView;
-            [v displayIfNeeded];
+            /* Drawn whole first: gnustep-gui's cacheDisplayInRect: copies
+               what the window last displayed. */
+            [window.window display];
             NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
             [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
 #ifdef GNUSTEP

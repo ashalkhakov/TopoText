@@ -17,17 +17,18 @@ ARG SDK=odatakit-sdk:latest
 # FreeCoreData, rebuilt over the sdk's: a commit of it, or a checkout of
 # one's own (--build-context freecoredata=../FreeCoreData).
 FROM alpine/git AS freecoredata-git
-ARG FREECOREDATA_REF=beb700578e92998fc953da22ac1e7fc654a14b43
+ARG FREECOREDATA_REF=f3d56b490c0618154e4727351384efe9488eb831
 RUN git clone -q https://github.com/ashalkhakov/FreeCoreData.git /src && cd /src && git checkout -q "$FREECOREDATA_REF"
 FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /
 
 # The sdk has Foundation only: AppKit (gui, back on cairo) built into its
-# prefix by the same script and pin, for SimpleNotes, with the Eau theme the
-# app looks as on any of our Linux apps (XFormsKit, RDLKit, ODataKit's).
+# prefix by the same script, for SimpleNotes, with the Eau theme the app
+# looks as on any of our Linux apps (XFormsKit, RDLKit, ODataKit's); and
+# Foundation again, at this pin, which may be ahead of the sdk's.
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GNUSTEP_PATCHES_REF=0b19ede3cd7ddc7e958130a856bea1a49e66c0f8
+ARG GNUSTEP_PATCHES_REF=4d5599fcec9e35e1e62affb387b6a47a66c11fdc
 RUN apt-get update && apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
       libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev libfreetype-dev libfontconfig1-dev \
       libxrender-dev libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
@@ -37,7 +38,7 @@ RUN set -e; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
     git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
-    PREFIX=/opt/gnustep SOURCES=/tmp/src/gnustep COMPONENTS="libs-gui libs-back eau" Scripts/build-gnustep.sh; \
+    PREFIX=/opt/gnustep SOURCES=/tmp/src/gnustep COMPONENTS="libs-base libs-gui libs-back eau" Scripts/build-gnustep.sh; \
     rm -rf /tmp/src
 COPY --from=freecoredata / /tmp/freecoredata/
 RUN set -e; cd /tmp/freecoredata; make clean >/dev/null 2>&1 || true; \

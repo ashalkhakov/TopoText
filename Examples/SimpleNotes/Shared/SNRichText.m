@@ -1,5 +1,6 @@
 #import "SNRichText.h"
 #import "SNNotes.h"
+#import "SNModel.h"
 
 NSString * const SNBoldKey = @"bold";
 NSString * const SNItalicKey = @"italic";
@@ -351,6 +352,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     _applying = YES;
     [_storage setAttributedString:SNViewString(editor.text)];
     _applying = NO;
+    [self showTagsInRange:NSMakeRange(0, _storage.length)];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storageEdited:)
                                                  name:NSTextStorageDidProcessEditingNotification object:_storage];
     return self;
@@ -481,6 +483,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [self showParagraphsAsTheText];
     [_storage endEditing];
     _applying = NO;
+    [self showTagsInRange:NSMakeRange(0, _storage.length)];
     _dirty = NSMakeRange(NSNotFound, 0);
     [_afterNewline removeAllIndexes];
     if (start != NSNotFound) {
@@ -500,6 +503,25 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
         if (!para.length) continue;
         [self setParagraph:[t paragraphAttributesAtIndex:para.location keys:SNParagraphKeys()] inRange:para];
     }
+}
+
+/* Tags (#word) in the paragraphs a range touches shown in the accent
+   colour, as Apple Notes does: the view's only, nothing of the text's. */
+- (void)showTagsInRange:(NSRange)range {
+    NSString *s = _storage.string;
+    NSRange para = SNParagraphsRange(s, range);
+    if (!para.length) return;
+    BOOL was = _applying;
+    _applying = YES;
+    [_storage beginEditing];
+    [_storage addAttribute:NSForegroundColorAttributeName value:SNTextColor() range:para];
+    for (NSValue *v in SNTagRangesInText([s substringWithRange:para])) {
+        NSRange tag = v.rangeValue;
+        tag.location += para.location;
+        [_storage addAttribute:NSForegroundColorAttributeName value:SNAccent() range:tag];
+    }
+    [_storage endEditing];
+    _applying = was;
 }
 
 #pragma mark formatting
@@ -543,6 +565,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
         [_storage setAttributes:now range:run];
     }
     [_storage endEditing];
+    [self showTagsInRange:range];
 }
 
 /* A paragraph's formatting, exactly p; the empty last paragraph's (no
@@ -741,6 +764,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
         /* The line after too: a newline typed began it. */
         NSUInteger end = MIN(NSMaxRange(_dirty) + 1, s.length);
         NSRange d = NSMakeRange(_dirty.location, end - _dirty.location);
+        [self showTagsInRange:d];
         NSRange whole = SNParagraphsRange(s, d);
         for (NSUInteger i = whole.location; i < NSMaxRange(whole); ) {
             NSUInteger next = SNParagraphEnd(s, i);
@@ -794,6 +818,38 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
     if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(len - 1, 1)];
 #endif
 }
+
+/* After an edit, the whole text drawn again, not only what changed: a
+   marker depends on the paragraphs before it (a number counts them, a
+   checkbox moves with them). Once the edit is done: not while the storage
+   is still processing it. */
+- (void)markersMayHaveMoved {
+#if TARGET_OS_IPHONE
+    NSUInteger len = self.textStorage.length;
+    if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(0, len)];
+#else
+    [self.firstTextView setNeedsDisplay:YES];
+#endif
+}
+
+- (void)textEdited {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(markersMayHaveMoved) object:nil];
+    [self performSelector:@selector(markersMayHaveMoved) withObject:nil afterDelay:0];
+}
+
+#ifdef GNUSTEP
+- (void)textStorage:(NSTextStorage *)storage edited:(unsigned int)mask range:(NSRange)range
+     changeInLength:(int)delta invalidatedRange:(NSRange)invalidated {
+    [super textStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
+    [self textEdited];
+}
+#else
+- (void)processEditingForTextStorage:(NSTextStorage *)storage edited:(NSTextStorageEditActions)mask range:(NSRange)range
+                      changeInLength:(NSInteger)delta invalidatedRange:(NSRange)invalidated {
+    [super processEditingForTextStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
+    [self textEdited];
+}
+#endif
 
 /* An item's number: one more than the item before at its indent, items
    indented further between them not counted. */

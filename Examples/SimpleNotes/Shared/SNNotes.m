@@ -12,6 +12,91 @@ NSInteger SNDaysLeft(SNNote *note) {
     return MAX(0, SNRecentlyDeletedDays - (NSInteger)floor(gone / 86400));
 }
 
+static NSString * const SNSortOrderDefaultsKey = @"SNSortOrder";
+static NSString * const SNGroupByDateDefaultsKey = @"SNGroupByDate";
+
+/* Pinned first, then by order. */
+static NSComparisonResult SNCompareNotes(SNNote *a, SNNote *b, SNSortOrder order) {
+    BOOL pa = a.isPinned, pb = b.isPinned;
+    if (pa != pb) return pa ? NSOrderedAscending : NSOrderedDescending;
+    if (order == SNSortByTitle) {
+        NSComparisonResult r = [a.title ?: @"" localizedStandardCompare:b.title ?: @""];
+        if (r != NSOrderedSame) return r;
+    }
+    NSDate *da = (order == SNSortByDateCreated ? a.created : a.lastEdited) ?: [NSDate distantPast];
+    NSDate *db = (order == SNSortByDateCreated ? b.created : b.lastEdited) ?: [NSDate distantPast];
+    return [db compare:da];
+}
+
+static NSInteger SNCompareNotesWithOrder(id a, id b, void *order) {
+    return SNCompareNotes(a, b, *(SNSortOrder *)order);
+}
+
+static NSArray<SNNote *> *SNSortNotes(NSArray<SNNote *> *notes, SNSortOrder order) {
+    /* Sorted here: the same on every Core Data, nil dates and all. */
+    NSMutableArray *sorted = [notes mutableCopy];
+    [sorted sortUsingFunction:SNCompareNotesWithOrder context:&order];
+    return sorted;
+}
+
+@implementation SNNoteGroup
+- (instancetype)initWithTitle:(NSString *)title notes:(NSArray *)notes {
+    if ((self = [super init])) {
+        _title = [title copy];
+        _notes = [notes copy];
+    }
+    return self;
+}
+@end
+
+/* The heading of a date in a list grouped by date, at now. */
+static NSString *SNDateGroupTitle(NSDate *date, NSDate *now) {
+    NSCalendar *cal = [NSCalendar currentCalendar];
+    NSDateComponents *c = [cal components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:now];
+    NSDate *today = [cal dateFromComponents:c];
+    NSDateComponents *back = [[NSDateComponents alloc] init];
+    back.day = -1;
+    NSDate *yesterday = [cal dateByAddingComponents:back toDate:today options:0];
+    back.day = -7;
+    NSDate *week = [cal dateByAddingComponents:back toDate:today options:0];
+    back.day = -30;
+    NSDate *month = [cal dateByAddingComponents:back toDate:today options:0];
+    if (!date) return @"Earlier";
+    if ([date compare:today] != NSOrderedAscending) return @"Today";
+    if ([date compare:yesterday] != NSOrderedAscending) return @"Yesterday";
+    if ([date compare:week] != NSOrderedAscending) return @"Previous 7 Days";
+    if ([date compare:month] != NSOrderedAscending) return @"Previous 30 Days";
+    NSDateFormatter *f = [[NSDateFormatter alloc] init];
+    NSInteger year = [cal components:NSCalendarUnitYear fromDate:date].year;
+    f.dateFormat = year == c.year ? @"LLLL" : @"yyyy";
+    return [f stringFromDate:date];
+}
+
+NSArray<SNNoteGroup *> *SNGroupNotes(NSArray<SNNote *> *notes, SNSortOrder order, BOOL byDate, NSDate *now) {
+    NSArray *sorted = SNSortNotes(notes, order);
+    NSMutableArray *groups = [NSMutableArray array];
+    NSMutableArray *pinned = [NSMutableArray array], *rest = [NSMutableArray array];
+    for (SNNote *n in sorted) [(n.isPinned ? pinned : rest) addObject:n];
+    if (pinned.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:@"Pinned" notes:pinned]];
+    if (!byDate || order == SNSortByTitle) {
+        if (rest.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:pinned.count ? @"Notes" : nil notes:rest]];
+        return groups;
+    }
+    NSString *title = nil;
+    NSMutableArray *group = nil;
+    for (SNNote *n in rest) {
+        NSString *t = SNDateGroupTitle(order == SNSortByDateCreated ? n.created : n.lastEdited, now);
+        if (![t isEqualToString:title]) {
+            if (group.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:title notes:group]];
+            title = t;
+            group = [NSMutableArray array];
+        }
+        [group addObject:n];
+    }
+    if (group.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:title notes:group]];
+    return groups;
+}
+
 NSString *SNDateText(NSDate *date) {
     if (!date) return @"";
     NSDateFormatter *f = [[NSDateFormatter alloc] init];
@@ -36,6 +121,7 @@ NSString *SNDateText(NSDate *date) {
     NSPersistentStoreCoordinator *_coordinator;
     NSHashTable<SNNoteEditor *> *_editors;
     BOOL _deletes;   /* the model has Recently Deleted (version 2 on) */
+    BOOL _nests;     /* the model has folders in folders (version 3 on) */
     BOOL _savePending;
     NSTimer *_timer;
 }
@@ -75,6 +161,8 @@ NSString *SNDateText(NSDate *date) {
     _context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy;
     NSEntityDescription *note = model.entitiesByName[SNNoteEntity];  /* typed: FreeCoreData's dictionaries are not */
     _deletes = [note.attributesByName objectForKey:@"deletedAt"] != nil;
+    NSEntityDescription *folderEntity = model.entitiesByName[SNFolderEntity];
+    _nests = [folderEntity.relationshipsByName objectForKey:@"parent"] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
@@ -231,14 +319,111 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSArray<SNNote *> *)notesInFolder:(SNFolder *)folder matching:(NSString *)text {
-    NSArray *notes = [self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text deleted:NO] sortedBy:nil];
-    /* Sorted here: the same on every Core Data, nil dates and all. */
-    return [notes sortedArrayUsingComparator:^NSComparisonResult(SNNote *a, SNNote *b) {
-        BOOL pa = a.isPinned, pb = b.isPinned;
-        if (pa != pb) return pa ? NSOrderedAscending : NSOrderedDescending;
-        NSDate *da = a.updated ?: [NSDate distantPast], *db = b.updated ?: [NSDate distantPast];
-        return [db compare:da];
-    }];
+    return SNSortNotes([self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text deleted:NO] sortedBy:nil], self.sortOrder);
+}
+
+#pragma mark folders in folders
+
+- (SNFolder *)parentOfFolder:(SNFolder *)folder {
+    if (!_nests) return nil;
+    SNFolder *parent = folder.parent;
+    if (!parent || parent.isDeleted) return nil;
+    /* On a circle? Then cut at the folder whose id sorts first. */
+    NSMutableArray<SNFolder *> *circle = [NSMutableArray arrayWithObject:folder];
+    for (SNFolder *f = parent; f; f = f.parent) {
+        if (f == folder) {
+            SNFolder *first = folder;
+            for (SNFolder *c in circle)
+                if ([c.id ?: @"" compare:first.id ?: @""] == NSOrderedAscending) first = c;
+            return first == folder ? nil : parent;
+        }
+        /* Into a circle it is not on. */
+        if ([circle containsObject:f]) break;
+        [circle addObject:f];
+    }
+    return parent;
+}
+
+- (NSUInteger)depthOfFolder:(SNFolder *)folder {
+    NSUInteger depth = 0;
+    for (SNFolder *f = [self parentOfFolder:folder]; f; f = [self parentOfFolder:f]) depth++;
+    return depth;
+}
+
+- (BOOL)folder:(SNFolder *)folder isInFolder:(SNFolder *)ancestor {
+    for (SNFolder *f = [self parentOfFolder:folder]; f; f = [self parentOfFolder:f])
+        if (f == ancestor) return YES;
+    return NO;
+}
+
+- (NSArray<SNFolder *> *)foldersInFolder:(SNFolder *)folder {
+    NSMutableArray *in = [NSMutableArray array];
+    for (SNFolder *f in [self folders])
+        if ([self parentOfFolder:f] == folder) [in addObject:f];
+    return in;
+}
+
+- (void)addTreeOf:(SNFolder *)folder to:(NSMutableArray *)tree {
+    for (SNFolder *f in [self foldersInFolder:folder]) {
+        [tree addObject:f];
+        [self addTreeOf:f to:tree];
+    }
+}
+
+- (NSArray<SNFolder *> *)folderTree {
+    NSMutableArray *tree = [NSMutableArray array];
+    [self addTreeOf:nil to:tree];
+    return tree;
+}
+
+#pragma mark tags
+
+- (NSArray<NSString *> *)tags {
+    NSMutableSet *tags = [NSMutableSet set];
+    for (SNNote *n in [self fetch:SNNoteEntity where:[self predicateForFolder:nil matching:@"#" deleted:NO] sortedBy:nil])
+        [tags addObjectsFromArray:SNTagsInText(n.body ?: @"")];
+    return [tags.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+- (NSArray<SNNote *> *)notesTagged:(NSString *)tag matching:(NSString *)text {
+    tag = tag.lowercaseString;
+    NSPredicate *base = [self predicateForFolder:nil matching:text deleted:NO];
+    NSPredicate *mentions = [NSPredicate predicateWithFormat:@"body CONTAINS[c] %@", [@"#" stringByAppendingString:tag]];
+    NSPredicate *where = base ? [NSCompoundPredicate andPredicateWithSubpredicates:@[ base, mentions ]] : mentions;
+    NSMutableArray *tagged = [NSMutableArray array];
+    for (SNNote *n in [self fetch:SNNoteEntity where:where sortedBy:nil])
+        if ([SNTagsInText(n.body ?: @"") containsObject:tag]) [tagged addObject:n];
+    return SNSortNotes(tagged, self.sortOrder);
+}
+
+- (NSUInteger)countOfNotesTagged:(NSString *)tag {
+    return [self notesTagged:tag matching:nil].count;
+}
+
+#pragma mark sorting and grouping
+
+- (SNSortOrder)sortOrder {
+    NSInteger order = [[NSUserDefaults standardUserDefaults] integerForKey:SNSortOrderDefaultsKey];
+    return order >= SNSortByDateEdited && order <= SNSortByTitle ? (SNSortOrder)order : SNSortByDateEdited;
+}
+
+- (void)setSortOrder:(SNSortOrder)order {
+    [[NSUserDefaults standardUserDefaults] setInteger:order forKey:SNSortOrderDefaultsKey];
+    [self say:_status synced:NO];
+}
+
+- (BOOL)groupsByDate {
+    id v = [[NSUserDefaults standardUserDefaults] objectForKey:SNGroupByDateDefaultsKey];
+    return v ? [v boolValue] : YES;
+}
+
+- (void)setGroupsByDate:(BOOL)groups {
+    [[NSUserDefaults standardUserDefaults] setBool:groups forKey:SNGroupByDateDefaultsKey];
+    [self say:_status synced:NO];
+}
+
+- (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes {
+    return SNGroupNotes(notes, self.sortOrder, self.groupsByDate, [NSDate date]);
 }
 
 - (NSUInteger)count:(NSPredicate *)predicate {
@@ -303,10 +488,26 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (SNFolder *)addFolderNamed:(NSString *)name {
+    return [self addFolderNamed:name inFolder:nil];
+}
+
+- (SNFolder *)addFolderNamed:(NSString *)name inFolder:(SNFolder *)parent {
     SNFolder *f = [self insert:SNFolderEntity];
     f.name = name;
+    if (_nests) f.parent = parent;
     [self save];
     return f;
+}
+
+- (BOOL)moveFolder:(SNFolder *)folder toFolder:(SNFolder *)parent {
+    if (!_nests || parent == folder || (parent && [self folder:parent isInFolder:folder])) return NO;
+    /* A circle cut as shown (parentOfFolder:) is cut so in the store
+       first: moving one of its folders must not close it again. */
+    for (SNFolder *f in [self folders])
+        if (f.parent && !f.parent.isDeleted && ![self parentOfFolder:f]) f.parent = nil;
+    folder.parent = parent;
+    [self save];
+    return YES;
 }
 
 - (void)renameFolder:(SNFolder *)folder to:(NSString *)name {
@@ -316,19 +517,24 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (void)deleteFolder:(SNFolder *)folder {
-    /* Its notes to Recently Deleted: each changed, and sent so. */
+    /* The folders in it too, each deleted (and sent so); all their notes
+       to Recently Deleted. */
+    NSMutableArray<SNFolder *> *gone = [NSMutableArray arrayWithObject:folder];
+    [self addTreeOf:folder to:gone];
     NSDate *now = [NSDate date];
-    for (SNNote *n in folder.notes.allObjects) {
-        n.folder = nil;
-        if (!n.deletedAt) n.deletedAt = now;
+    for (SNFolder *f in gone) {
+        for (SNNote *n in f.notes.allObjects) {
+            n.folder = nil;
+            if (_deletes && !n.deletedAt) n.deletedAt = now;
+        }
+        [_context deleteObject:f];
     }
-    [_context deleteObject:folder];
     [self save];
 }
 
 - (SNNote *)addNoteInFolder:(SNFolder *)folder {
     SNNote *n = [self insert:SNNoteEntity];
-    n.updated = n.created;
+    n.lastEdited = n.created;
     n.title = @"New Note";
     n.body = @"";
     n.pinned = @NO;
@@ -469,7 +675,7 @@ NSString *SNDateText(NSDate *date) {
     if (!_dirty) return;
     _dirty = NO;
     note.text = _text;
-    note.updated = [NSDate date];
+    note.lastEdited = [NSDate date];
     _seen = note.bodyText;
     [notes save];
 }

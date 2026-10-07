@@ -38,9 +38,9 @@
     XCTAssertNotNil([server addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:[self temporaryStore]
                                                options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:server serviceRoot:_root];
-    /* Older devices' writes: the newer model only adds, so taken as they are. */
+    /* Older devices' writes, as the server takes them. */
     _service.upgradeBody = ^NSDictionary *(NSDictionary *body, NSString *version, NSEntityDescription *entity, ODataRequest *request, NSError **e) {
-        return body;
+        return SNUpgradeBody(body, entity);
     };
     _histories = [[ODataSyncService alloc] initWithService:_service];
 }
@@ -73,13 +73,14 @@
     [e close];
 }
 
-- (void)testAnOlderStoreIsMigratedAndWhatWaitedIsSent {
+/* A device on the version in mom, updated to the current one. */
+- (void)migrateFrom:(NSString *)mom {
     NSURL *store = [self temporaryStore];
-    NSURL *version1 = [_momd URLByAppendingPathComponent:@"SimpleNotes.mom"];
-    XCTAssertEqual(SNModelVersions(_momd).count, 2u);
+    NSURL *older = [_momd URLByAppendingPathComponent:mom];
+    XCTAssertEqual(SNModelVersions(_momd).count, 3u);
     NSString *replica = nil;
     @autoreleasepool {
-        SNNotes *old = [self deviceAt:store model:version1];
+        SNNotes *old = [self deviceAt:store model:older];
         replica = old.engine.replicaID;
         SNNote *note = [old addNoteInFolder:[old addFolderNamed:@"Home"]];
         [self type:@"Before the update" into:note on:old];
@@ -87,7 +88,7 @@
         /* Typed, saved, not sent: in the store's history only. */
         [self type:@", and after" into:note on:old];
         XCTAssertNotNil([note.entity.attributesByName objectForKey:@"title"]);
-        XCTAssertNil([note.entity.attributesByName objectForKey:@"deletedAt"], @"version 1 has no deletedAt");
+        XCTAssertNil([note.folder.entity.relationshipsByName objectForKey:@"parent"], @"before version 3, no folders in folders");
     }
 
     /* The app updated: the device opened with the current model migrates
@@ -97,6 +98,9 @@
     SNNote *note = [updated notesInFolder:nil matching:nil].firstObject;
     XCTAssertEqualObjects(note.body, @"Before the update, and after");
     XCTAssertEqualObjects(note.folder.name, @"Home");
+    /* updated, renamed edited, kept: a new note's is when it was made. */
+    XCTAssertEqualWithAccuracy(note.edited.timeIntervalSinceReferenceDate, note.created.timeIntervalSinceReferenceDate, 1,
+                               @"updated, renamed edited, kept: %@", note.edited);
     XCTAssertNil(note.deletedAt);
     XCTAssertEqual(updated.pendingCount, 1u, @"still waiting, after the migration (in its history): %@", updated.engine.pendingChanges);
     [self sync:updated];
@@ -111,6 +115,20 @@
     [self sync:updated];
     [self sync:other];
     XCTAssertEqualObjects([other notesInFolder:nil matching:nil].firstObject.body, @"Before the update, and after!");
+    /* Folders in folders, now. */
+    SNFolder *home = note.folder;
+    [updated addFolderNamed:@"Kitchen" inFolder:home];
+    [self sync:updated];
+    [self sync:other];
+    XCTAssertEqualObjects([[other foldersInFolder:[other foldersInFolder:nil].firstObject] valueForKey:@"name"], @[ @"Kitchen" ]);
+}
+
+- (void)testAVersion1StoreIsMigratedAndWhatWaitedIsSent {
+    [self migrateFrom:@"SimpleNotes.mom"];
+}
+
+- (void)testAVersion2StoreIsMigratedAndWhatWaitedIsSent {
+    [self migrateFrom:@"SimpleNotes 2.mom"];
 }
 
 - (void)testAStoreOfTheCurrentVersionIsLeftAlone {

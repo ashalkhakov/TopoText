@@ -89,6 +89,11 @@
     XCTAssertEqualObjects(there.title, @"Groceries");
     XCTAssertEqualObjects(there.body, @"Groceries\nMilk, eggs");
     XCTAssertEqualObjects(there.folder.name, @"Home");
+    /* Its dates too ("updated", before version 3, never synced on Apple's
+       Core Data: key-value coding read NSManagedObject's -isUpdated). */
+    XCTAssertNotNil(there.edited);
+    XCTAssertEqualWithAccuracy(there.edited.timeIntervalSinceReferenceDate, note.edited.timeIntervalSinceReferenceDate, 1);
+    XCTAssertEqualWithAccuracy(there.created.timeIntervalSinceReferenceDate, note.created.timeIntervalSinceReferenceDate, 1);
     TopoText *text = there.text;
     XCTAssertEqualObjects([text attributesAtIndex:0 effectiveRange:NULL], @{ @"style": @"title" });
     XCTAssertEqual([b notesInFolder:nil matching:@"eggs"].count, 1u);
@@ -286,7 +291,7 @@
     SNNotes *a = [self device];
     SNNote *old = [a addNoteInFolder:nil];
     [self edit:old on:a with:^(TopoText *t) { [t insertString:@"old" atIndex:0 attributes:nil]; }];
-    old.updated = [NSDate dateWithTimeIntervalSinceNow:-3600];
+    old.edited = [NSDate dateWithTimeIntervalSinceNow:-3600];
     SNNote *recent = [a addNoteInFolder:nil];
     [self edit:recent on:a with:^(TopoText *t) { [t insertString:@"recent" atIndex:0 attributes:nil]; }];
     XCTAssertEqualObjects([[a notesInFolder:nil matching:nil] valueForKey:@"title"], (@[ @"recent", @"old" ]));
@@ -304,6 +309,158 @@
     XCTAssertEqual(a.pendingCount, 1u);
     [self sync:a];
     XCTAssertEqual(a.pendingCount, 0u);
+}
+
+#pragma mark folders in folders
+
+- (NSArray<NSString *> *)treeOf:(SNNotes *)d {
+    NSMutableArray *names = [NSMutableArray array];
+    for (SNFolder *f in d.folderTree)
+        [names addObject:[[@"" stringByPaddingToLength:[d depthOfFolder:f] * 2 withString:@" " startingAtIndex:0] stringByAppendingString:f.name]];
+    return names;
+}
+
+- (SNFolder *)folderNamed:(NSString *)name on:(SNNotes *)d {
+    for (SNFolder *f in d.folders) if ([f.name isEqual:name]) return f;
+    return nil;
+}
+
+- (void)testFoldersInFolders {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *work = [a addFolderNamed:@"Work"], *home = [a addFolderNamed:@"Home"];
+    SNFolder *projects = [a addFolderNamed:@"Projects" inFolder:work];
+    SNFolder *archive = [a addFolderNamed:@"Archive" inFolder:projects];
+    [a addNoteInFolder:archive];
+    XCTAssertEqualObjects([self treeOf:a], (@[ @"Home", @"Work", @"  Projects", @"    Archive" ]));
+    XCTAssertEqualObjects([a foldersInFolder:nil], (@[ home, work ]));
+    XCTAssertTrue([a folder:archive isInFolder:work]);
+    XCTAssertEqual([a countOfNotesInFolder:work], 0u, @"a folder's own notes");
+    XCTAssertFalse([a moveFolder:work toFolder:archive], @"not into a folder in it");
+    XCTAssertFalse([a moveFolder:work toFolder:work]);
+    XCTAssertEqualObjects([self treeOf:a], (@[ @"Home", @"Work", @"  Projects", @"    Archive" ]));
+    XCTAssertTrue([a moveFolder:projects toFolder:home]);
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqualObjects([self treeOf:b], (@[ @"Home", @"  Projects", @"    Archive", @"Work" ]));
+    XCTAssertEqual([b countOfNotesInFolder:[self folderNamed:@"Archive" on:b]], 1u);
+    /* Moved back to the top, there too. */
+    XCTAssertTrue([b moveFolder:[self folderNamed:@"Projects" on:b] toFolder:nil]);
+    [self sync:b];
+    [self sync:a];
+    XCTAssertEqualObjects([self treeOf:a], (@[ @"Home", @"Projects", @"  Archive", @"Work" ]));
+}
+
+- (void)testFoldersMovedIntoEachOtherApartAreCutTheSameWayEverywhere {
+    SNNotes *a = [self device], *b = [self device];
+    [a addFolderNamed:@"X"];
+    [a addFolderNamed:@"Y"];
+    [self sync:a];
+    [self sync:b];
+    /* Apart: X into Y here, Y into X there. */
+    XCTAssertTrue([a moveFolder:[self folderNamed:@"X" on:a] toFolder:[self folderNamed:@"Y" on:a]]);
+    XCTAssertTrue([b moveFolder:[self folderNamed:@"Y" on:b] toFolder:[self folderNamed:@"X" on:b]]);
+    [self sync:a];
+    [self sync:b];
+    [self sync:a];
+    NSArray *tree = [self treeOf:a];
+    XCTAssertEqualObjects([self treeOf:b], tree, @"the same on both");
+    XCTAssertEqual(tree.count, 2u, @"both kept: %@", tree);
+    XCTAssertEqual([a foldersInFolder:nil].count, 1u, @"one at the top, the other in it: %@", tree);
+    /* And either can be moved out again. */
+    SNFolder *inner = a.folderTree.lastObject;
+    XCTAssertTrue([a moveFolder:inner toFolder:nil]);
+    XCTAssertEqual([a foldersInFolder:nil].count, 2u);
+}
+
+- (void)testDeletingAFolderDeletesTheFoldersInIt {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *work = [a addFolderNamed:@"Work"];
+    SNFolder *projects = [a addFolderNamed:@"Projects" inFolder:work];
+    [a addFolderNamed:@"Home"];
+    [a addNoteInFolder:work];
+    [a addNoteInFolder:projects];
+    [self sync:a];
+    [self sync:b];
+    [b deleteFolder:[self folderNamed:@"Work" on:b]];
+    XCTAssertEqualObjects([self treeOf:b], @[ @"Home" ]);
+    XCTAssertEqual(b.countOfDeletedNotes, 2u);
+    [self sync:b];
+    [self sync:a];
+    XCTAssertEqualObjects([self treeOf:a], @[ @"Home" ]);
+    XCTAssertEqual(a.countOfDeletedNotes, 2u, @"their notes in Recently Deleted everywhere");
+}
+
+#pragma mark tags
+
+- (void)testTagsAreWordsAfterAHash {
+    XCTAssertEqualObjects(SNTagsInText(@"#Groceries for the #weekend-trip, #2024 and #q3_plan"), (@[ @"groceries", @"weekend-trip", @"q3_plan" ]));
+    XCTAssertEqualObjects(SNTagsInText(@"issue#12 a#b # #"), @[], @"after a space or at the start, a letter in it");
+    XCTAssertEqualObjects(SNTagsInText(@"#Work\n#work #WORK"), @[ @"work" ], @"one tag whatever its case");
+    NSArray *ranges = SNTagRangesInText(@"buy #milk.");
+    XCTAssertEqual(ranges.count, 1u);
+    XCTAssertTrue(NSEqualRanges([ranges.firstObject rangeValue], NSMakeRange(4, 5)));
+}
+
+- (void)testNotesByTag {
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *one = [a addNoteInFolder:[a addFolderNamed:@"Home"]], *two = [a addNoteInFolder:nil], *three = [a addNoteInFolder:nil];
+    [self edit:one on:a with:^(TopoText *t) { [t insertString:@"Groceries #home #Errands" atIndex:0 attributes:nil]; }];
+    [self edit:two on:a with:^(TopoText *t) { [t insertString:@"Bike\nfix it #errands" atIndex:0 attributes:nil]; }];
+    [self edit:three on:a with:^(TopoText *t) { [t insertString:@"Old #errands" atIndex:0 attributes:nil]; }];
+    [a deleteNote:three];
+    XCTAssertEqualObjects(a.tags, (@[ @"errands", @"home" ]));
+    XCTAssertEqual([a countOfNotesTagged:@"errands"], 2u, @"not the deleted one");
+    XCTAssertEqual([a notesTagged:@"Errands" matching:@"bike"].count, 1u);
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqualObjects(b.tags, (@[ @"errands", @"home" ]), @"tags are in the text, and sync with it");
+    XCTAssertEqual([b countOfNotesTagged:@"home"], 1u);
+}
+
+#pragma mark sorting and grouping
+
+/* Each group's heading ("" for none) and its notes' titles. */
+- (NSArray *)titlesOf:(NSArray<SNNoteGroup *> *)groups {
+    NSMutableArray *out = [NSMutableArray array];
+    for (SNNoteGroup *g in groups) [out addObject:@[ g.title ?: @"", [g.notes valueForKey:@"title"] ]];
+    return out;
+}
+
+- (void)testSortingAndGroupingByDate {
+    SNNotes *a = [self device];
+    NSCalendar *cal = [NSCalendar currentCalendar];
+    NSDateComponents *noon = [cal components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:[NSDate date]];
+    noon.hour = 12;
+    NSDate *now = [cal dateFromComponents:noon];
+    NSMutableArray *notes = [NSMutableArray array];
+    NSArray *made = @[ @[ @"Banana", @0, @5 ], @[ @"apple", @1, @0 ], @[ @"Cherry", @3, @2 ], @[ @"Date", @20, @1 ], @[ @"Elder", @400, @400 ] ];
+    for (NSArray *m in made) {
+        SNNote *n = [a addNoteInFolder:nil];
+        n.title = m[0];
+        n.edited = [now dateByAddingTimeInterval:-[m[1] integerValue] * 86400.0];
+        n.created = [now dateByAddingTimeInterval:-[m[2] integerValue] * 86400.0];
+        [notes addObject:n];
+    }
+    [a setNote:notes[3] pinned:YES];
+    NSDateFormatter *year = [[NSDateFormatter alloc] init];
+    year.dateFormat = @"yyyy";
+    NSString *old = [year stringFromDate:[now dateByAddingTimeInterval:-400 * 86400.0]];
+    XCTAssertEqualObjects([self titlesOf:SNGroupNotes(notes, SNSortByDateEdited, YES, now)],
+                          (@[ @[ @"Pinned", @[ @"Date" ] ], @[ @"Today", @[ @"Banana" ] ], @[ @"Yesterday", @[ @"apple" ] ],
+                              @[ @"Previous 7 Days", @[ @"Cherry" ] ], @[ old, @[ @"Elder" ] ] ]));
+    XCTAssertEqualObjects([self titlesOf:SNGroupNotes(notes, SNSortByDateCreated, YES, now)],
+                          (@[ @[ @"Pinned", @[ @"Date" ] ], @[ @"Today", @[ @"apple" ] ], @[ @"Previous 7 Days", @[ @"Cherry", @"Banana" ] ],
+                              @[ old, @[ @"Elder" ] ] ]));
+    XCTAssertEqualObjects([self titlesOf:SNGroupNotes(notes, SNSortByTitle, YES, now)],
+                          (@[ @[ @"Pinned", @[ @"Date" ] ], @[ @"Notes", @[ @"apple", @"Banana", @"Cherry", @"Elder" ] ] ]));
+    [a setNote:notes[3] pinned:NO];
+    XCTAssertEqualObjects([self titlesOf:SNGroupNotes(notes, SNSortByDateEdited, NO, now)],
+                          (@[ @[ @"", @[ @"Banana", @"apple", @"Cherry", @"Date", @"Elder" ] ] ]), @"one list, no headings");
+    /* The device's choice, for its lists. */
+    SNSortOrder was = a.sortOrder;
+    a.sortOrder = SNSortByTitle;
+    XCTAssertEqualObjects([[a notesInFolder:nil matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry", @"Date", @"Elder" ]));
+    a.sortOrder = was;
 }
 
 @end

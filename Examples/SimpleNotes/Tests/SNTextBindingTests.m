@@ -237,4 +237,20 @@
     XCTAssertNil([_storage attribute:SNListAttributeName atIndex:6 effectiveRange:NULL]);
 }
 
+#pragma mark tags
+
+- (void)testTagsAreShownInTheirColourOnly {
+    [self start:@"buy #milk"];
+    id plain = [_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL];
+    id tag = [_storage attribute:NSForegroundColorAttributeName atIndex:6 effectiveRange:NULL];
+    XCTAssertNotNil(tag);
+    XCTAssertNotEqualObjects(tag, plain, @"a tag stands out");
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:6 effectiveRange:NULL], @{}, @"the view's, not the text's");
+    /* No longer a tag, no longer shown so. */
+    _selection = NSMakeRange(5, 0);
+    [self key:@""];
+    XCTAssertEqualObjects(_storage.string, @"buy milk");
+    XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:5 effectiveRange:NULL], plain);
+}
+
 @end

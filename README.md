@@ -186,6 +186,12 @@ iOS. On Ubuntu it builds the same pinned gnustep-patches stack (cached),
 FreeCoreData and ODataKit, then builds and tests TopoText, also checking that
 TopoText builds alone.
 
+Releases (`release.yml`, `docker.yml`, ported from ODataKit's, XFormsKit's
+and RDLKit's) package SimpleNotes from a `v*` tag: the macOS app (signed and
+notarized when the secrets are set), a Linux AppImage, unsigned iOS builds,
+and the server's image on the GitHub Container Registry. See
+SimpleNotes' README, "Releases".
+
 ## The files
 
 | File | What it does |
@@ -198,6 +204,8 @@ TopoText builds alone.
 | `Tests/` | Unit tests, the convergence fuzz, ODataSync end to end |
 | `Examples/SimpleNotes/` | The notes app and its server |
 | `Scripts/xcodeproj.py` | The Xcode projects and workspace, written |
+| `Scripts/prepare-appdir.sh`, `package-appimage.sh`, `appimage/` | SimpleNotes' AppImage |
+| `Docker/server.Dockerfile`, `collect-server.sh` | The server's image, FROM scratch |
 
 The wire format is described at the top of `TTCoding.m`. Text is WTF-8,
 because a run split by a remote insert between the two halves of a surrogate
