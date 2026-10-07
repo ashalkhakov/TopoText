@@ -83,7 +83,7 @@
                 </barButtonItem>
                 <barButtonItem image="tablecells" catalog="system" id="SNe-bi-011">
                     <connections>
-                        <action selector="insertTable:" destination="-1" id="SNe-ac-011"/>
+                        <action selector="addTable:" destination="-1" id="SNe-ac-011"/>
                     </connections>
                 </barButtonItem>
             </items>

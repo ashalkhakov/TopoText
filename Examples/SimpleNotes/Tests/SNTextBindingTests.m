@@ -8,6 +8,7 @@
 #import "SNRichText.h"
 #import "SNModel.h"
 #import "SNNotes.h"
+#import "SNTableGrid.h"
 
 /* The test is the text view: its storage, selection and typing. */
 @interface SNTextBindingTests : XCTestCase <SNTextViewing>
@@ -403,6 +404,44 @@
     [_binding applyEdits:[_editor.text mergeText:elsewhere]];
     XCTAssertEqualObjects(_storage.string, _editor.text.string, @"merged in, too");
     XCTAssertNotNil([_storage attribute:NSAttachmentAttributeName atIndex:0 effectiveRange:NULL]);
+}
+
+/* A table's character keeps its grid's room: empty, as large as said. */
+- (void)testATableKeepsItsGridsRoom {
+    NSString *tableID = [_binding insertTableWithRows:2 columns:3 inRange:NSMakeRange(11, 0)];
+    XCTAssertNotNil(tableID);
+    SNTableGrid *grid = [[SNTableGrid alloc] initWithNotes:_notes attachmentID:tableID];
+    XCTAssertEqual(grid.table.columnCount, 3u);
+    SNSize size = [grid layoutForWidth:300];
+    XCTAssertEqualWithAccuracy(size.width, 300, 3, @"its columns sharing the width");
+    [_binding setRoomSize:size forAttachmentID:tableID];
+    NSTextAttachment *shown = [_storage attribute:NSAttachmentAttributeName atIndex:11 effectiveRange:NULL];
+    SNSize room = [[shown valueForKey:@"room"] sizeValue];
+    XCTAssertEqual(room.width, size.width);
+    XCTAssertEqual(room.height, size.height);
+    [_binding refreshAttachments];
+    XCTAssertEqual([_storage attribute:NSAttachmentAttributeName atIndex:11 effectiveRange:NULL], shown, @"kept, not made again");
+}
+
+/* Typed into here while another device typed into the same table: what
+   was stored meanwhile merged in, both kept, saved together. */
+- (void)testATableTypedIntoHereAndElsewhereMerges {
+    NSString *tableID = [_binding insertTableWithRows:2 columns:2 inRange:NSMakeRange(0, 0)];
+    SNTableGrid *grid = [[SNTableGrid alloc] initWithNotes:_notes attachmentID:tableID];
+    [grid layoutForWidth:300];
+    [grid setString:@"Bike" atRow:0 column:0];
+    SNAttachment *a = [_notes attachmentWithID:tableID];
+    TTTable *elsewhere = [_notes tableOfAttachment:a];
+    [[elsewhere textAtRow:1 column:1] setString:@"Sunday"];
+    [elsewhere insertRowAtIndex:2];
+    [[elsewhere textAtRow:2 column:0] setString:@"Grandma"];
+    [_notes saveTable:elsewhere toAttachment:a];
+    [grid reloadFromStore];
+    NSArray *both = @[ @[ @"Bike", @"" ], @[ @"", @"Sunday" ], @[ @"Grandma", @"" ] ];
+    XCTAssertEqualObjects(grid.table.strings, both);
+    XCTAssertEqualObjects([grid textViewAtRow:2 column:0].string, @"Grandma", @"a row come is shown");
+    [grid save];
+    XCTAssertEqualObjects([_notes tableOfAttachment:a].strings, both);
 }
 
 @end

@@ -21,9 +21,9 @@ merges it through `TTSyncResolver`. The note is not settled for one side.
 
 | Part | Where | What |
 |---|---|---|
-| The device | `Shared/` | Foundation and Core Data only, shared by every app |
-| The AppKit app | `AppKit/` | macOS and GNUstep: `MainMenu.xib`, `NotesWindow.xib` (folders, notes, the note), `TextPanel.xib` |
-| The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard) |
+| The device | `Shared/` | Foundation and Core Data, shared by every app; the rich text and tables too, with no `#if`: what they need of AppKit or UIKit is `SNTextSystem.h` and `SNTableGrid+System.h`, each system's in its own folder |
+| The AppKit app | `AppKit/` | macOS and GNUstep: `MainMenu.xib`, `NotesWindow.xib` (folders, notes, the note), `TextPanel.xib`; `SNTextSystem.m` and `SNTableGrid+System.m`, AppKit's part of the shared code (GNUstep's differences inside, `#ifdef GNUSTEP`) |
+| The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard); UIKit's `SNTextSystem.m` and `SNTableGrid+System.m` |
 | The server | `Server/SNServer.m` | ODataKit's server (HTTPServerKit, ODataService) with ODataSync's part of it |
 | The model | `SimpleNotes.xcdatamodeld` | `Folder` and `Note`; the classes' properties are generated as each target builds (Codegen: Category/Extension), by Xcode or by FreeCoreData's momc |
 | Tests | `Tests/` | The device against the service in one process; the text view's binding; migration from an older model; two devices through the running server; each app driven from within |
@@ -116,10 +116,20 @@ deletes its attachments.
 
 ## Tables
 
-**Format > Table** (⌥⌘T; on iOS, the format bar's table button) puts a table
-in the note. Click or tap a table to edit its cells, and to add or remove
-rows and columns. In this version cells are edited in a table editor, not
-in place in the note.
+**Format > Table > Insert Table** (⌥⌘T; on iOS, the format bar's table
+button) puts a two-by-two table in the note, and you type into its first
+cell. Tables are edited where they are in the note, as in Apple Notes:
+
+- **Tab** goes to the next cell (Shift-Tab, the one before). Tab in the
+  last cell adds a row. Return starts a new line in the cell.
+- **Add Row Above/Below, Add Column Before/After, Delete Row, Delete
+  Column** are in Format > Table and in a cell's context menu. On iOS
+  they're on the table button in the bar over the keyboard, and in a cell's
+  edit menu.
+- Cells are plain text for now. In Apple Notes they can be formatted.
+
+Each table is a grid of text views (`SNTableGrid`) laid over its place in
+the note. That place is the table's character, which keeps the grid's room.
 
 A table merges as Apple Notes' do, with no cell, row or column lost when
 two devices edit apart. It's a `TTTable`, from TopoText. Its rows and
@@ -429,6 +439,6 @@ stays where the item was.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Editing a table in place in the note, files other than images, smart
+- Formatting in table cells, files other than images, smart
   folders, a sort order per folder, and undo across a merge (the undo stack
   is cleared when a sync changes the open note).

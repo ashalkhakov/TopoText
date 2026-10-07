@@ -2,6 +2,7 @@
 #import "SNWindowController.h"
 #import "SNModel.h"
 #import "SNRichText.h"
+#import "SNTableGrid.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -136,17 +137,34 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         [tv insertNewline:nil];
         [tv insertNewline:nil];   /* on the empty item: the list ends */
         SNSay([window attachImageData:SNSelfTestPNG()], @"an image attached");
-        /* A table after it, filled in as its editor would. */
+        /* A table after it, from the Format menu, typed into where it is:
+           Tab to the next cell, and from the last one a row more. */
         [tv insertNewline:nil];
-        NSString *tableID = [window insertTableWithRows:2 columns:2];
-        SNAttachment *tableHere = tableID ? [notes attachmentWithID:tableID] : nil;
-        TTTable *table = tableHere ? [notes tableOfAttachment:tableHere] : nil;
+        SNSay([tv tryToPerform:@selector(addTable:) with:nil], @"Insert Table from the menu");
+        NSString *tableID = [tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        SNTableGrid *grid = tableID ? [window gridForAttachmentID:tableID] : nil;
+        SNSay(grid && grid.table.rowCount == 2 && grid.table.columnCount == 2 && tv.window.firstResponder == [grid textViewAtRow:0 column:0],
+              @"a table in the note, its first cell typed in");
         NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday morning, before lunch" ] ];
-        for (NSUInteger r = 0; r < 2; r++)
-            for (NSUInteger c = 0; c < 2; c++) [[table textAtRow:r column:c] setString:cells[r][c]];
-        if (table) [notes saveTable:table toAttachment:tableHere];
-        SNSay(table && [tv.textStorage attribute:NSAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL] != nil,
-              @"a table put in the note");
+        for (NSUInteger k = 0; k < 4; k++) {
+            NSTextView *cell = (NSTextView *)tv.window.firstResponder;
+            [cell insertText:cells[k / 2][k % 2]];
+            [cell doCommandBySelector:@selector(insertTab:)];
+        }
+        SNSay(grid.table.rowCount == 3 && tv.window.firstResponder == [grid textViewAtRow:2 column:0],
+              [NSString stringWithFormat:@"Tab from the last cell: a row more (%lu)", (unsigned long)grid.table.rowCount]);
+        SNSay([tv.window.firstResponder tryToPerform:@selector(deleteRow:) with:nil] && grid.table.rowCount == 2,
+              @"Delete Row from the menu");
+        SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed (%@)", grid.table.strings]);
+        /* Over its place in the text, which keeps its room. */
+        NSLayoutManager *tlm = tv.layoutManager;
+        NSUInteger tg = [tlm glyphRangeForCharacterRange:NSMakeRange(tv.string.length - 1, 1) actualCharacterRange:NULL].location;
+        NSRect room = [tlm boundingRectForGlyphRange:NSMakeRange(tg, 1) inTextContainer:tv.textContainer];
+        room = NSOffsetRect(room, tv.textContainerOrigin.x, tv.textContainerOrigin.y);
+        SNSay(grid.superview == tv && fabs(NSMinX(grid.frame) - NSMinX(room)) < 2 && NSMinY(grid.frame) >= NSMinY(room) - 2 &&
+              NSMaxY(grid.frame) <= NSMaxY(room) + 2 && NSHeight(grid.frame) > 40,
+              [NSString stringWithFormat:@"the grid over its room (%@, %@)", NSStringFromRect(grid.frame), NSStringFromRect(room)]);
+        [grid save];
         SNWait(2, ^BOOL { return NO; });
         [notes sync];
         SNWait(30, ^BOOL { return !notes.syncing; });

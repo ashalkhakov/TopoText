@@ -1,6 +1,7 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
+#import "SNTableGrid.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -37,7 +38,8 @@ static void SNSnapshot(UIView *v, NSString *path) {
     @try {
         self.run();
     } @catch (NSException *e) {
-        fprintf(stderr, "FAIL %s: %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String);
+        fprintf(stderr, "FAIL %s: %s\nFAIL   %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String,
+                [e.callStackSymbols componentsJoinedByString:@"\nFAIL   "].UTF8String);
         exit(1);
     }
 }
@@ -117,15 +119,34 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             [[UIColor systemYellowColor] setFill];
             UIRectFill(CGRectMake(0, 0, 64, 48));
         }])];
-        /* A table after it, filled in as its editor would. */
+        /* A table after it, from the bar, typed into where it is: the
+           keyboard's Tab to the next cell, and from the last a row more. */
         if ([we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:@"\n"]) [wtv insertText:@"\n"];
-        NSString *tableID = [we insertTableWithRows:2 columns:2];
-        SNAttachment *tableHere = tableID ? [notes attachmentWithID:tableID] : nil;
-        TTTable *table = tableHere ? [notes tableOfAttachment:tableHere] : nil;
+        [we addTable:nil];
+        NSString *tableID = [wtv.textStorage attribute:SNAttachmentAttributeName atIndex:wtv.text.length - 1 effectiveRange:NULL];
+        SNTableGrid *grid = tableID ? [we gridForAttachmentID:tableID] : nil;
+        SNSay(grid && grid.table.rowCount == 2 && [grid textViewAtRow:0 column:0].isFirstResponder, @"a table in the note, its first cell typed in");
         NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday" ] ];
-        for (NSUInteger r = 0; r < 2; r++)
-            for (NSUInteger c = 0; c < 2; c++) [[table textAtRow:r column:c] setString:cells[r][c]];
-        if (table) [notes saveTable:table toAttachment:tableHere];
+        for (NSUInteger k = 0; k < 4; k++) {
+            UITextView *cell = [grid textViewAtRow:k / 2 column:k % 2];
+            if (!cell.isFirstResponder) break;
+            [cell insertText:cells[k / 2][k % 2]];
+            if ([cell.delegate textView:cell shouldChangeTextInRange:cell.selectedRange replacementText:@"\t"]) [cell insertText:@"\t"];
+        }
+        UITextView *added = [grid textViewAtRow:2 column:0];
+        SNSay(grid.table.rowCount == 3 && added.isFirstResponder, @"Tab from the last cell: a row more");
+        SNSay([added canPerformAction:@selector(deleteRow:) withSender:nil] || [grid canPerformAction:@selector(deleteRow:) withSender:nil],
+              @"Delete Row in the cell's menu");
+        [[UIApplication sharedApplication] sendAction:@selector(deleteRow:) to:nil from:nil forEvent:nil];
+        SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed, the row deleted (%@)", grid.table.strings]);
+        NSLayoutManager *tlm = wtv.layoutManager;
+        CGRect room = [tlm boundingRectForGlyphRange:[tlm glyphRangeForCharacterRange:NSMakeRange(wtv.text.length - 1, 1) actualCharacterRange:NULL]
+                                     inTextContainer:wtv.textContainer];
+        room = CGRectOffset(room, wtv.textContainerInset.left, wtv.textContainerInset.top);
+        SNSay(grid.superview == wtv && fabs(CGRectGetMinX(grid.frame) - CGRectGetMinX(room)) < 2 && CGRectGetMinY(grid.frame) >= CGRectGetMinY(room) - 2 &&
+              CGRectGetMaxY(grid.frame) <= CGRectGetMaxY(room) + 2 && grid.frame.size.height > 40,
+              [NSString stringWithFormat:@"the grid over its room (%@, %@)", NSStringFromCGRect(grid.frame), NSStringFromCGRect(room)]);
+        [grid save];
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             [wtv resignFirstResponder];

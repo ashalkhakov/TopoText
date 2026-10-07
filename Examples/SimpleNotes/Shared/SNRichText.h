@@ -26,10 +26,12 @@
 #import <UIKit/UIKit.h>
 typedef UIFont SNFont;
 typedef CGPoint SNPoint;
+typedef CGSize SNSize;
 #else
 #import <AppKit/AppKit.h>
 typedef NSFont SNFont;
 typedef NSPoint SNPoint;
+typedef NSSize SNSize;
 #endif
 #import <TopoText/TopoText.h>
 
@@ -139,6 +141,10 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 - (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range;
 // The id of the attachment at a place (nil: none).
 - (nullable NSString *)attachmentIDAt:(NSUInteger)index;
+// A table's room in the text: the size its character keeps, empty, for its
+// grid laid over it (SNTableGrid). Until it is said, the table is drawn
+// there as a picture.
+- (void)setRoomSize:(SNSize)size forAttachmentID:(NSString *)attachmentID;
 // Attachments shown again: those a sync has brought since (a text can come
 // before its attachment).
 - (void)refreshAttachments;

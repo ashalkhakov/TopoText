@@ -1,6 +1,7 @@
 #import "SNRichText.h"
 #import "SNNotes.h"
 #import "SNModel.h"
+#import "SNTextSystem.h"
 
 NSString * const SNBoldKey = @"bold";
 NSString * const SNItalicKey = @"italic";
@@ -34,18 +35,6 @@ static NSString * const SNBoldAttributeName = @"SNBold";
 static NSString * const SNItalicAttributeName = @"SNItalic";
 
 static const NSInteger SNMaxIndent = 8;
-/* An indent's width, and a list marker's column. */
-#if TARGET_OS_IPHONE
-static const CGFloat SNIndentStep = 28;
-typedef UIColor SNColor;
-typedef UIBezierPath SNPath;
-typedef CGRect SNRect;
-#else
-static const CGFloat SNIndentStep = 24;
-typedef NSColor SNColor;
-typedef NSBezierPath SNPath;
-typedef NSRect SNRect;
-#endif
 
 NSSet<NSString *> *SNParagraphKeys(void) {
     static NSSet *keys;
@@ -134,29 +123,6 @@ static BOOL SNEndsEmpty(NSString *s) {
 
 #pragma mark fonts
 
-static CGFloat SNSize(NSString *style) {
-#if TARGET_OS_IPHONE
-    return [style isEqual:SNStyleTitle] ? 28 : [style isEqual:SNStyleHeading] ? 22 : [style isEqual:SNStyleSubheading] ? 18 : 17;
-#else
-    return [style isEqual:SNStyleTitle] ? 24 : [style isEqual:SNStyleHeading] ? 18 : [style isEqual:SNStyleSubheading] ? 15 : 14;
-#endif
-}
-
-static SNFont *SNWithTraits(SNFont *font, BOOL bold, BOOL italic) {
-#if TARGET_OS_IPHONE
-    UIFontDescriptorSymbolicTraits t = font.fontDescriptor.symbolicTraits;
-    if (bold) t |= UIFontDescriptorTraitBold;
-    if (italic) t |= UIFontDescriptorTraitItalic;
-    UIFontDescriptor *d = [font.fontDescriptor fontDescriptorWithSymbolicTraits:t];
-    return d ? [UIFont fontWithDescriptor:d size:font.pointSize] : font;
-#else
-    NSFontManager *fm = [NSFontManager sharedFontManager];
-    if (bold) font = [fm convertFont:font toHaveTrait:NSBoldFontMask] ?: font;
-    if (italic) font = [fm convertFont:font toHaveTrait:NSItalicFontMask] ?: font;
-    return font;
-#endif
-}
-
 SNFont *SNFontFor(NSString *style, BOOL bold, BOOL italic) {
     static NSMutableDictionary *cache;
     if (!cache) cache = [NSMutableDictionary dictionary];
@@ -165,57 +131,11 @@ SNFont *SNFontFor(NSString *style, BOOL bold, BOOL italic) {
     NSString *key = [NSString stringWithFormat:@"%@/%d/%d", style ?: @"", bold, italic];
     SNFont *font = cache[key];
     if (font) return font;
-    CGFloat size = SNSize(style);
-    if ([style isEqual:SNStyleMono]) {
-#if TARGET_OS_IPHONE
-        font = [UIFont monospacedSystemFontOfSize:size weight:bold ? UIFontWeightBold : UIFontWeightRegular];
-        if (italic) font = SNWithTraits(font, NO, YES);
-#else
-        font = SNWithTraits([NSFont userFixedPitchFontOfSize:size] ?: [NSFont systemFontOfSize:size], bold, italic);
-#endif
-    } else {
-        font = bold ? [SNFont boldSystemFontOfSize:size] : [SNFont systemFontOfSize:size];
-        if (italic) font = SNWithTraits(font, NO, YES);
-    }
+    CGFloat size = SNSystemFontSize(style);
+    font = [style isEqual:SNStyleMono] ? SNSystemMonoFont(size, bold) : SNSystemFont(size, bold);
+    if (italic) font = SNSystemFontWithTraits(font, NO, YES);
     cache[key] = font;
     return font;
-}
-
-static void SNTraitsOf(SNFont *font, BOOL *bold, BOOL *italic) {
-#if TARGET_OS_IPHONE
-    UIFontDescriptorSymbolicTraits t = font.fontDescriptor.symbolicTraits;
-    *bold = (t & UIFontDescriptorTraitBold) != 0;
-    *italic = (t & UIFontDescriptorTraitItalic) != 0;
-#else
-    NSFontTraitMask t = [[NSFontManager sharedFontManager] traitsOfFont:font];
-    *bold = (t & NSBoldFontMask) != 0;
-    *italic = (t & NSItalicFontMask) != 0;
-#endif
-}
-
-static SNColor *SNTextColor(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor labelColor];
-#else
-    return [NSColor textColor];
-#endif
-}
-
-static SNColor *SNMarkerGray(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor tertiaryLabelColor];
-#else
-    return [NSColor grayColor];
-#endif
-}
-
-/* Apple Notes' checkbox, ticked. */
-static SNColor *SNAccent(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor systemOrangeColor];
-#else
-    return [NSColor colorWithCalibratedRed:0.96 green:0.66 blue:0.0 alpha:1];
-#endif
 }
 
 /* The text in from the margin: an indent's, and a list marker's column. */
@@ -226,7 +146,7 @@ static NSParagraphStyle *SNParagraphStyle(NSInteger indent, BOOL list) {
     NSParagraphStyle *style = cache[key];
     if (style) return style;
     NSMutableParagraphStyle *m = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
-    CGFloat x = (indent + (list ? 1 : 0)) * SNIndentStep;
+    CGFloat x = (indent + (list ? 1 : 0)) * SNSystemIndentStep();
     m.firstLineHeadIndent = x;
     m.headIndent = x;
     cache[key] = style = [m copy];
@@ -243,7 +163,7 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     v[NSFontAttributeName] = SNFontFor(style, bold, italic);
     if (bold) v[SNBoldAttributeName] = @YES;
     if (italic) v[SNItalicAttributeName] = @YES;
-    v[NSForegroundColorAttributeName] = SNTextColor();
+    v[NSForegroundColorAttributeName] = SNSystemTextColor();
     if ([attrs[SNUnderlineKey] boolValue]) v[NSUnderlineStyleAttributeName] = @(NSUnderlineStyleSingle);
     if ([attrs[SNStrikeKey] boolValue]) v[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
     NSString *link = [attrs[SNLinkKey] isKindOfClass:[NSString class]] ? attrs[SNLinkKey] : nil;
@@ -272,7 +192,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     SNFont *font = view[NSFontAttributeName];
     if (font) {
         BOOL bold = NO, italic = NO;
-        SNTraitsOf(font, &bold, &italic);
+        SNSystemTraitsOf(font, &bold, &italic);
         if (bold && !SNIsBoldStyle(style)) t[SNBoldKey] = @YES;
         if (italic) t[SNItalicKey] = @YES;
     }
@@ -348,35 +268,13 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
 
 #pragma mark attachments
 
-#if TARGET_OS_IPHONE
-typedef UIImage SNImage;
-#else
-typedef NSImage SNImage;
-#endif
-
 static BOOL SNHasPrefix(NSData *data, const char *bytes, NSUInteger n) {
     return data.length >= n && memcmp(data.bytes, bytes, n) == 0;
 }
 
-/* An image's size in pixels (not points). */
-static void SNPixelSize(SNImage *image, NSData *data, double *w, double *h) {
-#if TARGET_OS_IPHONE
-    *w = image.size.width * image.scale;
-    *h = image.size.height * image.scale;
-#else
-    NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:data];
-    *w = rep ? rep.pixelsWide : image.size.width;
-    *h = rep ? rep.pixelsHigh : image.size.height;
-#endif
-}
-
 NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, double *height) {
-    if (!data.length) return nil;
-    SNImage *image = [[SNImage alloc] initWithData:data];
-    if (!image) return nil;
     double w = 0, h = 0;
-    SNPixelSize(image, data, &w, &h);
-    if (w < 1 || h < 1) return nil;
+    if (!data.length || !SNSystemImagePixels(data, &w, &h) || w < 1 || h < 1) return nil;
     BOOL png = SNHasPrefix(data, "\x89PNG", 4), jpeg = SNHasPrefix(data, "\xFF\xD8\xFF", 3);
     double scale = MIN(1.0, SNAttachmentMaxPixels / MAX(w, h));
     if (scale >= 1.0 && (png || jpeg)) {
@@ -386,39 +284,7 @@ NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, d
         return data;
     }
     NSUInteger tw = (NSUInteger)MAX(1.0, round(w * scale)), th = (NSUInteger)MAX(1.0, round(h * scale));
-    NSData *out = nil;
-#if TARGET_OS_IPHONE
-    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
-    format.scale = 1;
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(tw, th) format:format];
-    UIImage *drawn = [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
-        [image drawInRect:CGRectMake(0, 0, tw, th)];
-    }];
-    out = png ? UIImagePNGRepresentation(drawn) : UIImageJPEGRepresentation(drawn, 0.85);
-#else
-    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:(NSInteger)tw pixelsHigh:(NSInteger)th
-                                                                 bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
-                                                                colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
-    [NSGraphicsContext saveGraphicsState];
-    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
-    [NSGraphicsContext setCurrentContext:context];
-#ifdef GNUSTEP
-    [image drawInRect:NSMakeRect(0, 0, tw, th) fromRect:NSZeroRect operation:NSCompositeCopy fraction:1.0];
-#else
-    [image drawInRect:NSMakeRect(0, 0, tw, th) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1.0];
-#endif
-    /* Into the bitmap: gnustep-back's cairo draws on a surface of its own,
-       copied into the bitmap only when flushed. */
-    [context flushGraphics];
-    [NSGraphicsContext restoreGraphicsState];
-#ifdef GNUSTEP
-    out = png ? [rep representationUsingType:NSPNGFileType properties:@{}]
-              : [rep representationUsingType:NSJPEGFileType properties:@{ NSImageCompressionFactor: @0.85 }];
-#else
-    out = png ? [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]
-              : [rep representationUsingType:NSBitmapImageFileTypeJPEG properties:@{ NSImageCompressionFactor: @0.85 }];
-#endif
-#endif
+    NSData *out = SNSystemScaledImage(data, tw, th, png);
     if (!out) return nil;
     *type = png ? @"image/png" : @"image/jpeg";
     *width = tw;
@@ -426,177 +292,32 @@ NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, d
     return out;
 }
 
-/* An attachment shown: the view's, made from the note's attachment of
-   attachmentID; loaded NO while it has not come yet (a grey box shows). */
-@interface SNTextAttachment : NSTextAttachment
-@property (nonatomic, copy) NSString *attachmentID;
-@property (nonatomic) BOOL loaded;
-/* What it was drawn from: a table is drawn again when it changed. */
-@property (nonatomic) NSUInteger dataHash;
-@end
-
-@implementation SNTextAttachment
-@end
-
-/* A box to show while an attachment has not come yet. */
-static SNImage *SNPlaceholderImage(double w, double h) {
-#if TARGET_OS_IPHONE
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(w, h)];
-    return [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
-        [[UIColor systemGray5Color] setFill];
-        [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, w, h) cornerRadius:8] fill];
-    }];
-#else
-    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(w, h)];
-    [image lockFocus];
-    [[NSColor colorWithCalibratedWhite:0.85 alpha:1] setFill];
-    [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(0, 0, w, h) xRadius:8 yRadius:8] fill];
-    [image unlockFocus];
-    return image;
-#endif
+static BOOL SNSameSize(SNSize a, SNSize b) {
+    return a.width == b.width && a.height == b.height;
 }
 
-#if TARGET_OS_IPHONE
-#define SNRectMake CGRectMake
-#else
-#define SNRectMake NSMakeRect
-#endif
-
-/* The grid and the cells' text, drawn top down: y from the top, in a flipped
-   context (UIKit's) or not (an NSImage's). */
-static void SNDrawTable(NSArray<NSArray<NSString *> *> *rows, NSArray<NSNumber *> *heights, NSUInteger columns, CGFloat column,
-                        CGFloat height, NSDictionary *attrs, BOOL flipped) {
-    const CGFloat pad = 6;
-    CGFloat y = 0;
-    for (NSUInteger r = 0; r < rows.count; r++) {
-        CGFloat h = heights[r].doubleValue;
-        for (NSUInteger c = 0; c < columns; c++) {
-            SNRect cell = SNRectMake(c * column + 0.5, y + 0.5, column, h);
-            SNRect drawn = flipped ? cell : SNRectMake(cell.origin.x, height - cell.origin.y - h, column, h);
-            SNPath *box = [SNPath bezierPathWithRect:drawn];
-            box.lineWidth = 1;
-            [SNMarkerGray() setStroke];   /* each time: drawing a string sets its own */
-            [box stroke];
-            NSString *text = c < rows[r].count ? rows[r][c] : @"";
-#if TARGET_OS_IPHONE
-            [text drawWithRect:CGRectInset(drawn, pad, pad) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs context:nil];
-#else
-            [text drawInRect:NSInsetRect(drawn, pad, pad) withAttributes:attrs];
-#endif
-        }
-        y += h;
-    }
-}
-
-/* A table drawn: a grid, its columns sharing the width, its cells' text
-   wrapped. */
-static SNImage *SNTableImage(TTTable *table, CGFloat maxWidth, CGFloat *outWidth, CGFloat *outHeight) {
-    NSArray<NSArray<NSString *> *> *rows = table.strings;
-    NSUInteger columns = MAX((NSUInteger)1, table.columnCount);
-    CGFloat width = MIN(maxWidth, MAX(240.0, columns * 140.0)), column = floor(width / columns);
-    width = column * columns;
-    SNFont *font = SNFontFor(nil, NO, NO);
-    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNTextColor() };
-    const CGFloat pad = 6, line = ceil(font.ascender - font.descender + 4);
-    NSMutableArray<NSNumber *> *heights = [NSMutableArray array];
-    CGFloat height = 0;
-    for (NSArray<NSString *> *row in rows) {
-        CGFloat h = line;
-        for (NSString *cell in row) {
-#if TARGET_OS_IPHONE
-            CGRect r = [cell boundingRectWithSize:CGSizeMake(column - 2 * pad, 10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs context:nil];
-#else
-            NSRect r = [cell boundingRectWithSize:NSMakeSize(column - 2 * pad, 10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs];
-#endif
-            h = MAX(h, ceil(r.size.height) + 2 * pad);
-        }
-        h = MAX(h, line + 2 * pad);
-        [heights addObject:@(h)];
-        height += h;
-    }
-    if (!rows.count) height = line + 2 * pad;
-    height = ceil(height) + 1;
-    width += 1;
-    *outWidth = width;
-    *outHeight = height;
-#if TARGET_OS_IPHONE
-    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(width, height)];
-    return [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
-        SNDrawTable(rows, heights, columns, column, height, attrs, YES);
-    }];
-#else
-    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
-    [image lockFocus];
-    SNDrawTable(rows, heights, columns, column, height, attrs, NO);
-    [image unlockFocus];
-    return image;
-#endif
-}
-
-/* The attachment's view: its image as wide as it is, or as the text is; a
-   table drawn. */
-static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *attachment, CGFloat maxWidth) {
+/* The attachment's view: an image as wide as it is, or as the text is; a
+   table's room, its grid over it (a box until its size is known). */
+static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *attachment, CGFloat maxWidth, NSValue *room) {
     NSData *data = attachment.data;
-    if ([attachment.kind isEqual:SNAttachmentKindTable]) {
-        TTTable *table = data ? [TTTable tableWithData:data replica:0 error:NULL] : nil;
-        CGFloat w = 240, h = 40;
-        SNImage *image = table ? SNTableImage(table, maxWidth, &w, &h) : SNPlaceholderImage(w, h);
-#if TARGET_OS_IPHONE
-        SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:nil ofType:nil];
-        a.image = image;
-        a.bounds = CGRectMake(0, 0, w, h);
-#else
-        SNTextAttachment *a = [[SNTextAttachment alloc] init];
-        a.attachmentCell = [[NSTextAttachmentCell alloc] initImageCell:image];
-#endif
-        a.attachmentID = attachmentID;
-        a.loaded = table != nil;
-        a.dataHash = data.hash;
-        return a;
-    }
-    SNImage *image = data ? [[SNImage alloc] initWithData:data] : nil;
-    double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
-    if (image && (w < 1 || h < 1)) SNPixelSize(image, data, &w, &h);
-    if (w < 1 || h < 1) { w = 160; h = 120; }
-    double scale = MIN(1.0, maxWidth / w);
-#if TARGET_OS_IPHONE
-    scale = MIN(scale, 1.0 / [UIScreen mainScreen].scale);
-#endif
-    CGFloat dw = MAX(1, w * scale), dh = MAX(1, h * scale);
-    if (!image) image = SNPlaceholderImage(dw, dh);
-#if TARGET_OS_IPHONE
-    SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:data ofType:nil];
-    a.image = image;
-    a.bounds = CGRectMake(0, 0, dw, dh);
-#else
     SNTextAttachment *a;
-    if (data) {
-        NSFileWrapper *file = [[NSFileWrapper alloc] initRegularFileWithContents:data];
-        file.preferredFilename = [attachment.type isEqual:@"image/png"] ? @"image.png" : @"image.jpg";
-        a = [[SNTextAttachment alloc] initWithFileWrapper:file];
+    if ([attachment.kind isEqual:SNAttachmentKindTable]) {
+        SNSize size = { 240, 40 };
+        if (room) [room getValue:&size];
+        a = room ? SNSystemRoomAttachment(size) : SNSystemImageAttachment(nil, nil, size);
+        a.loaded = room != nil;
     } else {
-        a = [[SNTextAttachment alloc] init];
+        double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
+        if (data && (w < 1 || h < 1)) SNSystemImagePixels(data, &w, &h);
+        if (w < 1 || h < 1) { w = 160; h = 120; }
+        double scale = MIN(MIN(1.0, maxWidth / w), SNSystemPointsPerPixel());
+        SNSize size = { MAX(1, w * scale), MAX(1, h * scale) };
+        a = SNSystemImageAttachment(data, attachment.type, size);
+        a.loaded = data != nil;
     }
-    image.size = NSMakeSize(dw, dh);
-    a.attachmentCell = [[NSTextAttachmentCell alloc] initImageCell:image];
-#endif
     a.attachmentID = attachmentID;
-    a.loaded = data != nil;
+    a.dataHash = data.hash;
     return a;
-}
-
-/* What a view's attachment holds, as data (one pasted or dropped). */
-static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
-#if TARGET_OS_IPHONE
-    if (a.contents.length) return a.contents;
-    if (a.fileWrapper.regularFile) return a.fileWrapper.regularFileContents;
-    return a.image ? UIImagePNGRepresentation(a.image) : nil;
-#else
-    if (a.fileWrapper.isRegularFile) return a.fileWrapper.regularFileContents;
-    id cell = a.attachmentCell;
-    NSImage *image = [cell respondsToSelector:@selector(image)] ? [cell image] : nil;
-    return image.TIFFRepresentation;
-#endif
 }
 
 #pragma mark the binding
@@ -612,6 +333,8 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     /* Images pasted or dropped, made attachments of the note: each view
        attachment, to have its id once the view's edit is done. */
     NSMapTable<NSTextAttachment *, NSString *> *_pendingAttachments;
+    /* Tables' rooms, by attachment id (SNSize values). */
+    NSMutableDictionary<NSString *, NSValue *> *_rooms;
 }
 
 - (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor {
@@ -622,6 +345,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     _dirty = NSMakeRange(NSNotFound, 0);
     _afterNewline = [NSMutableIndexSet indexSet];
     _pendingAttachments = [NSMapTable strongToStrongObjectsMapTable];
+    _rooms = [NSMutableDictionary dictionary];
     _applying = YES;
     /* Each attachment's character with its view from the first: a U+FFFC
        without one is taken out of the text by gnustep-gui's attribute
@@ -806,11 +530,11 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     BOOL was = _applying;
     _applying = YES;
     [_storage beginEditing];
-    [_storage addAttribute:NSForegroundColorAttributeName value:SNTextColor() range:para];
+    [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemTextColor() range:para];
     for (NSValue *v in SNTagRangesInText(text)) {
         NSRange tag = v.rangeValue;
         tag.location += para.location;
-        [_storage addAttribute:NSForegroundColorAttributeName value:SNAccent() range:tag];
+        [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemAccentColor() range:tag];
     }
     /* Detected links: off where none is now, on where one is. */
     for (NSValue *v in SNAttributeRuns(_storage, para)) {
@@ -839,11 +563,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
 - (CGFloat)attachmentWidth {
     NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
     NSTextContainer *c = lm.textContainers.firstObject;
-#ifdef GNUSTEP
-    CGFloat w = c ? c.containerSize.width - 2 * c.lineFragmentPadding - 4 : 0;
-#else
-    CGFloat w = c ? c.size.width - 2 * c.lineFragmentPadding - 4 : 0;
-#endif
+    CGFloat w = c ? SNSystemContainerWidth(c) - 2 * c.lineFragmentPadding - 4 : 0;
     return w > 40 && w < 4000 ? w : 480;
 }
 
@@ -858,10 +578,15 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
         if (!attachmentID) continue;
         SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
         SNAttachment *attachment = [_editor attachmentWithID:attachmentID];
-        if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID] &&
-            ((shown.loaded && shown.dataHash == attachment.data.hash) || !attachment.data))
-            continue;
-        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, [self attachmentWidth])
+        NSValue *room = [attachment.kind isEqual:SNAttachmentKindTable] ? _rooms[attachmentID] : nil;
+        if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID]) {
+            SNSize size = { 0, 0 };
+            if (room) [room getValue:&size];
+            if (room ? SNSameSize(shown.room, size) : (shown.loaded && shown.dataHash == attachment.data.hash && shown.room.width == 0))
+                continue;
+            if (!room && !attachment.data) continue;
+        }
+        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, [self attachmentWidth], room)
                        range:NSMakeRange(i, 1)];
     }
 }
@@ -879,6 +604,13 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
 }
 
+- (void)setRoomSize:(SNSize)size forAttachmentID:(NSString *)attachmentID {
+    NSValue *room = [NSValue valueWithBytes:&size objCType:@encode(SNSize)];
+    if ([_rooms[attachmentID] isEqual:room]) return;
+    _rooms[attachmentID] = room;
+    [self refreshAttachments];
+}
+
 /* A pasted image saved as one of the note's attachments, its id; its view
    attachment is given the id once the view's edit is done (not while the
    storage is still processing it). */
@@ -887,7 +619,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     if (made) return made;
     NSString *type = nil;
     double w = 0, h = 0;
-    NSData *data = SNImageDataForAttachment(SNDataOfTextAttachment(pasted), &type, &w, &h);
+    NSData *data = SNImageDataForAttachment(SNSystemDataOfAttachment(pasted), &type, &w, &h);
     if (!data) return nil;
     made = [_editor addImageData:data type:type width:w height:h];
     if (!made) return nil;
@@ -908,7 +640,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
         NSString *made = a ? [_pendingAttachments objectForKey:a] : nil;
         if (!made) continue;
         [_storage addAttribute:SNAttachmentAttributeName value:made range:NSMakeRange(i, 1)];
-        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth])
+        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth], _rooms[made])
                          range:NSMakeRange(i, 1)];
     }
     [_storage endEditing];
@@ -932,7 +664,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
     t[SNAttachmentKey] = attachmentID;
     NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
-    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [_editor attachmentWithID:attachmentID], [self attachmentWidth]);
+    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [_editor attachmentWithID:attachmentID], [self attachmentWidth], _rooms[attachmentID]);
     unichar c = SNAttachmentCharacter;
     [_storage replaceCharactersInRange:range
                   withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
@@ -1283,15 +1015,6 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
 
 #pragma mark list markers
 
-static void SNStrokeLine(SNPath *path, SNPoint a, SNPoint b) {
-    [path moveToPoint:a];
-#if TARGET_OS_IPHONE
-    [path addLineToPoint:b];
-#else
-    [path lineToPoint:b];
-#endif
-}
-
 /* A character's first glyph (gnustep-gui's layout manager has no
    -glyphIndexForCharacterAtIndex:). */
 static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
@@ -1303,13 +1026,8 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
 - (void)setExtraLineAttributes:(NSDictionary *)attrs {
     if ([attrs isEqual:_extraLineAttributes]) return;
     _extraLineAttributes = [attrs copy];
-#if !TARGET_OS_IPHONE
-    NSTextView *tv = self.firstTextView;
-    if (tv) [tv setNeedsDisplay:YES];
-#else
     NSUInteger len = self.textStorage.length;
-    if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(len - 1, 1)];
-#endif
+    if (len) SNSystemRedisplay(self, NSMakeRange(len - 1, 1));
 }
 
 /* After an edit, the whole text drawn again, not only what changed: a
@@ -1317,12 +1035,7 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
    checkbox moves with them). Once the edit is done: not while the storage
    is still processing it. */
 - (void)markersMayHaveMoved {
-#if TARGET_OS_IPHONE
-    NSUInteger len = self.textStorage.length;
-    if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(0, len)];
-#else
-    [self.firstTextView setNeedsDisplay:YES];
-#endif
+    SNSystemRedisplay(self, NSMakeRange(0, self.textStorage.length));
 }
 
 - (void)textEdited {
@@ -1330,19 +1043,7 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
     [self performSelector:@selector(markersMayHaveMoved) withObject:nil afterDelay:0];
 }
 
-#ifdef GNUSTEP
-- (void)textStorage:(NSTextStorage *)storage edited:(unsigned int)mask range:(NSRange)range
-     changeInLength:(int)delta invalidatedRange:(NSRange)invalidated {
-    [super textStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
-    [self textEdited];
-}
-#else
-- (void)processEditingForTextStorage:(NSTextStorage *)storage edited:(NSTextStorageEditActions)mask range:(NSRange)range
-                      changeInLength:(NSInteger)delta invalidatedRange:(NSRange)invalidated {
-    [super processEditingForTextStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
-    [self textEdited];
-}
-#endif
+/* Each edit: SNTextSystem's -textEdited, each system's own way. */
 
 /* An item's number: one more than the item before at its indent, items
    indented further between them not counted. */
@@ -1367,8 +1068,8 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
    indent on GNUstep, at the edge on Apple's). */
 static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     SNRect r = line;
-    r.origin.x = left + indent * SNIndentStep;
-    r.size.width = SNIndentStep;
+    r.origin.x = left + indent * SNSystemIndentStep();
+    r.size.width = SNSystemIndentStep();
     return r;
 }
 
@@ -1378,24 +1079,20 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     SNRect col = SNMarkerColumn(line, indent, left);
     SNFont *font = SNFontFor(nil, NO, NO);
     if ([list isEqual:SNListCheck]) {
-#if TARGET_OS_IPHONE
-        CGFloat d = round(font.pointSize * 1.25);
-#else
-        CGFloat d = round(font.pointSize * 1.15);
-#endif
+        CGFloat d = SNSystemCheckboxSize(font);
         CGFloat cx = col.origin.x + col.size.width / 2 - 2, cy = baseline - font.capHeight / 2;
         SNRect box = col;
         box.origin.x = cx - d / 2;
         box.origin.y = cy - d / 2;
         box.size.width = box.size.height = d;
         if ([a[SNCheckedAttributeName] boolValue]) {
-            [SNAccent() setFill];
+            [SNSystemAccentColor() setFill];
             [[SNPath bezierPathWithOvalInRect:box] fill];
             SNPath *tick = [SNPath bezierPath];
             CGFloat x = box.origin.x, y = box.origin.y;
             SNPoint p1 = { x + d * 0.27, y + d * 0.52 }, p2 = { x + d * 0.43, y + d * 0.68 }, p3 = { x + d * 0.74, y + d * 0.34 };
-            SNStrokeLine(tick, p1, p2);
-            SNStrokeLine(tick, p2, p3);
+            SNSystemAddLine(tick, p1, p2);
+            SNSystemAddLine(tick, p2, p3);
             tick.lineWidth = MAX(1.5, d / 10);
             [[SNColor whiteColor] setStroke];
             [tick stroke];
@@ -1406,14 +1103,14 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
             box.size.height -= 1.2;
             SNPath *ring = [SNPath bezierPathWithOvalInRect:box];
             ring.lineWidth = 1.2;
-            [SNMarkerGray() setStroke];
+            [SNSystemMarkerColor() setStroke];
             [ring stroke];
         }
         return;
     }
     NSString *marker = [list isEqual:SNListNumber] ? [NSString stringWithFormat:@"%lu.", (unsigned long)[self numberAt:start indent:indent]]
                      : [list isEqual:SNListDash] ? @"–" : @"•";
-    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNTextColor() };
+    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNSystemTextColor() };
     CGFloat w = [marker sizeWithAttributes:attrs].width;
     SNPoint at = { [list isEqual:SNListNumber] ? col.origin.x + col.size.width - 5 - w : col.origin.x + (col.size.width - w) / 2 - 2,
                    baseline - font.ascender };

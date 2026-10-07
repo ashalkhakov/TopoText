@@ -24,7 +24,9 @@ MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m
 	$(GENERATED)/SNNote+CoreDataProperties.m $(GENERATED)/SNFolder+CoreDataProperties.m $(GENERATED)/SNAttachment+CoreDataProperties.m
 # The model's files, spaces escaped: Xcode names a version "SimpleNotes 2".
 MODEL_FILES := $(shell find SimpleNotes.xcdatamodeld -type f | sed 's/ /\\ /g')
-SHARED = $(MODEL) Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m
+# The rich text and tables, and AppKit's part of them (SNTextSystem).
+SHARED = $(MODEL) Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m \
+	AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m
 DEVELOPER := $(shell xcode-select -p)
 XCTEST_FRAMEWORKS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/Library/Frameworks
 XCTEST_LIBS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/usr/lib

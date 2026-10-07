@@ -1,7 +1,7 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
 #import "SNModel.h"
-#import "SNTableEditor.h"
+#import "SNTableGrid.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -34,6 +34,8 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     NSArray *_rows;
     SNNoteEditor *_editor;
     SNTextBinding *_binding;
+    /* The open note's tables, each over its place in the text. */
+    SNTableGrids *_grids;
     BOOL _reloading;
     /* What the window shows: All Notes, a folder, or Recently Deleted. The
        folder table's selection follows it, not the other way round: rows
@@ -219,14 +221,19 @@ static const NSInteger SNMoveToMenuTag = 7001;
     /* The open note left this list (deleted, recovered, moved, here or
        elsewhere): closed. One still here follows whether it is deleted. */
     if (_editor && row == NSNotFound) [self openNote:nil];
-    else if (_editor) _textView.editable = ![_rows[row] deletedAt];
+    else if (_editor) {
+        _textView.editable = ![_rows[row] deletedAt];
+        [_grids update];
+    }
 }
 
 - (void)notesChanged:(NSNotification *)n {
     [self reloadFolders];
     [self reloadNotes];
-    /* An attachment can come after the text that has it. */
+    /* An attachment can come after the text that has it; a table's cells
+       can have been typed into elsewhere. */
     [_binding refreshAttachments];
+    [_grids reload];
     [self showStatus:n.userInfo[@"status"] ?: @""];
 }
 
@@ -495,6 +502,8 @@ static const NSInteger SNMoveToMenuTag = 7001;
 #pragma mark the note
 
 - (void)closeEditor {
+    [_grids removeAll];
+    _grids = nil;
     [_binding unbind];
     _binding = nil;
     [_editor close];
@@ -516,13 +525,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
     _textView.editable = !note.deletedAt;
     _textView.selectedRange = NSMakeRange(_textView.textStorage.length, 0);
     [_binding selectionDidChange];
+    _grids = [[SNTableGrids alloc] initWithBinding:_binding notes:_notes];
 }
 
 #pragma mark the editor's delegate
 
 /* What a sync brought into the open note, into the text view. */
 - (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
-    if (editor == _editor) [_binding applyEdits:edits];
+    if (editor != _editor) return;
+    [_binding applyEdits:edits];
+    [_grids update];
 }
 
 - (void)noteEditorDidVanish:(SNNoteEditor *)editor {
@@ -530,13 +542,6 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 #pragma mark the text view's delegate
-
-/* A table clicked: edited. */
-- (void)textView:(NSTextView *)tv clickedOnCell:(id<NSTextAttachmentCell>)cell inRect:(NSRect)rect atIndex:(NSUInteger)index {
-    NSString *attachmentID = [_binding attachmentIDAt:index];
-    if ([[_notes attachmentWithID:attachmentID].kind isEqual:SNAttachmentKindTable] && _textView.isEditable)
-        [self editTableOfAttachment:attachmentID];
-}
 
 /* A link to a note opens it here; any other, in its own application. */
 - (BOOL)textView:(NSTextView *)tv clickedOnLink:(id)link atIndex:(NSUInteger)index {
@@ -577,7 +582,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (void)textDidChange:(NSNotification *)n {
-    if (n.object == _textView) [_binding textDidChange];
+    if (n.object != _textView) return;
+    [_binding textDidChange];
+    /* The tables after what changed moved with it. */
+    [_grids update];
 }
 
 - (void)textViewDidChangeSelection:(NSNotification *)n {
@@ -740,23 +748,18 @@ static const NSInteger SNMoveToMenuTag = 7001;
     NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
     if (made) [_textView didChangeText];
     _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_grids update];
     return made;
 }
 
-- (IBAction)insertTable:(id)sender {
-    NSString *made = [self insertTableWithRows:3 columns:2];
-    if (made) [self editTableOfAttachment:made];
+/* Two rows, two columns, as Apple Notes' are, its first cell typed in. */
+- (IBAction)addTable:(id)sender {
+    NSString *made = [self insertTableWithRows:2 columns:2];
+    [[_grids gridForAttachmentID:made] beginEditing];
 }
 
-/* A table edited, then merged into what is stored (a sync may have brought
-   edits meanwhile), and shown again. */
-- (void)editTableOfAttachment:(NSString *)attachmentID {
-    SNAttachment *a = [_notes attachmentWithID:attachmentID];
-    TTTable *table = a ? [_notes tableOfAttachment:a] : nil;
-    if (!table) return;
-    [SNTableEditor editTable:table];
-    [_notes saveTable:table toAttachment:a];
-    [_binding refreshAttachments];
+- (SNTableGrid *)gridForAttachmentID:(NSString *)attachmentID {
+    return [_grids gridForAttachmentID:attachmentID];
 }
 
 - (IBAction)copyNoteLink:(id)sender {
@@ -792,7 +795,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
-    if (a == @selector(addLink:) || a == @selector(attachFile:) || a == @selector(insertTable:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(addLink:) || a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(moveCheckedToBottom:))
         return _binding != nil && _textView.isEditable && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
     if (a == @selector(toggleKeepCheckedAtBottom:)) {
