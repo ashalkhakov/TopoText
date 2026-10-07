@@ -15,6 +15,10 @@
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
 		};
+		0673CCA21FF03D971C8DF4BA /* SNTableEditor.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 1B05A9B64D22CC8F0DE0108F;
+		};
 		095BECCD974EC50D623BA7B9 /* TextPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3BD4E32C20887A161DAC86F3;
@@ -140,6 +144,10 @@
 		4D005DD96A8C3606DA4AEBE0 /* ODataSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
+		};
+		55459C47DA67678983C576DD /* TableEditor.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = C4747834EE0A6C644D7C8E11;
 		};
 		556FA39ACD65B0E3991FDA0D /* OTelKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -723,6 +731,13 @@
 			path = "simplenotes-server";
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		1B05A9B64D22CC8F0DE0108F /* SNTableEditor.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNTableEditor.m;
+			sourceTree = "<group>";
+			name = SNTableEditor.m;
+		};
 		1DDFCCB317D232BCC759DB30 /* SNWindowController.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -888,6 +903,13 @@
 			path = ../../TopoText.xcodeproj;
 			sourceTree = "<group>";
 		};
+		710D466C0BBE76BFAE59BF8F /* SNTableEditor.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNTableEditor.h;
+			sourceTree = "<group>";
+			name = SNTableEditor.h;
+		};
 		719BCFED3ECD01936BB14F74 /* SNCheck.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1013,6 +1035,13 @@
 			sourceTree = "<group>";
 			name = Release.xcconfig;
 		};
+		C4747834EE0A6C644D7C8E11 /* TableEditor.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/TableEditor.xib;
+			sourceTree = "<group>";
+			name = TableEditor.xib;
+		};
 		C5BF2DACC29D3CD90AB653ED /* SNResolver.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1130,11 +1159,14 @@
 				1DDFCCB317D232BCC759DB30,
 				61C49631D69D1072A58600F6,
 				94DE5DF5B274EF78A7375493,
+				710D466C0BBE76BFAE59BF8F,
+				1B05A9B64D22CC8F0DE0108F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
 				93905B50397F393A04D89B2C,
 				824A3193518B99D32009123E,
 				3BD4E32C20887A161DAC86F3,
+				C4747834EE0A6C644D7C8E11,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1449,6 +1481,7 @@
 				EEA03511188291009AB0171F,
 				F9C5540A3B0482B8474FBF95,
 				095BECCD974EC50D623BA7B9,
+				55459C47DA67678983C576DD,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1505,6 +1538,7 @@
 				3B72C38E82942C960038A006,
 				123BF91B2FF0039DAA8CD216,
 				34F4CD95AC29D3E0EA84037E,
+				0673CCA21FF03D971C8DF4BA,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
 				F48063A33E82F7318AC1D2FF,

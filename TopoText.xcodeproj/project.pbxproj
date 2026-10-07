@@ -16,6 +16,10 @@
 				);
 			};
 		};
+		32BF985D213F51057C57D932 /* TTTable.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = EBFC070967C65A5AC833201B;
+		};
 		35BC712523A5D965AC8B00BD /* TTInternal.h in Headers */ = {
 			isa = PBXBuildFile;
 			fileRef = 1662602902F46AA2F6704BFD;
@@ -171,6 +175,13 @@
 			sourceTree = "<group>";
 			name = TTCoding.m;
 		};
+		EBFC070967C65A5AC833201B /* TTTable.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Sources/TopoText/TTTable.m;
+			sourceTree = "<group>";
+			name = TTTable.m;
+		};
 		F1067FDDD1727FCC50DAA84D /* Debug.xcconfig */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.xcconfig;
@@ -271,6 +282,7 @@
 			children = (
 				2F53ECBD97F866E69A41DA12,
 				D0B40C2B20EF04636BE16429,
+				EBFC070967C65A5AC833201B,
 				1662602902F46AA2F6704BFD,
 				2BADAAB2A08E26268BC93E10,
 			);
@@ -395,6 +407,7 @@
 			files = (
 				DFD300DA2EDA848287F99541,
 				90834DB971D67B6CDEA6CC0B,
+				32BF985D213F51057C57D932,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

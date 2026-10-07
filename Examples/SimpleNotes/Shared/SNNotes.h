@@ -86,6 +86,15 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // like a note. The note's text then refers to it by its id.
 - (SNAttachment *)addImageToNote:(SNNote *)note data:(NSData *)data type:(NSString *)type
                            width:(double)width height:(double)height;
+// A table in a note (rows x columns, empty), saved and synced; the note's
+// text then refers to it by its id.
+- (SNAttachment *)addTableToNote:(SNNote *)note rows:(NSUInteger)rows columns:(NSUInteger)columns;
+// A table attachment's table, to edit: a copy of its own, written as a new
+// replica (an editing session's). nil: not a table.
+- (nullable TTTable *)tableOfAttachment:(SNAttachment *)attachment;
+// The table edited, merged into what is stored (a sync may have brought
+// edits meanwhile) and saved.
+- (void)saveTable:(TTTable *)table toAttachment:(SNAttachment *)attachment;
 // The attachment of that id; nil: none here (yet: a note's text can come
 // before its attachment in a sync).
 - (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
@@ -194,6 +203,8 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Whoever shows the text: told of merges, and of the note going.
 @property (nonatomic, weak, nullable) id<SNNoteEditorDelegate> delegate;
 @property (nonatomic, readonly, getter=isGone) BOOL gone;
+// A table added to the note (SNNotes' -addTableToNote:...), its id.
+- (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns;
 // An image added to the note (SNNotes' -addImageToNote:...), its id; an
 // attachment's, by id.
 - (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height;

@@ -81,6 +81,11 @@
                         <action selector="attachPhoto:" destination="-1" id="SNe-ac-010"/>
                     </connections>
                 </barButtonItem>
+                <barButtonItem image="tablecells" catalog="system" id="SNe-bi-011">
+                    <connections>
+                        <action selector="insertTable:" destination="-1" id="SNe-ac-011"/>
+                    </connections>
+                </barButtonItem>
             </items>
             <point key="canvasLocation" x="0.0" y="500"/>
         </toolbar>
@@ -91,6 +96,7 @@
         <image name="list.bullet" catalog="system" width="16" height="16"/>
         <image name="link" catalog="system" width="16" height="16"/>
         <image name="photo" catalog="system" width="16" height="16"/>
+        <image name="tablecells" catalog="system" width="16" height="16"/>
         <image name="italic" catalog="system" width="10" height="16"/>
         <image name="strikethrough" catalog="system" width="16" height="16"/>
         <image name="underline" catalog="system" width="12" height="16"/>

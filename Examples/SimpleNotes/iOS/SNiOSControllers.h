@@ -32,9 +32,29 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (instancetype)initRecentlyDeletedWithNotes:(SNNotes *)notes;
 @end
 
+@class SNTableEditorViewController;
+
+@protocol SNTableEditorDelegate <NSObject>
+// Done: the table edited, to be saved.
+- (void)tableEditorDidFinish:(SNTableEditorViewController *)editor;
+@end
+
+// A table's cells, rows and columns edited: a row of the screen a row of
+// the table, a field each cell; rows removed by a swipe.
+@interface SNTableEditorViewController : UITableViewController <UITextFieldDelegate>
+- (instancetype)initWithTable:(TTTable *)table attachmentID:(NSString *)attachmentID;
+@property (nonatomic, readonly) TTTable *table;
+@property (nonatomic, readonly, copy) NSString *attachmentID;
+@property (nonatomic, weak, nullable) id<SNTableEditorDelegate> delegate;
+- (IBAction)addRow:(nullable id)sender;
+- (IBAction)addColumn:(nullable id)sender;
+- (IBAction)removeColumn:(nullable id)sender;
+- (IBAction)done:(nullable id)sender;
+@end
+
 // SNEditorViewController.xib: the text view, and the format bar.
 @interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate,
-                                                       PHPickerViewControllerDelegate>
+                                                       PHPickerViewControllerDelegate, SNTableEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory.
@@ -61,6 +81,11 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)attachPhoto:(nullable id)sender;
 // An image's data into the note at the insertion point (as a photo picked).
 - (void)insertImageData:(NSData *)data;
+// A table at the insertion point (3 x 2), edited at once; a table tapped is
+// edited.
+- (IBAction)insertTable:(nullable id)sender;
+// A table put in the note, not edited: its attachment's id.
+- (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns;
 // Mark as Checked: the checklist items selected ticked (or unticked).
 - (IBAction)toggleChecked:(nullable id)sender;
 // Move Checked to Bottom, and Keep Checked at Bottom (every tick).

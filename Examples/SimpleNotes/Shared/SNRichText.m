@@ -431,6 +431,8 @@ NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, d
 @interface SNTextAttachment : NSTextAttachment
 @property (nonatomic, copy) NSString *attachmentID;
 @property (nonatomic) BOOL loaded;
+/* What it was drawn from: a table is drawn again when it changed. */
+@property (nonatomic) NSUInteger dataHash;
 @end
 
 @implementation SNTextAttachment
@@ -454,9 +456,104 @@ static SNImage *SNPlaceholderImage(double w, double h) {
 #endif
 }
 
-/* The attachment's view: its image as wide as it is, or as the text is. */
+#if TARGET_OS_IPHONE
+#define SNRectMake CGRectMake
+#else
+#define SNRectMake NSMakeRect
+#endif
+
+/* The grid and the cells' text, drawn top down: y from the top, in a flipped
+   context (UIKit's) or not (an NSImage's). */
+static void SNDrawTable(NSArray<NSArray<NSString *> *> *rows, NSArray<NSNumber *> *heights, NSUInteger columns, CGFloat column,
+                        CGFloat height, NSDictionary *attrs, BOOL flipped) {
+    const CGFloat pad = 6;
+    CGFloat y = 0;
+    for (NSUInteger r = 0; r < rows.count; r++) {
+        CGFloat h = heights[r].doubleValue;
+        for (NSUInteger c = 0; c < columns; c++) {
+            SNRect cell = SNRectMake(c * column + 0.5, y + 0.5, column, h);
+            SNRect drawn = flipped ? cell : SNRectMake(cell.origin.x, height - cell.origin.y - h, column, h);
+            SNPath *box = [SNPath bezierPathWithRect:drawn];
+            box.lineWidth = 1;
+            [SNMarkerGray() setStroke];   /* each time: drawing a string sets its own */
+            [box stroke];
+            NSString *text = c < rows[r].count ? rows[r][c] : @"";
+#if TARGET_OS_IPHONE
+            [text drawWithRect:CGRectInset(drawn, pad, pad) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs context:nil];
+#else
+            [text drawInRect:NSInsetRect(drawn, pad, pad) withAttributes:attrs];
+#endif
+        }
+        y += h;
+    }
+}
+
+/* A table drawn: a grid, its columns sharing the width, its cells' text
+   wrapped. */
+static SNImage *SNTableImage(TTTable *table, CGFloat maxWidth, CGFloat *outWidth, CGFloat *outHeight) {
+    NSArray<NSArray<NSString *> *> *rows = table.strings;
+    NSUInteger columns = MAX((NSUInteger)1, table.columnCount);
+    CGFloat width = MIN(maxWidth, MAX(240.0, columns * 140.0)), column = floor(width / columns);
+    width = column * columns;
+    SNFont *font = SNFontFor(nil, NO, NO);
+    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNTextColor() };
+    const CGFloat pad = 6, line = ceil(font.ascender - font.descender + 4);
+    NSMutableArray<NSNumber *> *heights = [NSMutableArray array];
+    CGFloat height = 0;
+    for (NSArray<NSString *> *row in rows) {
+        CGFloat h = line;
+        for (NSString *cell in row) {
+#if TARGET_OS_IPHONE
+            CGRect r = [cell boundingRectWithSize:CGSizeMake(column - 2 * pad, 10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs context:nil];
+#else
+            NSRect r = [cell boundingRectWithSize:NSMakeSize(column - 2 * pad, 10000) options:NSStringDrawingUsesLineFragmentOrigin attributes:attrs];
+#endif
+            h = MAX(h, ceil(r.size.height) + 2 * pad);
+        }
+        h = MAX(h, line + 2 * pad);
+        [heights addObject:@(h)];
+        height += h;
+    }
+    if (!rows.count) height = line + 2 * pad;
+    height = ceil(height) + 1;
+    width += 1;
+    *outWidth = width;
+    *outHeight = height;
+#if TARGET_OS_IPHONE
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(width, height)];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
+        SNDrawTable(rows, heights, columns, column, height, attrs, YES);
+    }];
+#else
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(width, height)];
+    [image lockFocus];
+    SNDrawTable(rows, heights, columns, column, height, attrs, NO);
+    [image unlockFocus];
+    return image;
+#endif
+}
+
+/* The attachment's view: its image as wide as it is, or as the text is; a
+   table drawn. */
 static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *attachment, CGFloat maxWidth) {
     NSData *data = attachment.data;
+    if ([attachment.kind isEqual:SNAttachmentKindTable]) {
+        TTTable *table = data ? [TTTable tableWithData:data replica:0 error:NULL] : nil;
+        CGFloat w = 240, h = 40;
+        SNImage *image = table ? SNTableImage(table, maxWidth, &w, &h) : SNPlaceholderImage(w, h);
+#if TARGET_OS_IPHONE
+        SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:nil ofType:nil];
+        a.image = image;
+        a.bounds = CGRectMake(0, 0, w, h);
+#else
+        SNTextAttachment *a = [[SNTextAttachment alloc] init];
+        a.attachmentCell = [[NSTextAttachmentCell alloc] initImageCell:image];
+#endif
+        a.attachmentID = attachmentID;
+        a.loaded = table != nil;
+        a.dataHash = data.hash;
+        return a;
+    }
     SNImage *image = data ? [[SNImage alloc] initWithData:data] : nil;
     double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
     if (image && (w < 1 || h < 1)) SNPixelSize(image, data, &w, &h);
@@ -762,7 +859,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
         SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
         SNAttachment *attachment = [_editor attachmentWithID:attachmentID];
         if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID] &&
-            (shown.loaded || !attachment.data))
+            ((shown.loaded && shown.dataHash == attachment.data.hash) || !attachment.data))
             continue;
         [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, [self attachmentWidth])
                        range:NSMakeRange(i, 1)];
@@ -819,6 +916,28 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     _applying = was;
 }
 
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range {
+    NSString *made = [_editor addTableWithRows:rows columns:columns];
+    if (!made) return nil;
+    [self insertAttachment:made inRange:range];
+    return made;
+}
+
+- (NSString *)attachmentIDAt:(NSUInteger)index {
+    return index < _storage.length ? [_storage attribute:SNAttachmentAttributeName atIndex:index effectiveRange:NULL] : nil;
+}
+
+/* The attachment's character in place of the range, shown. */
+- (void)insertAttachment:(NSString *)attachmentID inRange:(NSRange)range {
+    NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
+    t[SNAttachmentKey] = attachmentID;
+    NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
+    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [_editor attachmentWithID:attachmentID], [self attachmentWidth]);
+    unichar c = SNAttachmentCharacter;
+    [_storage replaceCharactersInRange:range
+                  withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+}
+
 - (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range {
     NSString *type = nil;
     double w = 0, h = 0;
@@ -826,13 +945,7 @@ static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
     if (!image) return NO;
     NSString *made = [_editor addImageData:image type:type width:w height:h];
     if (!made) return NO;
-    NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
-    t[SNAttachmentKey] = made;
-    NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
-    view[NSAttachmentAttributeName] = SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth]);
-    unichar c = SNAttachmentCharacter;
-    [_storage replaceCharactersInRange:range
-                  withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+    [self insertAttachment:made inRange:range];
     return YES;
 }
 

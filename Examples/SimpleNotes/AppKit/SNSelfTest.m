@@ -136,6 +136,17 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         [tv insertNewline:nil];
         [tv insertNewline:nil];   /* on the empty item: the list ends */
         SNSay([window attachImageData:SNSelfTestPNG()], @"an image attached");
+        /* A table after it, filled in as its editor would. */
+        [tv insertNewline:nil];
+        NSString *tableID = [window insertTableWithRows:2 columns:2];
+        SNAttachment *tableHere = tableID ? [notes attachmentWithID:tableID] : nil;
+        TTTable *table = tableHere ? [notes tableOfAttachment:tableHere] : nil;
+        NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday morning, before lunch" ] ];
+        for (NSUInteger r = 0; r < 2; r++)
+            for (NSUInteger c = 0; c < 2; c++) [[table textAtRow:r column:c] setString:cells[r][c]];
+        if (table) [notes saveTable:table toAttachment:tableHere];
+        SNSay(table && [tv.textStorage attribute:NSAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL] != nil,
+              @"a table put in the note");
         SNWait(2, ^BOOL { return NO; });
         [notes sync];
         SNWait(30, ^BOOL { return !notes.syncing; });
@@ -143,11 +154,15 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         for (SNNote *n in [other notesInFolder:nil matching:@"Weekend"]) weekend = n;
         wt = weekend.text;
         NSArray *lines2 = [wt.string componentsSeparatedByString:@"\n"];
-        SNSay(lines2.count == 5 && [lines2[3] isEqual:@"fix the bike"],
+        SNSay(lines2.count == 6 && [lines2[3] isEqual:@"fix the bike"],
               [NSString stringWithFormat:@"the second device has it at the bottom (%@)", [lines2 componentsJoinedByString:@" | "]]);
-        NSString *imageID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        NSString *imageID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
         SNAttachment *image = imageID ? [other attachmentWithID:imageID] : nil;
         SNSay(image.data.length > 0 && image.width.doubleValue == 64, [NSString stringWithFormat:@"and the image (%@, %@)", imageID, image.type]);
+        NSString *tableThereID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNAttachment *tableThere = tableThereID ? [other attachmentWithID:tableThereID] : nil;
+        SNSay([[other tableOfAttachment:tableThere].strings isEqual:cells],
+              [NSString stringWithFormat:@"and the table (%@)", [other tableOfAttachment:tableThere].strings]);
         SNNote *groceries = nil;
         for (SNNote *n in [notes notesInFolder:nil matching:@"Groceries"]) groceries = n;
         [window textView:window.textView clickedOnLink:SNLinkToNote(groceries.id) atIndex:0];

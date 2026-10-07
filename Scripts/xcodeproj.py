@@ -211,7 +211,7 @@ def topotext():
     p = Project('TopoText', 'TopoText.xcodeproj')
     odk = Remote(p, 'ODataKit', '../ODataKit/ODataKit.xcodeproj', {k: ODATAKIT[k] for k in ('ODataKit', 'ODataSync')})
     configs = [file_ref(p, 'Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
-    tt = {f: file_ref(p, 'Sources/TopoText/' + f) for f in ('TopoText.m', 'TTCoding.m', 'TTInternal.h', 'include/TopoText/TopoText.h')}
+    tt = {f: file_ref(p, 'Sources/TopoText/' + f) for f in ('TopoText.m', 'TTCoding.m', 'TTTable.m', 'TTInternal.h', 'include/TopoText/TopoText.h')}
     sy = {f: file_ref(p, 'Sources/TopoTextSync/' + f) for f in ('TTSyncResolver.m', 'include/TopoTextSync/TopoTextSync.h')}
     for k in tt:
         p.objects[tt[k]]['name'] = os.path.basename(k)
@@ -224,7 +224,7 @@ def topotext():
                 [build_file(p, 'TopoText', 'Headers', tt['include/TopoText/TopoText.h'], 'TopoText.h', {'ATTRIBUTES': ['Public']}),
                  build_file(p, 'TopoText', 'Headers', tt['TTInternal.h'], 'TTInternal.h')])
     src = phase(p, 'TopoText', 'PBXSourcesBuildPhase', 'Sources',
-                [build_file(p, 'TopoText', 'Sources', tt[f], f) for f in ('TopoText.m', 'TTCoding.m')])
+                [build_file(p, 'TopoText', 'Sources', tt[f], f) for f in ('TopoText.m', 'TTCoding.m', 'TTTable.m')])
     fw = phase(p, 'TopoText', 'PBXFrameworksBuildPhase', 'Frameworks', [])
     s = dict(FRAMEWORK_SETTINGS, PRODUCT_BUNDLE_IDENTIFIER='io.github.ashalkhakov.TopoText',
              HEADER_SEARCH_PATHS=['$(SRCROOT)/Sources/TopoText', '$(SRCROOT)/Sources/TopoText/include/TopoText'])
@@ -279,7 +279,7 @@ def simplenotes(topotext_ids):
                                            'SNMigration.h', 'SNMigration.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
-                                           'SNTextView.h', 'SNTextView.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'Info.plist',
+                                           'SNTextView.h', 'SNTextView.m', 'SNTableEditor.h', 'SNTableEditor.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'TableEditor.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m',
                                      'SNEditorViewController.xib', 'Info.plist',
@@ -314,9 +314,9 @@ def simplenotes(topotext_ids):
     common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNResolver.m', 'SNRichText.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
-    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNSelfTest.m'])
+    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTableEditor.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
-                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
+                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'TableEditor.xib']) + sources_of(icons, ['SimpleNotes.icns']),
                      appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],

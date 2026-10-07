@@ -65,6 +65,13 @@ array):
   newline's value wins (`paragraphAttributesAtIndex:keys:`); the last
   paragraph has no newline, so its first character's does. Text typed into a
   line that was made a list item elsewhere ends up in the item.
+- **Tables** (`TTTable`) merge as Apple Notes' do. Row order and column
+  order are each a TopoText whose characters stand for the rows (or
+  columns): a row's identity is its character's id, so rows added apart are
+  both kept, in one order. Each cell is a TopoText, keyed by its row's id
+  and its column's. Edits to a cell merge as text, and a column removed
+  takes its cells with it. A table is exchanged and merged whole, because
+  its pieces' clocks are each their own.
 - **Values are property-list types**: strings, numbers, data, dates, and arrays
   and dictionaries of them. NSNull removes a key. An editor maps its fonts and
   colours to such values and back.
@@ -199,6 +206,7 @@ SimpleNotes' README, "Releases".
 | `Sources/TopoText/include/TopoText/TopoText.h` | The public API: `TopoText`, `TTId`, `TTVersion`, `TTEdit` |
 | `Sources/TopoText/TopoText.m` | The text: runs, local edits, integration (RGA), deltas, edits reported |
 | `Sources/TopoText/TTCoding.m` | The wire format: varints, WTF-8 text, attribute values, payloads, versions |
+| `Sources/TopoText/TTTable.m` | Tables that merge: row and column orders, a TopoText per cell |
 | `Sources/TopoText/TTInternal.h` | Runs, registers, payloads, shared by both |
 | `Sources/TopoTextSync/` | `TTSyncResolver`, `NSManagedObject (TopoText)` |
 | `Tests/` | Unit tests, the convergence fuzz, ODataSync end to end |

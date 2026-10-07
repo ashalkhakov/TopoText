@@ -117,6 +117,15 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             [[UIColor systemYellowColor] setFill];
             UIRectFill(CGRectMake(0, 0, 64, 48));
         }])];
+        /* A table after it, filled in as its editor would. */
+        if ([we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:@"\n"]) [wtv insertText:@"\n"];
+        NSString *tableID = [we insertTableWithRows:2 columns:2];
+        SNAttachment *tableHere = tableID ? [notes attachmentWithID:tableID] : nil;
+        TTTable *table = tableHere ? [notes tableOfAttachment:tableHere] : nil;
+        NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday" ] ];
+        for (NSUInteger r = 0; r < 2; r++)
+            for (NSUInteger c = 0; c < 2; c++) [[table textAtRow:r column:c] setString:cells[r][c]];
+        if (table) [notes saveTable:table toAttachment:tableHere];
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             [wtv resignFirstResponder];
@@ -134,10 +143,12 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
             [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
         }
-        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-" ]],
+        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-" ]],
               [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
-        NSString *photoID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        NSString *photoID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
         SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
+        NSString *tableThere = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNSay([[other tableOfAttachment:[other attachmentWithID:tableThere]].strings isEqual:cells], @"and the table");
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

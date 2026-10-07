@@ -82,6 +82,12 @@ NS_ASSUME_NONNULL_BEGIN
 // An image's data into the note at the insertion point, undoably (NO: not
 // an image, or no note open).
 - (BOOL)attachImageData:(NSData *)data;
+// Format > Table: a table in the note at the insertion point, edited at
+// once; a table clicked is edited (SNTableEditor).
+- (IBAction)insertTable:(nullable id)sender;
+// A table put in the note (rows x columns), undoably, not edited: its
+// attachment's id.
+- (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns;
 // The note shown and chosen, as a link to it opens it (NO: not here).
 - (BOOL)showNote:(SNNote *)note;
 // View > Sort By, and Group By Date.

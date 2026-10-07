@@ -298,6 +298,12 @@
                                     <action selector="addLink:" target="-1" id="SNm-ac-903"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Table" keyEquivalent="t" id="SNm-mi-907">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="insertTable:" target="-1" id="SNm-ac-907"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

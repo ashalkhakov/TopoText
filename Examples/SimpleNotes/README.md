@@ -1,8 +1,9 @@
 # SimpleNotes
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
-with headings, lists and checklists, tags, search, pinning, sorting and
-grouping by date, Recently Deleted, and moving notes between folders. It runs
+with headings, lists and checklists, links, images and tables, tags,
+search, pinning, sorting and grouping by date, Recently Deleted, and moving
+notes between folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
@@ -90,6 +91,50 @@ sync, the folders would be inside each other. Each device then breaks the
 loop at the folder whose ID sorts first, which shows at the top level. Every
 device does the same, so nothing is lost and all show the same tree.
 
+## Links
+
+A web address you type becomes a link, as in Apple Notes. That link is
+only shown, not kept: it's worked out from the text each time.
+**Format > Add Link…** (⌘K; on iOS, the format bar's link button) puts a
+link on the selected text, and that one is part of the note and syncs with
+it.
+
+A link can also point to another note: **File > Copy Link to Note** (on iOS,
+press and hold a note in the list) copies a `simplenotes://note/<id>` link.
+Paste it with Add Link, and clicking it opens that note.
+
+## Images
+
+**File > Attach File…** (⇧⌘A), or paste or drop an image; on iOS, the format
+bar's photo button. An image is one of the note's attachments, with its own
+record that syncs like a note does. The note's text holds one character for
+it. Images larger than 1600 pixels across are scaled down.
+
+A note's text can reach a device before its attachment does. Until the
+attachment arrives, a grey box takes its place. Deleting a note for good
+deletes its attachments.
+
+## Tables
+
+**Format > Table** (⌥⌘T; on iOS, the format bar's table button) puts a table
+in the note. Click or tap a table to edit its cells, and to add or remove
+rows and columns. In this version cells are edited in a table editor, not
+in place in the note.
+
+A table merges as Apple Notes' do, with no cell, row or column lost when
+two devices edit apart. It's a `TTTable`, from TopoText. Its rows and
+columns are each kept in an order every device agrees on, and each cell is
+a TopoText of its own. So:
+
+- Rows (or columns) added on two devices are both kept.
+- Edits to different cells both stand; edits to one cell merge character
+  by character.
+- A column (or row) removed takes its cells with it, including anything
+  typed into them meanwhile.
+
+When the same table changed on two devices, the sync merges the two whole
+tables (`SNResolver`).
+
 ## Tags
 
 Type `#` and a word in a note, and that word becomes a tag, as in Apple
@@ -116,6 +161,7 @@ Notes. The choice is the device's own (user defaults), as in Apple Notes.
 `SimpleNotes.xcdatamodeld` holds every version of the model:
 
 - **Version 2** added `Note.deletedAt` (Recently Deleted).
+- **Version 4** added `Attachment` (images and tables in notes).
 - **Version 3** added `Folder.parent` (folders in folders). It also renamed
   `Note.updated` to `edited`, with Renaming ID `updated` so migration keeps
   the dates. On Apple's Core Data, `updated` is `NSManagedObject`'s own
@@ -369,13 +415,20 @@ Typing works as in Apple Notes:
 Clicking (or tapping) a checkbox ticks it. Numbered items count up within
 their indent level; items indented further don't interrupt the count.
 
+**Format > Move Checked to Bottom** (on iOS, in the list menu) moves the
+ticked items of the checklist at the insertion point below the unticked
+ones. **Keep Checked at Bottom** does that every time an item is ticked,
+which is Apple Notes' "Automatically" setting. Only the ticked items that
+are out of place move, and each move is a deletion plus an insertion. So if
+another device was typing into an item at the moment it moved, that text
+stays where the item was.
+
 ## Not yet
 
 - **One shared notebook.** A notebook per user means a handler on the
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Attachments, tables, smart folders, a sort order per folder, moving
-  checked items to the bottom,
-  and undo across a merge (the undo stack is cleared when a sync changes the
-  open note).
+- Editing a table in place in the note, files other than images, smart
+  folders, a sort order per folder, and undo across a merge (the undo stack
+  is cleared when a sync changes the open note).

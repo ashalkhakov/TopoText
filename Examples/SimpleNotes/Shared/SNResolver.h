@@ -3,6 +3,7 @@
 //   the body       merged, TopoText's (TTSyncResolver): both sides' edits
 //   the title      the merged body's first line
 //   edited         the later of the two
+//   a table        both merged (TTTable): rows, columns, and each cell's text
 //   anything else  from the side that changed it; changed on both, the
 //                  later writer's (the modified stamps)
 //   deleted on one side, changed on the other: the change stands, so an

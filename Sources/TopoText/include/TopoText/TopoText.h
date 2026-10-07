@@ -177,6 +177,52 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 - (void)addParagraphAttributes:(NSDictionary<NSString *, id> *)attrs range:(NSRange)range;
 @end
 
+/* A table that merges, as Apple Notes' do: rows and columns in an order every
+   copy agrees on, and a text per cell.
+
+   The rows' order is a TopoText whose characters are the rows: each row's
+   identity is its character's id, inserting a row is inserting a
+   character, removing one removes it. The columns' are another. A cell is a
+   TopoText of its own, keyed by its row's id and its column's. So two
+   people adding rows (or columns) apart both keep them, in one order; edits
+   to cells merge as any text does, the same cell's character by character;
+   a column removed takes its cells with it, whatever was typed into them
+   meanwhile (a row the same).
+
+   A table is exchanged whole (-data), and merged whole: its parts' clocks
+   are each their own, and one version over them all would not say what a
+   copy lacks. Not thread-safe, as TopoText. */
+@interface TTTable : NSObject <NSCopying>
+
+@property (nonatomic, readonly) TTReplica replica;
+/* rows x columns empty cells, a random replica (0) or this one. */
++ (instancetype)tableWithRows:(NSUInteger)rows columns:(NSUInteger)columns replica:(TTReplica)replica;
+/* The whole state, as -data wrote it. */
++ (nullable instancetype)tableWithData:(NSData *)data replica:(TTReplica)replica error:(NSError **)error;
+- (id)copyWithZone:(nullable NSZone *)zone;
+- (TTTable *)copyWithReplica:(TTReplica)replica;
+/* The whole state: canonical, as a TopoText's. */
+- (NSData *)data;
+
+@property (nonatomic, readonly) NSUInteger rowCount;
+@property (nonatomic, readonly) NSUInteger columnCount;
+/* A cell's text, the table's own: edited, the table is. */
+- (TopoText *)textAtRow:(NSUInteger)row column:(NSUInteger)column;
+/* Each row, as its cells' plain text. */
+- (NSArray<NSArray<NSString *> *> *)strings;
+
+- (void)insertRowAtIndex:(NSUInteger)index;
+- (void)removeRowAtIndex:(NSUInteger)index;
+- (void)insertColumnAtIndex:(NSUInteger)index;
+- (void)removeColumnAtIndex:(NSUInteger)index;
+
+/* Everything other has, merged in; a new copy with both, writing as this
+   one. */
+- (void)mergeTable:(TTTable *)other;
+- (TTTable *)mergedWith:(TTTable *)other;
+
+@end
+
 NS_ASSUME_NONNULL_END
 
 

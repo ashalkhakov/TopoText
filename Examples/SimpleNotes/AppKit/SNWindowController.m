@@ -1,6 +1,7 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
 #import "SNModel.h"
+#import "SNTableEditor.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -530,6 +531,13 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark the text view's delegate
 
+/* A table clicked: edited. */
+- (void)textView:(NSTextView *)tv clickedOnCell:(id<NSTextAttachmentCell>)cell inRect:(NSRect)rect atIndex:(NSUInteger)index {
+    NSString *attachmentID = [_binding attachmentIDAt:index];
+    if ([[_notes attachmentWithID:attachmentID].kind isEqual:SNAttachmentKindTable] && _textView.isEditable)
+        [self editTableOfAttachment:attachmentID];
+}
+
 /* A link to a note opens it here; any other, in its own application. */
 - (BOOL)textView:(NSTextView *)tv clickedOnLink:(id)link atIndex:(NSUInteger)index {
     NSURL *url = [link isKindOfClass:[NSURL class]] ? link : [link isKindOfClass:[NSString class]] ? SNURLOfLink(link) : nil;
@@ -725,6 +733,32 @@ static const NSInteger SNMoveToMenuTag = 7001;
     return YES;
 }
 
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    if (!_binding || !_textView.isEditable) return nil;
+    NSRange r = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return nil;
+    NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
+    if (made) [_textView didChangeText];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    return made;
+}
+
+- (IBAction)insertTable:(id)sender {
+    NSString *made = [self insertTableWithRows:3 columns:2];
+    if (made) [self editTableOfAttachment:made];
+}
+
+/* A table edited, then merged into what is stored (a sync may have brought
+   edits meanwhile), and shown again. */
+- (void)editTableOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = [_notes attachmentWithID:attachmentID];
+    TTTable *table = a ? [_notes tableOfAttachment:a] : nil;
+    if (!table) return;
+    [SNTableEditor editTable:table];
+    [_notes saveTable:table toAttachment:a];
+    [_binding refreshAttachments];
+}
+
 - (IBAction)copyNoteLink:(id)sender {
     SNNote *note = [self selectedNote];
     if (!note.id) return;
@@ -758,7 +792,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
-    if (a == @selector(addLink:) || a == @selector(attachFile:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(addLink:) || a == @selector(attachFile:) || a == @selector(insertTable:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(moveCheckedToBottom:))
         return _binding != nil && _textView.isEditable && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
     if (a == @selector(toggleKeepCheckedAtBottom:)) {

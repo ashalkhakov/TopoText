@@ -134,6 +134,11 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // An image in place of the range, made one of the note's attachments
 // (re-encoded, saved, synced); NO: not an image.
 - (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range;
+// A table in place of the range (rows x columns, empty), made one of the
+// note's attachments; its id.
+- (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range;
+// The id of the attachment at a place (nil: none).
+- (nullable NSString *)attachmentIDAt:(NSUInteger)index;
 // Attachments shown again: those a sync has brought since (a text can come
 // before its attachment).
 - (void)refreshAttachments;

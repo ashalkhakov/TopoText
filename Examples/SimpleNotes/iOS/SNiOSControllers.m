@@ -495,6 +495,115 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 @end
 
+#pragma mark a table
+
+@implementation SNTableEditorViewController {
+    TTTable *_table;
+}
+
+- (instancetype)initWithTable:(TTTable *)table attachmentID:(NSString *)attachmentID {
+    if ((self = [super initWithStyle:UITableViewStylePlain])) {
+        _table = table;
+        _attachmentID = [attachmentID copy];
+        self.title = @"Table";
+    }
+    return self;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
+                                                                                           target:self action:@selector(done:)];
+    UIBarButtonItem *flex = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    self.toolbarItems = @[ [[UIBarButtonItem alloc] initWithTitle:@"Add Row" style:UIBarButtonItemStylePlain target:self action:@selector(addRow:)], flex,
+                           [[UIBarButtonItem alloc] initWithTitle:@"Add Column" style:UIBarButtonItemStylePlain target:self action:@selector(addColumn:)], flex,
+                           [[UIBarButtonItem alloc] initWithTitle:@"Remove Column" style:UIBarButtonItemStylePlain target:self action:@selector(removeColumn:)] ];
+    self.tableView.rowHeight = 52;
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    self.navigationController.toolbarHidden = NO;
+}
+
+- (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section {
+    return (NSInteger)_table.rowCount;
+}
+
+/* A field a cell, side by side; its tag the cell's place (row * 1000 + column). */
+- (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)ip {
+    UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:nil];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    UIStackView *fields = [[UIStackView alloc] init];
+    fields.axis = UILayoutConstraintAxisHorizontal;
+    fields.distribution = UIStackViewDistributionFillEqually;
+    fields.spacing = 6;
+    fields.translatesAutoresizingMaskIntoConstraints = NO;
+    for (NSUInteger c = 0; c < _table.columnCount; c++) {
+        UITextField *f = [[UITextField alloc] init];
+        f.borderStyle = UITextBorderStyleRoundedRect;
+        f.text = [_table textAtRow:(NSUInteger)ip.row column:c].string;
+        f.tag = ip.row * 1000 + (NSInteger)c;
+        f.delegate = self;
+        [f addTarget:self action:@selector(fieldChanged:) forControlEvents:UIControlEventEditingChanged];
+        [fields addArrangedSubview:f];
+    }
+    [cell.contentView addSubview:fields];
+    UILayoutGuide *m = cell.contentView.layoutMarginsGuide;
+    [NSLayoutConstraint activateConstraints:@[ [fields.leadingAnchor constraintEqualToAnchor:m.leadingAnchor],
+                                               [fields.trailingAnchor constraintEqualToAnchor:m.trailingAnchor],
+                                               [fields.centerYAnchor constraintEqualToAnchor:cell.contentView.centerYAnchor] ]];
+    return cell;
+}
+
+/* A cell's text made the field's by the least edit: what another device
+   typed into it meanwhile merges in. */
+- (void)fieldChanged:(UITextField *)f {
+    NSUInteger row = (NSUInteger)f.tag / 1000, column = (NSUInteger)f.tag % 1000;
+    if (row < _table.rowCount && column < _table.columnCount) [[_table textAtRow:row column:column] setString:f.text ?: @""];
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)f {
+    [f resignFirstResponder];
+    return YES;
+}
+
+- (UISwipeActionsConfiguration *)tableView:(UITableView *)t trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
+    UIContextualAction *remove = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Remove"
+        handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            [self->_table removeRowAtIndex:(NSUInteger)ip.row];
+            [t reloadData];
+            done(YES);
+        }];
+    return [UISwipeActionsConfiguration configurationWithActions:@[ remove ]];
+}
+
+- (IBAction)addRow:(id)sender {
+    [self.view endEditing:YES];
+    [_table insertRowAtIndex:_table.rowCount];
+    [self.tableView reloadData];
+}
+
+- (IBAction)addColumn:(id)sender {
+    [self.view endEditing:YES];
+    [_table insertColumnAtIndex:_table.columnCount];
+    [self.tableView reloadData];
+}
+
+- (IBAction)removeColumn:(id)sender {
+    [self.view endEditing:YES];
+    if (_table.columnCount > 1) [_table removeColumnAtIndex:_table.columnCount - 1];
+    [self.tableView reloadData];
+}
+
+- (IBAction)done:(id)sender {
+    [self.view endEditing:YES];
+    [self.delegate tableEditorDidFinish:self];
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end
+
 #pragma mark the note
 
 @implementation SNEditorViewController {
@@ -648,9 +757,24 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [link isKindOfClass:[NSURL class]] ? link : nil;
 }
 
-/* Only a tap on a checkbox or a link: the text view has the others. */
+/* The table under a tap: its attachment's id; nil for none. */
+- (NSString *)tableAt:(UIGestureRecognizer *)g {
+    NSTextStorage *ts = _textView.textStorage;
+    if (!ts.length || !_textView.editable) return nil;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    p = CGPointMake(p.x - inset.left, p.y - inset.top);
+    NSLayoutManager *lm = _textView.layoutManager;
+    NSUInteger glyph = [lm glyphIndexForPoint:p inTextContainer:_textView.textContainer];
+    CGRect box = [lm boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
+    if (!CGRectContainsPoint(box, p)) return nil;
+    NSString *attachmentID = [_binding attachmentIDAt:[lm characterIndexForGlyphAtIndex:glyph]];
+    return [[_notes attachmentWithID:attachmentID].kind isEqual:SNAttachmentKindTable] ? attachmentID : nil;
+}
+
+/* Only a tap on a checkbox, a link or a table: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil;
+    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil || [self tableAt:g] != nil;
 }
 
 /* A link to a note opens its editor; any other, in its own application. */
@@ -669,6 +793,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSString *table = [self checkboxAt:g] == NSNotFound ? [self tableAt:g] : nil;
+    if (table) {
+        [self editTableOfAttachment:table];
+        return;
+    }
     NSURL *link = [self checkboxAt:g] == NSNotFound ? [self linkAt:g] : nil;
     if (link) {
         [self openLink:link];
@@ -761,6 +890,38 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)dashList:(id)sender { [self list:SNListDash]; }
 - (IBAction)numberList:(id)sender { [self list:SNListNumber]; }
 - (IBAction)checklist:(id)sender { [self list:SNListCheck]; }
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    if (!_textView.editable) return nil;
+    NSRange r = _textView.selectedRange;
+    NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+    return made;
+}
+
+- (IBAction)insertTable:(id)sender {
+    NSString *made = [self insertTableWithRows:3 columns:2];
+    if (made) [self editTableOfAttachment:made];
+}
+
+/* A table edited in a screen of its own; saved, merged into what is stored,
+   when Done. */
+- (void)editTableOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = [_notes attachmentWithID:attachmentID];
+    TTTable *table = a ? [_notes tableOfAttachment:a] : nil;
+    if (!table) return;
+    SNTableEditorViewController *editor = [[SNTableEditorViewController alloc] initWithTable:table attachmentID:attachmentID];
+    editor.delegate = self;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:editor];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)tableEditorDidFinish:(SNTableEditorViewController *)editor {
+    SNAttachment *a = [_notes attachmentWithID:editor.attachmentID];
+    if (a) [_notes saveTable:editor.table toAttachment:a];
+    [_binding refreshAttachments];
+}
+
 /* Photos into the note, at the insertion point (one pasted is one too). */
 - (IBAction)attachPhoto:(id)sender {
     if (!_textView.editable) return;

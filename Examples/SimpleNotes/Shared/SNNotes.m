@@ -459,6 +459,30 @@ NSString *SNDateText(NSDate *date) {
     return a;
 }
 
+- (SNAttachment *)addTableToNote:(SNNote *)note rows:(NSUInteger)rows columns:(NSUInteger)columns {
+    SNAttachment *a = [self insert:SNAttachmentEntity];
+    a.kind = SNAttachmentKindTable;
+    a.type = SNTableType;
+    a.data = [TTTable tableWithRows:rows columns:columns replica:0].data;
+    a.note = note;
+    [self save];
+    return a;
+}
+
+- (TTTable *)tableOfAttachment:(SNAttachment *)attachment {
+    if (![attachment.kind isEqual:SNAttachmentKindTable] || !attachment.data) return nil;
+    return [TTTable tableWithData:attachment.data replica:0 error:NULL];
+}
+
+- (void)saveTable:(TTTable *)table toAttachment:(SNAttachment *)attachment {
+    TTTable *stored = attachment.data ? [TTTable tableWithData:attachment.data replica:table.replica error:NULL] : nil;
+    if (stored) [stored mergeTable:table];
+    NSData *data = (stored ?: table).data;
+    if ([data isEqual:attachment.data]) return;
+    attachment.data = data;
+    [self save];
+}
+
 - (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
     if (!attachmentID.length || !_attaches) return nil;
     return [self fetch:SNAttachmentEntity where:[NSPredicate predicateWithFormat:@"id == %@", attachmentID] sortedBy:nil].firstObject;
@@ -677,6 +701,13 @@ NSString *SNDateText(NSDate *date) {
     SNNote *note = [self note];
     if (!notes || !note) return nil;
     return [notes addImageToNote:note data:data type:type width:width height:height].id;
+}
+
+- (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    SNNotes *notes = _notes;
+    SNNote *note = [self note];
+    if (!notes || !note) return nil;
+    return [notes addTableToNote:note rows:rows columns:columns].id;
 }
 
 - (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
