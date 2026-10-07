@@ -235,3 +235,7 @@ pair must still encode.
 - **Every operation is O(runs).** That is fine for notes: in a worst-case
   document of 20k one-character runs, an edit takes 15 µs, and merging 2000
   concurrent edits takes 0.16 s. A book-length text would want a tree.
+
+## License
+
+LGPL 2.1 or later (`LICENSE`). SimpleNotes, the example, is under it too.
