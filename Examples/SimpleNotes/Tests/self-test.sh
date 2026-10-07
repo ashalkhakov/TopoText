@@ -21,6 +21,9 @@ for i in $(seq 1 100); do
   sleep 0.2
 done
 python3 "$here/seed.py" "$root" || exit 1
+# On GNUstep, the Eau theme, set in the app's defaults as our other apps'
+# launchers (AppRun) set it.
+if [ "$(uname -s)" != Darwin ] && command -v defaults >/dev/null; then defaults write SimpleNotes GSTheme Eau; fi
 display=()
 if [ "$(uname -s)" != Darwin ] && [ -z "${DISPLAY:-}" ] && command -v xvfb-run >/dev/null; then display=(xvfb-run -a); fi
 ${display[@]+"${display[@]}"} "$app" --self-test "$root"

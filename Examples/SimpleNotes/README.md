@@ -146,9 +146,9 @@ The apps:
   make -C Examples/SimpleNotes && openapp Examples/SimpleNotes/SimpleNotes.app
   ```
 
-  It uses the Eau theme when it is installed (gnustep-patches'
-  `build-gnustep.sh` builds it, as for our other apps). A `GSTheme` default
-  of your own takes precedence.
+  For the Eau theme (gnustep-patches' `build-gnustep.sh` builds it), set it
+  in the app's defaults, as our other apps' launchers do:
+  `defaults write SimpleNotes GSTheme Eau`. The self-test does this itself.
 
 To try two devices on one Mac or Linux machine, give a second instance a
 store of its own: `SimpleNotes -SNStore /tmp/second.sqlite`.
