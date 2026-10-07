@@ -1,6 +1,7 @@
 #import "SNResolver.h"
 #import "SNModel.h"
 #import "SNAttachment.h"
+#import "SNSmartFilter.h"
 
 @implementation SNResolver
 
@@ -24,9 +25,31 @@
     return [ODataSyncResolution mergedValues:values];
 }
 
+/* A smart folder's rules changed on both sides: merged rule by rule
+   (SNSmartFilter), not the whole of them the later side's. */
+- (ODataSyncResolution *)resolveFilter:(ODataSyncConflict *)conflict resolution:(ODataSyncResolution *)r {
+    if (r.kind != ODataSyncMerge || ![conflict.localChanges containsObject:@"filter"] || ![conflict.remoteChanges containsObject:@"filter"])
+        return r;
+    id b = conflict.base[@"filter"], l = conflict.local[@"filter"], m = conflict.remote[@"filter"];
+    SNSmartFilter *base = [b isKindOfClass:[NSString class]] ? [SNSmartFilter filterWithString:b] : [[SNSmartFilter alloc] init];
+    SNSmartFilter *local = [l isKindOfClass:[NSString class]] ? [SNSmartFilter filterWithString:l] : nil;
+    SNSmartFilter *remote = [m isKindOfClass:[NSString class]] ? [SNSmartFilter filterWithString:m] : nil;
+    if (!base || !local || !remote) return r;
+    /* The later side, as last writer wins tells it: by the stamps, else
+       (from a peer) by the rules themselves, the same whichever side asks. */
+    id ls = conflict.local[@"modified"], rs = conflict.remote[@"modified"];
+    NSComparisonResult order = [ls isKindOfClass:[NSString class]] && [rs isKindOfClass:[NSString class]] ? [ls compare:rs] : NSOrderedSame;
+    if (order == NSOrderedSame && conflict.withPeer) order = [l compare:m];
+    SNSmartFilter *merged = [SNSmartFilter filterMergingBase:base local:local remote:remote localLater:order == NSOrderedDescending];
+    NSMutableDictionary *values = [r.values mutableCopy];
+    values[@"filter"] = merged.string;
+    return [ODataSyncResolution mergedValues:values];
+}
+
 - (ODataSyncResolution *)resolveConflict:(ODataSyncConflict *)conflict {
     ODataSyncResolution *r = [super resolveConflict:conflict];
     if ([conflict.entity.name isEqualToString:SNAttachmentEntity]) return [self resolveTable:conflict resolution:r];
+    if ([conflict.entity.name isEqualToString:SNFolderEntity]) return [self resolveFilter:conflict resolution:r];
     if (r.kind != ODataSyncMerge || ![conflict.entity.name isEqualToString:SNNoteEntity]) return r;
     NSMutableDictionary *values = [r.values mutableCopy];
     NSString *body = values[@"body"];

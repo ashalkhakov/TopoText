@@ -67,6 +67,34 @@ static NSString * const SNFilterCheckedKey = @"checked";
     return [self string].hash;
 }
 
+/* A rule's value from base, local and remote: the side that changed it,
+   or the later side when both did. */
+static id SNMergedRule(id base, id local, id remote, BOOL localLater) {
+    BOOL here = ![local isEqual:base], there = ![remote isEqual:base];
+    if (here && there) return localLater ? local : remote;
+    return here ? local : remote;
+}
+
++ (SNSmartFilter *)filterMergingBase:(SNSmartFilter *)base local:(SNSmartFilter *)local remote:(SNSmartFilter *)remote
+                          localLater:(BOOL)localLater {
+    SNSmartFilter *f = [[SNSmartFilter alloc] init];
+    f.matchesAny = [SNMergedRule(@(base.matchesAny), @(local.matchesAny), @(remote.matchesAny), localLater) boolValue];
+    f.anyTag = [SNMergedRule(@(base.anyTag), @(local.anyTag), @(remote.anyTag), localLater) boolValue];
+    f.editedWithinDays = [SNMergedRule(@(base.editedWithinDays), @(local.editedWithinDays), @(remote.editedWithinDays), localLater) integerValue];
+    f.createdWithinDays = [SNMergedRule(@(base.createdWithinDays), @(local.createdWithinDays), @(remote.createdWithinDays), localLater) integerValue];
+    f.checklists = (SNChecklistRule)[SNMergedRule(@(base.checklists), @(local.checklists), @(remote.checklists), localLater) integerValue];
+    f.withAttachments = [SNMergedRule(@(base.withAttachments), @(local.withAttachments), @(remote.withAttachments), localLater) boolValue];
+    f.pinnedOnly = [SNMergedRule(@(base.pinnedOnly), @(local.pinnedOnly), @(remote.pinnedOnly), localLater) boolValue];
+    NSSet *was = [NSSet setWithArray:base.tags], *here = [NSSet setWithArray:local.tags], *there = [NSSet setWithArray:remote.tags];
+    NSMutableSet *tags = [was mutableCopy];
+    [tags unionSet:here];
+    [tags unionSet:there];
+    for (NSString *t in was)
+        if (![here containsObject:t] || ![there containsObject:t]) [tags removeObject:t];
+    f.tags = [tags.allObjects sortedArrayUsingSelector:@selector(compare:)];
+    return f;
+}
+
 - (BOOL)isEmpty {
     return !_tags.count && _editedWithinDays <= 0 && _createdWithinDays <= 0 && _checklists == SNChecklistRuleNone &&
            !_withAttachments && !_pinnedOnly;

@@ -541,6 +541,57 @@
     XCTAssertEqual([b countOfNotesInFolder:there], 2u);
 }
 
+/* A smart folder's rules edited on two devices apart: each one's changes
+   kept, rule by rule; a rule both changed, the later edit's. */
+- (void)testASmartFoldersRulesEditedApartAreMerged {
+    SNNotes *a = [self device], *b = [self device];
+    SNSmartFilter *start = [[SNSmartFilter alloc] init];
+    start.tags = @[ @"work", @"errands" ];
+    start.editedWithinDays = 30;
+    SNFolder *smart = [a addSmartFolderNamed:@"Mine" filter:start inFolder:nil];
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = nil;
+    for (SNFolder *f in b.folders) if ([f.name isEqual:@"Mine"]) there = f;
+    /* Here: #family added, #errands taken off, edited within 7 days. */
+    SNSmartFilter *fa = [a filterOfFolder:smart];
+    fa.tags = @[ @"work", @"family" ];
+    fa.editedWithinDays = 7;
+    [a setFilter:fa ofFolder:smart];
+    [self sync:a];
+    /* There, later: pinned only, edited within 90 days; the name too. */
+    [NSThread sleepForTimeInterval:0.01];
+    SNSmartFilter *fb = [b filterOfFolder:there];
+    fb.pinnedOnly = YES;
+    fb.editedWithinDays = 90;
+    [b setFilter:fb ofFolder:there];
+    [b renameFolder:there to:@"Mine, pinned"];
+    [self sync:b];
+    [self sync:a];
+    SNSmartFilter *want = [[SNSmartFilter alloc] init];
+    want.tags = @[ @"family", @"work" ];
+    want.pinnedOnly = YES;
+    want.editedWithinDays = 90;
+    XCTAssertEqualObjects([b filterOfFolder:there], want, @"%@", [b filterOfFolder:there].string);
+    XCTAssertEqualObjects([a filterOfFolder:smart], want, @"%@", [a filterOfFolder:smart].string);
+    XCTAssertEqualObjects(smart.name, @"Mine, pinned");
+}
+
+- (void)testMergingRulesByHand {
+    SNSmartFilter *base = [SNSmartFilter filterWithString:@"{\"tags\":[\"a\",\"b\"],\"checklists\":\"any\"}"];
+    SNSmartFilter *l = [base copy], *r = [base copy];
+    l.tags = @[ @"a", @"c" ];
+    l.checklists = SNChecklistRuleTicked;
+    r.tags = @[ @"b", @"a", @"d" ];
+    r.checklists = SNChecklistRuleUnticked;
+    r.matchesAny = YES;
+    SNSmartFilter *m = [SNSmartFilter filterMergingBase:base local:l remote:r localLater:YES];
+    XCTAssertEqualObjects(m.tags, (@[ @"a", @"c", @"d" ]), @"b taken off here; c and d added");
+    XCTAssertEqual(m.checklists, SNChecklistRuleTicked, @"both changed it: the later side's");
+    XCTAssertTrue(m.matchesAny, @"one side changed it");
+    XCTAssertEqualObjects([SNSmartFilter filterMergingBase:base local:r remote:l localLater:NO], m, @"the same from the other side");
+}
+
 - (NSSet *)titles:(SNNotes *)device filter:(SNSmartFilter *)filter {
     NSMutableSet *out = [NSMutableSet set];
     for (SNNote *n in [device notesInFolder:nil matching:nil])

@@ -48,6 +48,14 @@ typedef NS_ENUM(NSInteger, SNChecklistRule) {
 @property (nonatomic, readonly, getter=isEmpty) BOOL empty;
 // Whether a note (not deleted) is in the folder, at now.
 - (BOOL)matchesNote:(SNNote *)note now:(NSDate *)now;
+
+// The rules two devices changed apart, from the ones they last agreed on
+// (base): each rule as the side that changed it has it; one both changed,
+// the later side's (localLater). Tags merge as a set: one added on either
+// side is added, one taken off on either side is off. The same result on
+// both devices (tags sorted), so the merge settles.
++ (SNSmartFilter *)filterMergingBase:(SNSmartFilter *)base local:(SNSmartFilter *)local remote:(SNSmartFilter *)remote
+                          localLater:(BOOL)localLater;
 @end
 
 NS_ASSUME_NONNULL_END

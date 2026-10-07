@@ -204,6 +204,14 @@ made in no folder. **Edit Smart Folder…** (on iOS, swipe it and choose
 **Edit**) changes its rules. It shows a gear before its name. Its rules are
 kept in the folder (`Folder.filter`, as JSON), so they sync with it.
 
+When two devices change a smart folder's rules apart, the sync merges them
+rule by rule (`SNResolver`), rather than keeping one device's whole set:
+
+- A rule changed on one device keeps that change.
+- A rule changed on both keeps the later edit.
+- Tags merge as a set: a tag added on either device is added, and a tag
+  removed on either device is removed.
+
 ## Model versions
 
 `SimpleNotes.xcdatamodeld` holds every version of the model:
