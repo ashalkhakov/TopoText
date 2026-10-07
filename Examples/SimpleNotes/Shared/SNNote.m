@@ -18,6 +18,25 @@
     return self.pinned.boolValue;
 }
 
+- (NSString *)editedKey {
+    return [self.entity.attributesByName objectForKey:@"edited"] ? @"edited" : @"updated";
+}
+
+- (NSDate *)lastEdited {
+    NSString *key = [self editedKey];
+    [self willAccessValueForKey:key];
+    NSDate *d = [self primitiveValueForKey:key];
+    [self didAccessValueForKey:key];
+    return d;
+}
+
+- (void)setLastEdited:(NSDate *)date {
+    NSString *key = [self editedKey];
+    [self willChangeValueForKey:key];
+    [self setPrimitiveValue:date forKey:key];
+    [self didChangeValueForKey:key];
+}
+
 - (NSString *)snippet {
     return SNSnippetOfBody(self.body ?: @"");
 }

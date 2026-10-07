@@ -15,7 +15,14 @@
 #import "SNNote.h"
 #import "SNFolder.h"
 
-@class SNNoteEditor;
+@class SNNoteEditor, SNNoteGroup;
+
+// How lists of notes are sorted: pinned notes first, then by this.
+typedef NS_ENUM(NSInteger, SNSortOrder) {
+    SNSortByDateEdited,    // the latest edited first (Apple Notes' default)
+    SNSortByDateCreated,   // the latest made first
+    SNSortByTitle,         // A to Z
+};
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -66,10 +73,11 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 
 #pragma mark Reading
 
-// By name.
+// Every folder, by name.
 - (NSArray<SNFolder *> *)folders;
 // Of a folder (nil: all of them), whose text has text in it (nil: all),
-// pinned first, then the latest changed; none deleted.
+// sorted (sortOrder); none deleted. A folder's own notes, not its
+// folders', as Apple Notes lists them.
 - (NSArray<SNNote *> *)notesInFolder:(nullable SNFolder *)folder matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesInFolder:(nullable SNFolder *)folder;
 // Recently Deleted: the notes deleted, and not yet for good, the latest
@@ -77,11 +85,54 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (NSArray<SNNote *> *)deletedNotesMatching:(nullable NSString *)text;
 - (NSUInteger)countOfDeletedNotes;
 
+#pragma mark Folders in folders
+
+// The folders in a folder (nil: at the top), by name.
+- (NSArray<SNFolder *> *)foldersInFolder:(nullable SNFolder *)folder;
+// Every folder, each one followed by those in it, by name at each level:
+// for lists and menus, indented by -depthOfFolder:.
+- (NSArray<SNFolder *> *)folderTree;
+// The folder a folder is in, as shown: nil at the top. Folders in each
+// other round in a circle (two devices each moved one into the other) are
+// cut at the one whose id sorts first, which goes to the top: the same on
+// every device, and nothing lost.
+- (nullable SNFolder *)parentOfFolder:(SNFolder *)folder;
+// 0 at the top.
+- (NSUInteger)depthOfFolder:(SNFolder *)folder;
+// Whether folder is in ancestor, at any depth.
+- (BOOL)folder:(SNFolder *)folder isInFolder:(SNFolder *)ancestor;
+
+#pragma mark Tags
+
+// Every tag in the notes (Recently Deleted's not), by name, without #.
+- (NSArray<NSString *> *)tags;
+// The notes tagged so, sorted; whose text has text in it (nil: all).
+- (NSArray<SNNote *> *)notesTagged:(NSString *)tag matching:(nullable NSString *)text;
+- (NSUInteger)countOfNotesTagged:(NSString *)tag;
+
+#pragma mark Sorting and grouping
+
+// This device's choice (user defaults SNSortOrder, SNGroupByDate), for
+// every list: by date edited and grouped by date unless set otherwise.
+@property (nonatomic) SNSortOrder sortOrder;
+@property (nonatomic) BOOL groupsByDate;
+// A sorted list in the groups a list shows: Pinned first; then, grouped by
+// date, Today, Yesterday, Previous 7 Days, Previous 30 Days, the months of
+// this year, and the years before (by the date sorted by); else the rest,
+// as Notes when some are pinned.
+- (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes;
+
 #pragma mark Changing (saved at once)
 
+// At the top, or in a folder.
 - (SNFolder *)addFolderNamed:(NSString *)name;
+- (SNFolder *)addFolderNamed:(NSString *)name inFolder:(nullable SNFolder *)parent;
 - (void)renameFolder:(SNFolder *)folder to:(NSString *)name;
-// Its notes go to Recently Deleted, as Apple Notes does.
+// Into another folder (nil: to the top). Not into itself, or a folder in
+// it: NO, and nothing changes.
+- (BOOL)moveFolder:(SNFolder *)folder toFolder:(nullable SNFolder *)parent;
+// With the folders in it; all their notes go to Recently Deleted, as Apple
+// Notes does.
 - (void)deleteFolder:(SNFolder *)folder;
 - (SNNote *)addNoteInFolder:(nullable SNFolder *)folder;
 // To Recently Deleted, where it stays SNRecentlyDeletedDays, and can be
@@ -136,6 +187,16 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Flushed, and no longer kept up to date.
 - (void)close;
 @end
+
+// Notes under a heading in a list (nil: none).
+@interface SNNoteGroup : NSObject
+- (instancetype)initWithTitle:(nullable NSString *)title notes:(NSArray<SNNote *> *)notes;
+@property (nonatomic, readonly, copy, nullable) NSString *title;
+@property (nonatomic, readonly, copy) NSArray<SNNote *> *notes;
+@end
+
+// The groups of notes sorted so, at now: -groupsOfNotes:'s, for any date.
+FOUNDATION_EXPORT NSArray<SNNoteGroup *> *SNGroupNotes(NSArray<SNNote *> *notes, SNSortOrder order, BOOL byDate, NSDate *now);
 
 // How long Recently Deleted keeps a note: 30 days, as Apple Notes.
 FOUNDATION_EXPORT const NSInteger SNRecentlyDeletedDays;

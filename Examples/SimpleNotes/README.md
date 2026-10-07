@@ -1,8 +1,8 @@
 # SimpleNotes
 
-A small Apple Notes: folders, notes in rich text with headings, lists and
-checklists, search, pinning, Recently Deleted, and moving notes between
-folders. It runs
+A small Apple Notes: folders (and folders in folders), notes in rich text
+with headings, lists and checklists, tags, search, pinning, sorting and
+grouping by date, Recently Deleted, and moving notes between folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
@@ -73,19 +73,69 @@ On the Mac and GNUstep, use **File > Move To**, or drag a note onto a folder.
 Dropping it on Recently Deleted deletes it. On iOS, swipe the note and choose
 **Move**.
 
+## Folders in folders
+
+A folder can hold other folders, as in Apple Notes. A folder lists its own
+notes; the folders in it appear under it in the sidebar.
+
+- **On the Mac and GNUstep**, **New Folder** makes the folder inside the
+  folder chosen (or at the top when none is). Drag a folder onto another to
+  move it in, or onto All Notes to move it to the top.
+- **On iOS**, swipe a folder and choose **Move**.
+- **Deleting a folder** deletes the folders in it too. All their notes go to
+  Recently Deleted.
+
+Two devices can each move a folder into the other while apart. When they
+sync, the folders would be inside each other. Each device then breaks the
+loop at the folder whose ID sorts first, which shows at the top level. Every
+device does the same, so nothing is lost and all show the same tree.
+
+## Tags
+
+Type `#` and a word in a note, and that word becomes a tag, as in Apple
+Notes: `#errands`, `#q3-plan`. A tag can contain letters, digits, `-` and
+`_`, needs at least one letter, and starts the text or follows a space. Tags
+are matched whatever their case.
+
+Tags are read from the note's text, so they sync with it and need nothing
+in the model. The sidebar (on iOS, the folder list) shows every tag with
+how many notes have it. Choose a tag to list those notes. In the editor,
+tags appear in the accent colour.
+
+## Sorting and grouping
+
+**View > Sort By** (on iOS, the **…** menu over a list) sorts every list by
+**Date Edited** (the default), **Date Created** or **Title**. Pinned notes
+always come first. **Group By Date** puts headings over the list: Pinned,
+Today, Yesterday, Previous 7 Days, Previous 30 Days, then each month of this
+year, then each earlier year. Sorted by title, a list has just Pinned and
+Notes. The choice is the device's own (user defaults), as in Apple Notes.
+
 ## Model versions
 
-`SimpleNotes.xcdatamodeld` holds every version of the model; version 2 added
-`Note.deletedAt`. To add another:
+`SimpleNotes.xcdatamodeld` holds every version of the model:
+
+- **Version 2** added `Note.deletedAt` (Recently Deleted).
+- **Version 3** added `Folder.parent` (folders in folders). It also renamed
+  `Note.updated` to `edited`, with Renaming ID `updated` so migration keeps
+  the dates. On Apple's Core Data, `updated` is `NSManagedObject`'s own
+  (`-isUpdated`), and key-value coding gets that rather than the attribute.
+  Syncing goes through key-value coding, so on macOS and iOS a note's edit
+  date never reached the server.
+
+To add a version:
 
 1. Add a version in Xcode (or copy the latest `.xcdatamodel` and name it
-   `SimpleNotes 3.xcdatamodel`), and give it the next
+   `SimpleNotes 4.xcdatamodel`), and give it the next
    `userDefinedModelVersionIdentifier`.
 2. Make it current in `.xccurrentversion`.
 3. Run `Scripts/xcodeproj.py`.
 
 Keep each change additive (new optional attributes, new entities), so a
-lightweight migration covers it.
+lightweight migration covers it. When you rename, set the Renaming ID to the
+old name, as version 3 does, so the inferred mapping carries values over.
+FreeCoreData follows Renaming IDs from its `inferred-mapping-renaming`
+branch on.
 
 What happens when a store opens:
 
@@ -97,7 +147,8 @@ What happens when a store opens:
 - **On the server**, a SQLite store is migrated the same way. A PostgreSQL or
   MariaDB store migrates itself, in place.
 - **Devices not yet updated** keep syncing: they name their model's version
-  with every request, and the server accepts their writes as they are.
+  with every request, and the server accepts their writes, renaming
+  `Updated` to `Edited` on the way (`SNUpgradeBody`).
 
 Core Data's automatic migration can't do the device's part, because a store
 holding ODataSync's entities wasn't made from any of the compiled models as
@@ -131,6 +182,69 @@ addition:
 - `AllowAnonymous NO` refuses requests that don't say who they're from,
   once a sign-in is set. Every device syncs every note: one shared notebook.
 
+Each setting can also be an environment variable: `SN_` and the setting's
+name in capitals, words split by `_` (`SN_STORE_URL`, `SN_SERVICE_ROOT`,
+`SN_TRUSTED_USER_HEADER`).
+
+### In Docker
+
+The server's image holds the server, its model, FreeCoreData's PostgreSQL
+and MySQL/MariaDB stores, and the libraries they all run on. It has no
+shell and no package manager (`Docker/server.Dockerfile`, about 31 MB
+compressed). A release publishes it as
+`ghcr.io/ashalkhakov/simplenotes-server`.
+
+```sh
+docker run -p 8080:8080 -v notes:/data ghcr.io/ashalkhakov/simplenotes-server
+docker build -f Docker/server.Dockerfile -t simplenotes-server .   # from the repository's root
+```
+
+It runs as an unprivileged user, and by default keeps a SQLite store in
+the `/data` volume. Configure it with environment variables:
+
+| Variable | Default | |
+|---|---|---|
+| `SN_STORE_TYPE` | `SQLite` | `SQLite`, `PostgreSQL`, `MySQL` or `MariaDB` |
+| `SN_STORE_URL` | `/data/notes.sqlite` | a path for SQLite, else the database's URL (`postgresql://user:password@host:5432/notes`, `mysql://user:password@host:3306/notes`) |
+| `SN_SERVICE_ROOT` | `http://<container>:8080/odata/` | the public URL the service is reached at: set it behind a reverse proxy, as its links begin with it |
+| `SN_PORT` | `8080` | |
+| `SN_ACCESS_LOG` | `json` | JSON lines, for a log collector |
+| `SN_HEALTH_PATH` | `/health` | for the orchestrator or the proxy |
+
+With PostgreSQL:
+
+```sh
+docker run -p 8080:8080 \
+  -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://notes:secret@db:5432/notes \
+  ghcr.io/ashalkhakov/simplenotes-server
+```
+
+Behind a reverse proxy (Nginx Proxy Manager, Caddy, Traefik), forward a
+host to the container's port 8080, and give the address users reach as
+`SN_SERVICE_ROOT`, for example `https://notes.example.com/odata/`.
+HTTPServerKit's proxy settings work as `SN_` variables too:
+
+- `SN_TRUSTED_USER_HEADER` takes the signed-in user from a header the
+  proxy sets.
+- `SN_PROXY_SECRET_HEADER` together with `SN_PROXY_SECRET_ENVIRONMENT`
+  accepts only requests that carry the proxy's secret.
+- `SN_CORS_ORIGINS` sets the allowed origins.
+
+Sign-in with OIDC (`SN_JWT_ISSUER`, `SN_JWT_AUDIENCE`) works the same way.
+Separating each user's notes is still to come (see "Not yet").
+
+### On Linux, without Docker
+
+The Docker image is the way to host the server, on a machine of your own,
+in an LXC container, or on a Raspberry Pi (it's built for arm64 too). For a
+machine that can run neither, the AppImage carries the server as well. It
+never starts on its own: opening the image starts the app, and the server
+runs only when asked:
+
+```sh
+./SimpleNotes-Linux-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+```
+
 The apps:
 
 - **macOS**: open `TopoText.xcworkspace` (ODataKit checked out beside this
@@ -153,6 +267,32 @@ The apps:
 To try two devices on one Mac or Linux machine, give a second instance a
 store of its own: `SimpleNotes -SNStore /tmp/second.sqlite`.
 
+## Releases
+
+Tag a version (`git tag v0.1.0 && git push --tags`), and the workflows build
+and attach:
+
+- **macOS** (`release.yml`): `SimpleNotes-macOS-<version>.zip`, universal.
+  It is signed with a Developer ID and notarized when the `production`
+  environment has the secrets `MACOS_CERTIFICATE` (a base64 .p12),
+  `MACOS_CERTIFICATE_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and
+  `NOTARY_PASSWORD`; otherwise it's unsigned, and named so. Either way it
+  must pass its self-test first.
+- **Linux** (`release.yml`): `SimpleNotes-Linux-<version>-x86_64.AppImage`,
+  built on Ubuntu 22.04 so it runs there and on anything newer. It is
+  checked on a clean Ubuntu: its own server is started and seeded, and the
+  app's self-test runs against it.
+- **iOS** (`release.yml`): `SimpleNotes-iOS-<version>-unsigned.ipa`, to be
+  signed for TestFlight and the App Store once there is an account, and a
+  simulator build. The simulator build must pass its self-test.
+- **The server's image** (`docker.yml`): pushed to
+  `ghcr.io/ashalkhakov/simplenotes-server:<version>` and `:latest`, for
+  amd64 and arm64. Every push builds it and checks it on SQLite and
+  PostgreSQL.
+
+Run `release.yml` by hand to build any branch's packages as artifacts,
+without releasing.
+
 ## Checked
 
 ```sh
@@ -163,7 +303,9 @@ This runs four things:
 
 - **The tests.** Two devices and the service run in one process: edits made
   apart, a deletion against an edit, an open editor merged while its own
-  typing is kept, and the text view's binding both ways.
+  typing is kept, folders moved into each other apart, tags, sorting and
+  grouping, migrations from each older version, and the text view's
+  binding both ways.
 - **Two devices through the server, over HTTP**
   (`Tests/serve-and-check.sh`, `SimpleNotes --check`). With `SN_STORE_ARGS`,
   the server stores in PostgreSQL or MariaDB instead.
@@ -171,9 +313,12 @@ This runs four things:
   `xvfb-run` where there's no display). A note is chosen in the list, text
   is typed into the window's text view, and Bold is sent up the responder
   chain. Two lines become a checklist, a click on the first checkbox ticks
-  it, and Return starts a third item. A second device must see all of it.
-  With `SN_SELF_TEST_SNAPSHOT=<file.png>`, the window is saved as a picture
-  at that point; that's how the screenshots above were made.
+  it, and Return starts a third item. The sidebar must show Projects
+  inside Work and the tags; a tag and a nested folder list their notes; a
+  folder moves to the top; Sort By Title regroups the list. A second device
+  must see all of it. With `SN_SELF_TEST_SNAPSHOT=<file.png>`, the window is
+  saved as a picture at that point; that's how the screenshots above were
+  made.
 - **The iOS app's self-test, in a simulator** (`Tests/ios-self-test.sh`;
   macOS only). It does the same through the iOS view controllers.
 
@@ -230,6 +375,7 @@ their indent level; items indented further don't interrupt the count.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Attachments, tables, nested folders, moving checked items to the bottom,
+- Attachments, tables, smart folders, a sort order per folder, moving
+  checked items to the bottom,
   and undo across a merge (the undo stack is cleared when a sync changes the
   open note).

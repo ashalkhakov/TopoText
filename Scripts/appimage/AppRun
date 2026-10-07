@@ -1,0 +1,112 @@
+#!/bin/sh
+# The AppImage's entry point. From ODataKit's Scripts/appimage/AppRun (after
+# XFormsKit's, RDLKit's and UDQuakeTools'): this image carries SimpleNotes
+# and its server, simplenotes-server; the dispatch at the end decides which
+# starts.
+#
+#   SimpleNotes-*.AppImage                       the app
+#   SimpleNotes-*.AppImage --server -StoreURL notes.sqlite -Port 8080
+#   ln -s SimpleNotes-*.AppImage simplenotes-server   (then the server)
+#
+# The server is opt-in: nothing in the image serves unless asked so, and
+# self-hosters with a machine of their own are better served by its Docker
+# image. It is here for those without one (a small board, no containers).
+#
+# GNUstep finds its libraries, backend and the app through paths that are
+# not known until the image is mounted, so its configuration is written
+# here, each time.
+set -eu
+
+HERE="$(dirname "$(readlink -f "$0")")"
+
+export GNUSTEP_CONFIG_FILE="/tmp/GNUstep-SimpleNotes-$$.conf"
+cat << IN_EOF > "$GNUSTEP_CONFIG_FILE"
+GNUSTEP_USER_CONFIG_FILE=.GNUstep.conf
+GNUSTEP_USER_DEFAULTS_DIR=GNUstep/Defaults
+GNUSTEP_SYSTEM_USERS_DIR=/home
+GNUSTEP_NETWORK_USERS_DIR=/home
+GNUSTEP_LOCAL_USERS_DIR=/home
+GNUSTEP_SYSTEM_ROOT=$HERE/usr/System
+GNUSTEP_SYSTEM_LIBRARIES=$HERE/usr/System/Library
+GNUSTEP_SYSTEM_LIBRARY=$HERE/usr/System/Library
+GNUSTEP_SYSTEM_TOOLS=$HERE/usr/System/Tools
+GNUSTEP_SYSTEM_APPS=$HERE/usr/System/Applications
+GNUSTEP_LOCAL_ROOT=$HERE/usr/Local
+GNUSTEP_LOCAL_LIBRARY=$HERE/usr/Local/Library
+GNUSTEP_LOCAL_TOOLS=$HERE/usr/Local/Tools
+GNUSTEP_LOCAL_APPS=$HERE/usr/Local/Applications
+IN_EOF
+chmod 600 "$GNUSTEP_CONFIG_FILE"
+
+export GNUSTEP_SYSTEM_ROOT="$HERE/usr/System"
+export GNUSTEP_SYSTEM_LIBRARY="$HERE/usr/System/Library"
+export GNUSTEP_SYSTEM_TOOLS="$HERE/usr/System/Tools"
+export GNUSTEP_SYSTEM_APPS="$HERE/usr/System/Applications"
+export GNUSTEP_LOCAL_ROOT="$HERE/usr/Local"
+export GNUSTEP_LOCAL_LIBRARY="$HERE/usr/Local/Library"
+export GNUSTEP_LOCAL_TOOLS="$HERE/usr/Local/Tools"
+export GNUSTEP_LOCAL_APPS="$HERE/usr/Local/Applications"
+
+export LD_LIBRARY_PATH="$HERE/usr/lib:$HERE/usr/Local/Library/Libraries:$HERE/usr/System/Library/Libraries:${LD_LIBRARY_PATH:-}"
+export PATH="$HERE/usr/bin:$HERE/usr/System/Tools:$PATH"
+
+# Fontconfig for the fonts the image carries, plus whatever the host has,
+# so the window lays out the same on a machine that has none of them.
+# Written here with the image's path: fontconfig before 2.14 (Ubuntu 22.04's)
+# does not read a directory relative to the configuration file.
+export XDG_CACHE_HOME="/tmp/fc-cache-simplenotes-$$"
+mkdir -p "$XDG_CACHE_HOME"
+export FONTCONFIG_FILE="/tmp/fonts-simplenotes-$$.conf"
+cat << IN_EOF > "$FONTCONFIG_FILE"
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>$HERE/usr/share/fonts</dir>
+  <dir>/usr/share/fonts</dir>
+  <dir>~/.fonts</dir>
+  <cachedir>$XDG_CACHE_HOME/fontconfig</cachedir>
+  <config><rescan><int>30</int></rescan></config>
+</fontconfig>
+IN_EOF
+trap 'rm -rf "$XDG_CACHE_HOME" "$GNUSTEP_CONFIG_FILE" "$FONTCONFIG_FILE"' EXIT
+
+# The Eau theme and the Liberation fonts the image carries, and Ctrl as
+# Command, as on any other Linux window: GNUstep's default is NeXT's, Alt as
+# Command (see gnustep-gui's KeyboardSetup). The left Control fires menu key
+# equivalents; the right one stays a Control for the text bindings.
+DEFAULTS_TOOL=$(find "$HERE" -name defaults -type f -perm -111 | head -n 1)
+if [ -n "$DEFAULTS_TOOL" ]; then
+  for domain in SimpleNotes; do
+    "$DEFAULTS_TOOL" write "$domain" GSTheme Eau
+    "$DEFAULTS_TOOL" write "$domain" NSFont LiberationSans
+    "$DEFAULTS_TOOL" write "$domain" NSBoldFont LiberationSans-Bold
+    "$DEFAULTS_TOOL" write "$domain" NSUserFont LiberationSans
+    "$DEFAULTS_TOOL" write "$domain" NSUserFixedPitchFont LiberationMono
+    "$DEFAULTS_TOOL" write "$domain" GSFirstCommandKey Control_L
+    "$DEFAULTS_TOOL" write "$domain" GSFirstControlKey NoSymbol
+    "$DEFAULTS_TOOL" write "$domain" GSSecondControlKey Control_R
+    "$DEFAULTS_TOOL" write "$domain" GSFirstAlternateKey Alt_L
+    "$DEFAULTS_TOOL" write "$domain" GSSecondAlternateKey Alt_R
+  done
+fi
+
+# Which starts: the symlink the image was run through (simplenotes-server),
+# then a first argument naming one (server, app: the rest is its); else the
+# app, with every argument (--self-test, --check, -SNStore).
+APP=SimpleNotes
+case "$(basename "${ARGV0:-$0}")" in
+  *[Ss]erver*) APP=simplenotes-server ;;
+esac
+case "${1:-}" in
+  --server|server|simplenotes-server) APP=simplenotes-server; shift ;;
+  app|SimpleNotes) APP=SimpleNotes; shift ;;
+esac
+
+# Where gnustep-make installed each (Scripts/prepare-appdir.sh): found by
+# name, not by `file`, which a desktop need not have.
+if [ "$APP" = simplenotes-server ]; then
+  BIN=$(find "$HERE/usr/System/Tools" "$HERE/usr/Local/Tools" -type f -name simplenotes-server -perm -111 2>/dev/null | head -n 1)
+else
+  BIN="$HERE/usr/System/Applications/SimpleNotes.app/SimpleNotes"
+fi
+exec "$BIN" "$@"

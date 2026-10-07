@@ -270,6 +270,44 @@
                         </items>
                     </menu>
                 </menuItem>
+                <menuItem title="View" id="SNm-mi-800">
+                    <modifierMask key="keyEquivalentModifierMask"/>
+                    <menu key="submenu" title="View" id="SNm-mn-800">
+                        <items>
+                            <menuItem title="Sort By" id="SNm-mi-801">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Sort By" id="SNm-mn-801">
+                                    <items>
+                                        <menuItem title="Date Edited" id="SNm-mi-802">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortByDateEdited:" target="-1" id="SNm-ac-802"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Date Created" id="SNm-mi-803">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortByDateCreated:" target="-1" id="SNm-ac-803"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Title" id="SNm-mi-804">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortByTitle:" target="-1" id="SNm-ac-804"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Group By Date" id="SNm-mi-805">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="toggleGroupByDate:" target="-1" id="SNm-ac-805"/>
+                                </connections>
+                            </menuItem>
+                        </items>
+                    </menu>
+                </menuItem>
                 <menuItem title="Sync" id="SNm-mi-500">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="Sync" id="SNm-mn-500">

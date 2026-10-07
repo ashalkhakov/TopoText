@@ -10,9 +10,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
+@interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
+                                                    NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
-@property (nonatomic, strong) IBOutlet NSTableView *folderTable;
+// The sidebar: All Notes, the folders (folders in folders under them),
+// Recently Deleted, and the tags.
+@property (nonatomic, strong) IBOutlet NSOutlineView *folderTable;
 @property (nonatomic, strong) IBOutlet NSTableView *noteTable;
 @property (nonatomic, strong) IBOutlet NSSearchField *searchField;
 @property (nonatomic, strong) IBOutlet SNTextView *textView;
@@ -22,12 +25,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)closeEditor;
 // The note of that title chosen in the list, as a click would (the self-test).
 - (BOOL)selectNoteTitled:(NSString *)title;
-// All Notes, or Recently Deleted, chosen in the folder list.
+// All Notes, Recently Deleted, a folder or a tag, chosen in the sidebar.
 - (void)showAllNotes;
 - (void)showRecentlyDeleted;
+- (BOOL)showFolderNamed:(NSString *)name;
+- (BOOL)showTag:(NSString *)tag;
 // What the window shows, in words: the folder chosen and the notes listed
 // (a self-test's failures say it).
 - (NSString *)shownText;
+// The sidebar's rows, indented two spaces a level; the note list's, a
+// group's heading "## " and its title.
+- (NSArray<NSString *> *)sidebarRows;
+- (NSArray<NSString *> *)shownRows;
 
 // The menus' actions (the window's delegate is in the responder chain).
 - (IBAction)newNote:(nullable id)sender;
@@ -59,6 +68,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)increaseIndentation:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
 - (IBAction)findNote:(nullable id)sender;
+// View > Sort By, and Group By Date.
+- (IBAction)sortByDateEdited:(nullable id)sender;
+- (IBAction)sortByDateCreated:(nullable id)sender;
+- (IBAction)sortByTitle:(nullable id)sender;
+- (IBAction)toggleGroupByDate:(nullable id)sender;
 - (IBAction)searchChanged:(nullable id)sender;
 @end
 

@@ -1,0 +1,162 @@
+name: Docker
+
+# simplenotes-server's image (Docker/server.Dockerfile), as ODataKit's
+# docker.yml publishes its own. Every push and pull request builds it and
+# checks it: the image started, seeded, its notes read back, on SQLite and
+# on PostgreSQL. A v* tag also publishes it to the GitHub Container Registry,
+# ghcr.io/<owner>/simplenotes-server, for amd64 and arm64, tagged with the
+# version and latest.
+#
+# Each architecture is built on a runner of its own (ubuntu-24.04 and
+# ubuntu-24.04-arm), not under QEMU, which would take hours over the GNUstep
+# stack; the two are then joined into one tag.
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/simplenotes-server
+
+jobs:
+  image:
+    name: Image (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # The stack build is the long pole; the cache keeps it to the first run
+    # after its pins change.
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Names
+        id: names
+        run: |
+          echo "arch=${PLATFORM#linux/}" >> "$GITHUB_OUTPUT"
+          version="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] || version="0.0.0-$(git rev-parse --short HEAD)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Docker/server.Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ steps.names.outputs.version }}
+          load: true
+          tags: simplenotes-server:check
+          cache-from: type=gha,scope=server-${{ steps.names.outputs.arch }}
+          cache-to: type=gha,scope=server-${{ steps.names.outputs.arch }},mode=max
+
+      - name: Size
+        run: docker image ls simplenotes-server:check
+
+      # The image as a user runs it: SQLite in its volume by default, and
+      # PostgreSQL by its settings (FreeCoreData's store, loaded by name).
+      - name: Check, on SQLite and on PostgreSQL
+        run: |
+          docker network create notes
+          docker run -d --name db --network notes -e POSTGRES_PASSWORD=notes -e POSTGRES_DB=notes postgres:16
+          docker run -d --name sqlite --network notes -p 18080:8080 \
+            -e SN_SERVICE_ROOT=http://127.0.0.1:18080/odata/ simplenotes-server:check
+          for _ in $(seq 1 60); do docker exec db pg_isready -U postgres > /dev/null 2>&1 && break; sleep 1; done
+          docker run -d --name postgres --network notes -p 18081:8080 \
+            -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://postgres:notes@db:5432/notes \
+            -e SN_SERVICE_ROOT=http://127.0.0.1:18081/odata/ simplenotes-server:check
+          for port in 18080 18081; do
+            for _ in $(seq 1 60); do curl -sf -o /dev/null "http://127.0.0.1:$port/health" && break; sleep 1; done
+            python3 Examples/SimpleNotes/Tests/seed.py "http://127.0.0.1:$port/odata/"
+            count=$(curl -sf "http://127.0.0.1:$port/odata/Notes/\$count")
+            echo "$port: $count notes"
+            [ "$count" = 4 ] || { docker logs sqlite; docker logs postgres; exit 1; }
+          done
+
+      - name: Log in to the registry
+        if: github.ref_type == 'tag'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pushed by digest only; the join below tags the two as one.
+      - name: Push
+        id: push
+        if: github.ref_type == 'tag'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Docker/server.Dockerfile
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ steps.names.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.names.outputs.version }}
+            org.opencontainers.image.description=SimpleNotes' server: notes that sync, and merge what was written apart
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=server-${{ steps.names.outputs.arch }}
+
+      - name: Keep the digest
+        if: github.ref_type == 'tag'
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag'
+        with:
+          name: digest-${{ steps.names.outputs.arch }}
+          path: ${{ runner.temp }}/digests/*
+          retention-days: 1
+
+  publish:
+    name: Publish
+    if: github.ref_type == 'tag'
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag both architectures as one
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create -t "$IMAGE:$version" -t "$IMAGE:latest" "${sources[@]}"
+          docker buildx imagetools inspect "$IMAGE:$version"

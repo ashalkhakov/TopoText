@@ -1,9 +1,15 @@
 // SimpleNotes' model (SimpleNotes.xcdatamodeld): the same one on the
 // devices and at the server, compiled by Xcode's momc or FreeCoreData's.
 //
-//   Folder   id (key), name, created, modified, versions
-//   Note     id (key), title, body, bodyText, created, updated, pinned,
-//            folder (to-one), modified, versions
+//   Folder   id (key), name, created, parent (to-one: the folder it is
+//            in), children, notes, modified, versions
+//   Note     id (key), title, body, bodyText, created, edited, pinned,
+//            deletedAt, folder (to-one), modified, versions
+//
+// Versions: 1, the first; 2 adds Note.deletedAt (Recently Deleted); 3 adds
+// Folder.parent (folders in folders), and renames Note.updated edited:
+// on Apple's Core Data, "updated" is NSManagedObject's own (-isUpdated), and
+// what key-value coding reads and writes for it (ODataKit, a sync) is that.
 //
 // Both are ODataSync both entities: either side changes them. A note's body
 // is a TopoText (bodyText), merged when two devices edited it apart; body
@@ -32,5 +38,18 @@ FOUNDATION_EXPORT NSManagedObjectModel *_Nullable SNModel(void);
 FOUNDATION_EXPORT NSString *SNTitleOfBody(NSString *body);
 // What a list shows under the title: the rest, on one line.
 FOUNDATION_EXPORT NSString *SNSnippetOfBody(NSString *body);
+
+// A body sent by a device on an older version of the model, as this one
+// has it: Updated (version 1, 2) is Edited now. For the server's
+// upgradeBody.
+FOUNDATION_EXPORT NSDictionary<NSString *, id> *SNUpgradeBody(NSDictionary<NSString *, id> *body, NSEntityDescription *entity);
+
+// Tags, as Apple Notes has them: # and a word typed in a note's text
+// (letters, digits, - and _, at least one letter), at the start or after a
+// space. Where they are in text, each range its # included.
+FOUNDATION_EXPORT NSArray<NSValue *> *SNTagRangesInText(NSString *text);
+// The tags in text, lowercase (one tag whatever its case), each once, in
+// order, without their #.
+FOUNDATION_EXPORT NSArray<NSString *> *SNTagsInText(NSString *text);
 
 NS_ASSUME_NONNULL_END

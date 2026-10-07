@@ -2,7 +2,7 @@
 //
 //   the body       merged, TopoText's (TTSyncResolver): both sides' edits
 //   the title      the merged body's first line
-//   updated        the later of the two
+//   edited         the later of the two
 //   anything else  from the side that changed it; changed on both, the
 //                  later writer's (the modified stamps)
 //   deleted on one side, changed on the other: the change stands, so an

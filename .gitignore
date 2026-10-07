@@ -6,3 +6,4 @@ obj/
 .DS_Store
 xcuserdata/
 Local.xcconfig
+.claude/scheduled_tasks.lock

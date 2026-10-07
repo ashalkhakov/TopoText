@@ -49,7 +49,8 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 @implementation SNFoldersViewController {
     SNNotes *_notes;
-    NSArray<SNFolder *> *_folders;
+    NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
+    NSArray<NSString *> *_tags;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -82,7 +83,8 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (void)reload {
-    _folders = _notes.folders;
+    _folders = _notes.folderTree;
+    _tags = _notes.tags;
     [self.tableView reloadData];
     SNShowStatus(self, _notes);
 }
@@ -120,52 +122,97 @@ static NSString *SNDaysLeftText(SNNote *note) {
     });
 }
 
-/* All Notes; the folders; Recently Deleted, when it has notes. */
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)t { return 3; }
+/* All Notes; the folders, those in a folder under it; Recently Deleted,
+   when it has notes; the tags. */
+enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)t { return 4; }
 
 - (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section {
-    if (section == 2) return _notes.countOfDeletedNotes ? 1 : 0;
-    return section ? (NSInteger)_folders.count : 1;
+    switch (section) {
+    case SNAllSection: return 1;
+    case SNFoldersSection: return (NSInteger)_folders.count;
+    case SNDeletedSection: return _notes.countOfDeletedNotes ? 1 : 0;
+    default: return (NSInteger)_tags.count;
+    }
 }
 
 - (NSString *)tableView:(UITableView *)t titleForHeaderInSection:(NSInteger)section {
-    return section && _folders.count ? @"Folders" : nil;
+    if (section == SNFoldersSection && _folders.count) return @"Folders";
+    if (section == SNTagsSection && _tags.count) return @"Tags";
+    return nil;
 }
 
+/* A row: its name, its icon and how many notes, indented as deep as it is
+   (the icon too). */
 - (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)ip {
     UITableViewCell *cell = [t dequeueReusableCellWithIdentifier:@"folder"]
-        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"folder"];
-    if (ip.section == 2) {
-        cell.textLabel.text = @"Recently Deleted";
-        cell.imageView.image = [UIImage systemImageNamed:@"trash"];
-        cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)_notes.countOfDeletedNotes];
-        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
-        return cell;
-    }
-    SNFolder *f = ip.section ? _folders[(NSUInteger)ip.row] : nil;
-    cell.textLabel.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
-    cell.imageView.image = [UIImage systemImageNamed:f ? @"folder" : @"tray.full"];
-    cell.detailTextLabel.text = [NSString stringWithFormat:@"%lu", (unsigned long)[_notes countOfNotesInFolder:f]];
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"folder"];
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    UIListContentConfiguration *c = [UIListContentConfiguration valueCellConfiguration];
+    NSUInteger count;
+    NSInteger depth = 0;
+    if (ip.section == SNDeletedSection) {
+        c.text = @"Recently Deleted";
+        c.image = [UIImage systemImageNamed:@"trash"];
+        count = _notes.countOfDeletedNotes;
+    } else if (ip.section == SNTagsSection) {
+        NSString *tag = _tags[(NSUInteger)ip.row];
+        c.text = [@"#" stringByAppendingString:tag];
+        c.image = [UIImage systemImageNamed:@"number"];
+        count = [_notes countOfNotesTagged:tag];
+    } else {
+        SNFolder *f = ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil;
+        c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
+        c.image = [UIImage systemImageNamed:f ? @"folder" : @"tray.full"];
+        count = [_notes countOfNotesInFolder:f];
+        depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
+    }
+    c.secondaryText = [NSString stringWithFormat:@"%lu", (unsigned long)count];
+    cell.contentConfiguration = c;
+    cell.indentationWidth = 20;
+    cell.indentationLevel = depth;
     return cell;
 }
 
 - (void)tableView:(UITableView *)t didSelectRowAtIndexPath:(NSIndexPath *)ip {
-    if (ip.section == 2) {
-        [self.navigationController pushViewController:[[SNNotesViewController alloc] initRecentlyDeletedWithNotes:_notes] animated:YES];
-        return;
+    UIViewController *next;
+    if (ip.section == SNDeletedSection) next = [[SNNotesViewController alloc] initRecentlyDeletedWithNotes:_notes];
+    else if (ip.section == SNTagsSection) next = [[SNNotesViewController alloc] initWithNotes:_notes tag:_tags[(NSUInteger)ip.row]];
+    else next = [[SNNotesViewController alloc] initWithNotes:_notes folder:ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil];
+    [self.navigationController pushViewController:next animated:YES];
+}
+
+/* A sheet of where a folder can go: the top, or a folder not in it. */
+- (void)move:(SNFolder *)folder from:(UIView *)view {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"Move “%@” to", folder.name ?: @""]
+                                                                   message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Top Level" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        [self->_notes moveFolder:folder toFolder:nil];
+    }]];
+    for (SNFolder *f in _notes.folderTree) {
+        if (f == folder || [_notes folder:f isInFolder:folder]) continue;
+        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+        [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
+                                                  style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+            [self->_notes moveFolder:folder toFolder:f];
+        }]];
     }
-    SNFolder *f = ip.section ? _folders[(NSUInteger)ip.row] : nil;
-    [self.navigationController pushViewController:[[SNNotesViewController alloc] initWithNotes:_notes folder:f] animated:YES];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = view;
+    sheet.popoverPresentationController.sourceRect = view.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
-    if (ip.section != 1) return nil;
+    if (ip.section != SNFoldersSection) return nil;
     SNFolder *f = _folders[(NSUInteger)ip.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            SNConfirm(self, [NSString stringWithFormat:@"Delete “%@”?", f.name ?: @""],
-                      @"Its notes go to Recently Deleted, where they can be recovered for 30 days.", @"Delete", ^{
+            NSString *what = [self->_notes foldersInFolder:f].count
+                ? @"The folders in it are deleted too. Their notes go to Recently Deleted, where they can be recovered for 30 days."
+                : @"Its notes go to Recently Deleted, where they can be recovered for 30 days.";
+            SNConfirm(self, [NSString stringWithFormat:@"Delete “%@”?", f.name ?: @""], what, @"Delete", ^{
                 [self->_notes deleteFolder:f];
             });
             done(YES);
@@ -177,7 +224,13 @@ static NSString *SNDaysLeftText(SNNote *note) {
             });
             done(YES);
         }];
-    return [UISwipeActionsConfiguration configurationWithActions:@[ delete, rename ]];
+    UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Move"
+        handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
+            [self move:f from:[t cellForRowAtIndexPath:ip] ?: t];
+            done(YES);
+        }];
+    move.backgroundColor = [UIColor systemIndigoColor];
+    return [UISwipeActionsConfiguration configurationWithActions:@[ delete, rename, move ]];
 }
 
 @end
@@ -187,8 +240,9 @@ static NSString *SNDaysLeftText(SNNote *note) {
 @implementation SNNotesViewController {
     SNNotes *_notes;
     SNFolder *_folder;
+    NSString *_tag;
     BOOL _deleted;
-    NSArray<SNNote *> *_list;
+    NSArray<SNNoteGroup *> *_groups;
     UISearchController *_search;
 }
 
@@ -198,6 +252,14 @@ static NSString *SNDaysLeftText(SNNote *note) {
         _folder = folder;
         self.title = folder ? (folder.name.length ? folder.name : @"Untitled") : @"All Notes";
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(changed:) name:SNNotesDidChangeNotification object:notes];
+    }
+    return self;
+}
+
+- (instancetype)initWithNotes:(SNNotes *)notes tag:(NSString *)tag {
+    if ((self = [self initWithNotes:notes folder:nil])) {
+        _tag = [tag copy];
+        self.title = [@"#" stringByAppendingString:tag];
     }
     return self;
 }
@@ -216,9 +278,14 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.navigationItem.rightBarButtonItem = _deleted
-        ? [[UIBarButtonItem alloc] initWithTitle:@"Delete All" style:UIBarButtonItemStylePlain target:self action:@selector(deleteAll:)]
-        : [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCompose target:self action:@selector(newNote:)];
+    if (_deleted) {
+        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Delete All" style:UIBarButtonItemStylePlain
+                                                                                 target:self action:@selector(deleteAll:)];
+    } else {
+        UIBarButtonItem *view = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"] menu:nil];
+        self.navigationItem.rightBarButtonItems = @[ [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCompose
+                                                                                                  target:self action:@selector(newNote:)], view ];
+    }
     _search = [[UISearchController alloc] initWithSearchResultsController:nil];
     _search.searchResultsUpdater = self;
     _search.obscuresBackgroundDuringPresentation = NO;
@@ -234,10 +301,54 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (void)reload {
-    _list = _deleted ? [_notes deletedNotesMatching:_search.searchBar.text] : [_notes notesInFolder:_folder matching:_search.searchBar.text];
+    NSString *search = _search.searchBar.text;
+    if (_deleted) {
+        NSArray *deleted = [_notes deletedNotesMatching:search];
+        _groups = deleted.count ? @[ [[SNNoteGroup alloc] initWithTitle:nil notes:deleted] ] : @[];
+        self.navigationItem.rightBarButtonItem.enabled = deleted.count > 0;
+    } else {
+        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]];
+        self.navigationItem.rightBarButtonItems.lastObject.menu = [self viewMenu];
+    }
     [self.tableView reloadData];
     SNShowStatus(self, _notes);
-    self.navigationItem.rightBarButtonItem.enabled = !_deleted || _list.count;
+}
+
+/* Sort By and Group By Date: commands up the responder chain, to here. */
+- (UIMenu *)viewMenu {
+    SNSortOrder order = _notes.sortOrder;
+    UICommand *group = [UICommand commandWithTitle:@"Group By Date" image:nil action:@selector(toggleGroupByDate:) propertyList:nil];
+    group.state = _notes.groupsByDate ? UIMenuElementStateOn : UIMenuElementStateOff;
+    if (order == SNSortByTitle) group.attributes = UIMenuElementAttributesDisabled;
+    UIMenu *sortBy = [UIMenu menuWithTitle:@"Sort By" image:[UIImage systemImageNamed:@"arrow.up.arrow.down"] identifier:nil options:0 children:@[
+        [self sortCommand:@"Date Edited" action:@selector(sortByDateEdited:) on:order == SNSortByDateEdited],
+        [self sortCommand:@"Date Created" action:@selector(sortByDateCreated:) on:order == SNSortByDateCreated],
+        [self sortCommand:@"Title" action:@selector(sortByTitle:) on:order == SNSortByTitle] ]];
+    return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+}
+
+- (UICommand *)sortCommand:(NSString *)title action:(SEL)action on:(BOOL)on {
+    UICommand *c = [UICommand commandWithTitle:title image:nil action:action propertyList:nil];
+    c.state = on ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return c;
+}
+
+- (NSArray<NSString *> *)shownRows {
+    NSMutableArray *rows = [NSMutableArray array];
+    for (SNNoteGroup *g in _groups) {
+        if (g.title) [rows addObject:[@"## " stringByAppendingString:g.title]];
+        for (SNNote *n in g.notes) [rows addObject:n.title ?: @""];
+    }
+    return rows;
+}
+
+- (IBAction)sortByDateEdited:(id)sender { _notes.sortOrder = SNSortByDateEdited; }
+- (IBAction)sortByDateCreated:(id)sender { _notes.sortOrder = SNSortByDateCreated; }
+- (IBAction)sortByTitle:(id)sender { _notes.sortOrder = SNSortByTitle; }
+- (IBAction)toggleGroupByDate:(id)sender { _notes.groupsByDate = !_notes.groupsByDate; }
+
+- (SNNote *)noteAt:(NSIndexPath *)ip {
+    return _groups[(NSUInteger)ip.section].notes[(NSUInteger)ip.row];
 }
 
 - (void)changed:(NSNotification *)n {
@@ -270,10 +381,13 @@ static NSString *SNDaysLeftText(SNNote *note) {
     [sheet addAction:[UIAlertAction actionWithTitle:@"No Folder" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
         [self->_notes moveNote:note toFolder:nil];
     }]];
-    for (SNFolder *f in _notes.folders)
-        [sheet addAction:[UIAlertAction actionWithTitle:f.name.length ? f.name : @"Untitled" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+    for (SNFolder *f in _notes.folderTree) {
+        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+        [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
+                                                  style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
             [self->_notes moveNote:note toFolder:f];
         }]];
+    }
     [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     sheet.popoverPresentationController.sourceView = view;
     sheet.popoverPresentationController.sourceRect = view.bounds;
@@ -285,29 +399,38 @@ static NSString *SNDaysLeftText(SNNote *note) {
     [self.navigationController pushViewController:[[SNEditorViewController alloc] initWithNotes:_notes note:note] animated:YES];
 }
 
+/* A section a group: Pinned, Today, ... */
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)t {
+    return (NSInteger)_groups.count;
+}
+
 - (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section {
-    return (NSInteger)_list.count;
+    return (NSInteger)_groups[(NSUInteger)section].notes.count;
+}
+
+- (NSString *)tableView:(UITableView *)t titleForHeaderInSection:(NSInteger)section {
+    return _groups[(NSUInteger)section].title;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)ip {
     UITableViewCell *cell = [t dequeueReusableCellWithIdentifier:@"note"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"note"];
-    SNNote *note = _list[(NSUInteger)ip.row];
+    SNNote *note = [self noteAt:ip];
     cell.textLabel.text = note.title ?: @"New Note";
     cell.textLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
-    cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  %@", note.deletedAt ? SNDaysLeftText(note) : SNDateText(note.updated), note.snippet];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%@  %@", note.deletedAt ? SNDaysLeftText(note) : SNDateText(note.edited), note.snippet];
     cell.detailTextLabel.textColor = [UIColor secondaryLabelColor];
     cell.imageView.image = note.isPinned ? [UIImage systemImageNamed:@"pin.fill"] : nil;
     return cell;
 }
 
 - (void)tableView:(UITableView *)t didSelectRowAtIndexPath:(NSIndexPath *)ip {
-    SNNote *note = _list[(NSUInteger)ip.row];
+    SNNote *note = [self noteAt:ip];
     [self.navigationController pushViewController:[[SNEditorViewController alloc] initWithNotes:_notes note:note] animated:YES];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
-    SNNote *note = _list[(NSUInteger)ip.row];
+    SNNote *note = [self noteAt:ip];
     if (_deleted) {
         UIContextualAction *gone = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
             handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
@@ -334,7 +457,7 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
-    SNNote *note = _list[(NSUInteger)ip.row];
+    SNNote *note = [self noteAt:ip];
     if (_deleted) {
         UIContextualAction *recover = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Recover"
             handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {

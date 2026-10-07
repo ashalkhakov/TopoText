@@ -3,6 +3,7 @@
     ApplicationName = SimpleNotes;
     ApplicationRelease = "1.0";
     NSExecutable = SimpleNotes;
+    NSIcon = "SimpleNotes.png";
     NSMainNibFile = "MainMenu.xib";
     NSPrincipalClass = NSApplication;
     NSRole = Application;

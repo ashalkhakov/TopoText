@@ -15,8 +15,8 @@
     NSMutableDictionary *values = [r.values mutableCopy];
     NSString *body = values[@"body"];
     if ([body isKindOfClass:[NSString class]]) values[@"title"] = SNTitleOfBody(body);
-    id a = conflict.local[@"updated"], b = conflict.remote[@"updated"];
-    if ([a isKindOfClass:[NSDate class]] && [b isKindOfClass:[NSDate class]]) values[@"updated"] = [a laterDate:b];
+    id a = conflict.local[@"edited"], b = conflict.remote[@"edited"];
+    if ([a isKindOfClass:[NSDate class]] && [b isKindOfClass:[NSDate class]]) values[@"edited"] = [a laterDate:b];
     return [ODataSyncResolution mergedValues:values];
 }
 

@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: ee5c94e5a20c03a7e41ea6d68bb4b71dc24a6cde
+  ODATAKIT_REF: fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -129,14 +129,16 @@ jobs:
       # libobjc2 and libdispatch land in the prefix's plain lib/, which the
       # gnustep layout does not treat as a library root.
       LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
-      # ODataKit's pins of the stack (ODataKit #19). gnustep-patches 0b19ede:
-      # NSExpression's FUNCTION and FETCH, which FreeCoreData's migrations by
-      # mapping model need. FreeCoreData beb7005 (#62-65): momc reads Preserve
-      # After Deletion as Xcode writes it; a store comes through a migration
-      # as the same store, metadata and history (a migrated device keeps its
-      # replica ID, and what it had not sent).
-      GNUSTEP_PATCHES_REF: 0b19ede3cd7ddc7e958130a856bea1a49e66c0f8
-      FREECOREDATA_REF: beb700578e92998fc953da22ac1e7fc654a14b43
+      # gnustep-patches 4d5599f: NSExpression's FUNCTION and FETCH, and an
+      # expression given for %@ taken as that expression, which FreeCoreData's
+      # migrations need. FreeCoreData f3d56b4 (#62-67): momc reads Preserve
+      # After Deletion and Renaming IDs as Xcode writes them; a store comes
+      # through a migration as the same store, metadata and history (a
+      # migrated device keeps its replica ID, and what it had not sent); an
+      # inferred mapping follows Renaming IDs (SimpleNotes' updated, now
+      # edited).
+      GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
+      FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source

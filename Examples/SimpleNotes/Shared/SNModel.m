@@ -41,3 +41,43 @@ NSString *SNSnippetOfBody(NSString *body) {
     NSString *s = [lines componentsJoinedByString:@" "];
     return s.length > 160 ? [s substringToIndex:160] : s;
 }
+
+static BOOL SNIsTagCharacter(unichar c) {
+    return [[NSCharacterSet alphanumericCharacterSet] characterIsMember:c] || c == '-' || c == '_';
+}
+
+NSArray<NSValue *> *SNTagRangesInText(NSString *text) {
+    NSMutableArray *ranges = [NSMutableArray array];
+    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSCharacterSet *letters = [NSCharacterSet letterCharacterSet];
+    NSUInteger n = text.length;
+    for (NSUInteger i = 0; i < n; i++) {
+        if ([text characterAtIndex:i] != '#' || (i && ![space characterIsMember:[text characterAtIndex:i - 1]])) continue;
+        NSUInteger end = i + 1;
+        BOOL letter = NO;
+        while (end < n && SNIsTagCharacter([text characterAtIndex:end])) {
+            letter = letter || [letters characterIsMember:[text characterAtIndex:end]];
+            end++;
+        }
+        if (letter) [ranges addObject:[NSValue valueWithRange:NSMakeRange(i, end - i)]];
+        i = end - 1;
+    }
+    return ranges;
+}
+
+NSArray<NSString *> *SNTagsInText(NSString *text) {
+    NSMutableOrderedSet *tags = [NSMutableOrderedSet orderedSet];
+    for (NSValue *v in SNTagRangesInText(text ?: @"")) {
+        NSRange r = v.rangeValue;
+        [tags addObject:[text substringWithRange:NSMakeRange(r.location + 1, r.length - 1)].lowercaseString];
+    }
+    return tags.array;
+}
+
+NSDictionary *SNUpgradeBody(NSDictionary *body, NSEntityDescription *entity) {
+    if (![entity.name isEqualToString:SNNoteEntity] || !body[@"Updated"] || body[@"Edited"]) return body;
+    NSMutableDictionary *b = [body mutableCopy];
+    b[@"Edited"] = b[@"Updated"];
+    [b removeObjectForKey:@"Updated"];
+    return b;
+}

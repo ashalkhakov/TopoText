@@ -1,0 +1,441 @@
+name: Release
+
+# SimpleNotes, packaged: ported from ODataKit's, XFormsKit's and RDLKit's
+# release workflows. A v* tag builds every package and attaches it to that
+# release; run by hand with a tag, it builds that tag and attaches to its
+# release; with none, it builds the branch, as artifacts only.
+#
+#   macOS    SimpleNotes.app, universal, signed with a Developer ID and
+#            notarized (unsigned, and named so, without the secrets)
+#   Linux    SimpleNotes as an AppImage, with simplenotes-server in it
+#            (`SimpleNotes-*.AppImage server ...`)
+#   iOS      an unsigned device build (.ipa, to be signed for the App Store
+#            later) and a simulator build
+#
+# The server's image is docker.yml's: a tag publishes it to the GitHub
+# Container Registry.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A v* tag to build and attach to its release (empty: this branch, artifacts only)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  # ci.yml's pins: the release is built from what CI tested.
+  ODATAKIT_REF: fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
+  GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
+  FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
+  TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+
+jobs:
+  ################################ macOS ################################
+  macos:
+    name: macOS (signed)
+    runs-on: macos-15
+    timeout-minutes: 60
+    # The signing and notarisation secrets live in this environment, and an
+    # environment's secrets are only readable by a job that names it: without
+    # this line every one of them resolves to the empty string and the job
+    # ships an unsigned build, saying so and passing.
+    environment: production
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/source
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+          path: source
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/ODataKit
+          ref: ${{ env.ODATAKIT_REF }}
+          path: ODataKit
+
+      - name: Version
+        run: |
+          if [ -n "$TAG" ]; then
+            echo "APP_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.0-build${{ github.run_number }}" >> "$GITHUB_ENV"
+          fi
+
+      # Release, universal (arm64 and x86_64), the frameworks embedded; it
+      # has to start and pass its self-test against the server before
+      # anything else.
+      - name: Build
+        run: |
+          for scheme in SimpleNotes simplenotes-server; do
+            xcodebuild -workspace TopoText.xcworkspace -scheme "$scheme" \
+              -destination 'generic/platform=macOS' -configuration Release \
+              -derivedDataPath "$RUNNER_TEMP/Release" \
+              MARKETING_VERSION="${APP_VERSION%%-*}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" build
+          done
+          products="$RUNNER_TEMP/Release/Build/Products/Release"
+          app="$products/SimpleNotes.app"
+          echo "APP=$app" >> "$GITHUB_ENV"
+          echo "SERVER=$products/simplenotes-server" >> "$GITHUB_ENV"
+          for fw in TopoText TopoTextSync ODataKit ODataSync; do
+            test -d "$app/Contents/Frameworks/$fw.framework" \
+              || { echo "::error::SimpleNotes.app does not embed $fw.framework"; exit 1; }
+          done
+          lipo "$app/Contents/MacOS/SimpleNotes" -verify_arch arm64 x86_64
+          Examples/SimpleNotes/Tests/self-test.sh "$products/simplenotes-server" "$app/Contents/MacOS/SimpleNotes"
+
+      # Signing is skipped, loudly, when the certificate secrets are absent, so
+      # a fork or a dry run still produces artifacts -- unsigned, and named so.
+      - name: Sign
+        id: sign
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          if [ -z "$CERTIFICATE" ]; then
+            echo "::warning::MACOS_CERTIFICATE not set; shipping unsigned"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$password" "$keychain" > /dev/null
+          security list-keychain -d user -s "$keychain" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # codesign takes only an identity it can chain to Apple's root, and
+          # a runner need not have the Developer ID intermediate.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" || true
+
+          # The identity is read out of the keychain, not matched by name
+          # (ODataKit's and RDLKit's experience): only a Developer ID
+          # Application certificate can be notarized; MACOS_SIGN_IDENTITY, if
+          # set, chooses between several. Signed by hash, which is unambiguous.
+          echo "identities in the signing keychain:"
+          security find-identity -p codesigning "$keychain"
+          valid=$(security find-identity -v -p codesigning "$keychain")
+          candidates=$(printf '%s\n' "$valid" | awk -F'"' '/"Developer ID Application: /{print $2}' | sort -u)
+          if [ -z "$candidates" ]; then
+            echo "::error::MACOS_CERTIFICATE holds no valid Developer ID Application certificate (listed above); notarization accepts no other kind"
+            exit 1
+          fi
+          chosen=$(printf '%s\n' "$candidates" | { [ -n "$IDENTITY" ] && grep -Fx "$IDENTITY" || true; } | head -1)
+          if [ -z "$chosen" ]; then
+            [ -z "$IDENTITY" ] || echo "::warning::MACOS_SIGN_IDENTITY names no Developer ID identity in MACOS_CERTIFICATE; signing with the one it holds"
+            chosen=$(printf '%s\n' "$candidates" | head -1)
+          fi
+          echo "signing as: $chosen"
+          IDENTITY=$(printf '%s\n' "$valid" | grep -F "\"$chosen\"" | head -1 | awk '{print $2}')
+
+          # --timestamp and --options runtime are what notarization requires.
+          # Signed inside out: every framework embedded (what is there, not a
+          # list), then the app, whose signature seals theirs; not --deep,
+          # which Apple deprecates.
+          for fw in "$APP"/Contents/Frameworks/*.framework; do
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$fw"
+          done
+          codesign --force --timestamp --options runtime --sign "$IDENTITY" "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          # The hardened runtime loads only frameworks signed by the same
+          # team: the signed app has to start and pass again.
+          Examples/SimpleNotes/Tests/self-test.sh "$SERVER" "$APP/Contents/MacOS/SimpleNotes"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize
+        if: steps.sign.outputs.signed == 'true'
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          # Checked here rather than in `if:`, where a step's own env block is
+          # not reliably visible to its own condition.
+          if [ -z "$NOTARY_APPLE_ID" ] || [ -z "$NOTARY_TEAM_ID" ] || [ -z "$NOTARY_PASSWORD" ]; then
+            echo "::warning::NOTARY_* secrets not set; signed but not notarized"
+            exit 0
+          fi
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/SimpleNotes-notarize.zip"
+          # A submission Apple finds invalid still ends the wait: the status
+          # says whether it was accepted, and the log says why not.
+          xcrun notarytool submit "$RUNNER_TEMP/SimpleNotes-notarize.zip" \
+            --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" \
+            --password "$NOTARY_PASSWORD" --wait --output-format json > "$RUNNER_TEMP/notary.json" || true
+          cat "$RUNNER_TEMP/notary.json"
+          id=$(plutil -extract id raw -o - "$RUNNER_TEMP/notary.json" 2>/dev/null || true)
+          status=$(plutil -extract status raw -o - "$RUNNER_TEMP/notary.json" 2>/dev/null || true)
+          if [ "$status" != "Accepted" ]; then
+            [ -n "$id" ] && xcrun notarytool log "$id" \
+              --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD" || true
+            echo "::error::notarization was not accepted (status: ${status:-none})"
+            exit 1
+          fi
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          # What a downloaded copy meets: Gatekeeper's own assessment.
+          spctl --assess --type execute --verbose=2 "$APP"
+
+      - name: Package
+        run: |
+          suffix=""
+          [ "${{ steps.sign.outputs.signed }}" = "true" ] || suffix="-unsigned"
+          ditto -c -k --keepParent "$APP" "SimpleNotes-macOS-${APP_VERSION}${suffix}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-macOS-${{ env.APP_VERSION }}
+          path: ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+
+      - name: Attach to the release
+        if: env.TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+
+  ################################# iOS #################################
+  # Unsigned: there is no App Store account to sign it with yet. The device
+  # build is an .ipa (Payload/SimpleNotes.app, zipped) for a signing step to
+  # take later (codesign with a distribution certificate and profile, or
+  # fastlane's resign); the simulator build runs as it is. The simulator
+  # build has to pass its self-test against the server first.
+  ios:
+    name: iOS (unsigned)
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/source
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+          path: source
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/ODataKit
+          ref: ${{ env.ODATAKIT_REF }}
+          path: ODataKit
+
+      - name: Version
+        run: |
+          if [ -n "$TAG" ]; then
+            echo "APP_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.0-build${{ github.run_number }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        run: |
+          versions=(MARKETING_VERSION="${APP_VERSION%%-*}" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER")
+          xcodebuild -workspace TopoText.xcworkspace -scheme SimpleNotes-iOS \
+            -destination 'generic/platform=iOS' -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/Release" "${versions[@]}" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          xcodebuild -workspace TopoText.xcworkspace -scheme SimpleNotes-iOS \
+            -destination 'generic/platform=iOS Simulator' -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/Release" "${versions[@]}" build
+          xcodebuild -workspace TopoText.xcworkspace -scheme simplenotes-server \
+            -destination 'platform=macOS' -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/Server" build
+
+      - name: Self-test, in a simulator
+        run: |
+          Examples/SimpleNotes/Tests/ios-self-test.sh "$RUNNER_TEMP/Server/Build/Products/Release/simplenotes-server" \
+            "$RUNNER_TEMP/Release/Build/Products/Release-iphonesimulator/SimpleNotes.app"
+
+      - name: Package
+        run: |
+          products="$RUNNER_TEMP/Release/Build/Products"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$products/Release-iphoneos/SimpleNotes.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/source/SimpleNotes-iOS-${APP_VERSION}-unsigned.ipa" Payload)
+          ditto -c -k --keepParent "$products/Release-iphonesimulator/SimpleNotes.app" \
+            "SimpleNotes-iOS-Simulator-${APP_VERSION}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-iOS-${{ env.APP_VERSION }}
+          path: |
+            ${{ github.workspace }}/source/SimpleNotes-iOS-*.ipa
+            ${{ github.workspace }}/source/SimpleNotes-iOS-Simulator-*.zip
+
+      - name: Attach to the release
+        if: env.TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            ${{ github.workspace }}/source/SimpleNotes-iOS-*.ipa
+            ${{ github.workspace }}/source/SimpleNotes-iOS-Simulator-*.zip
+
+  ########################### Linux AppImage ###########################
+  appimage:
+    name: Linux AppImage
+    # Built on the oldest Ubuntu LTS still in support, not ubuntu-latest: an
+    # AppImage carries its own libraries but not glibc, so it runs only on a
+    # system at least as new as the one it was linked on (XFormsKit's
+    # experience). Raise this only when that release leaves support.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    env:
+      PREFIX: ${{ github.workspace }}/build
+      SOURCES: ${{ github.workspace }}/dependencies
+      CC: clang
+      CXX: clang++
+      LIBRARY_COMBO: ng-gnu-gnu
+      RUNTIME_VERSION: gnustep-2.0
+      # Foundation, gui and back for the app, and the Eau theme it looks as
+      # with (AppRun sets it in the app's defaults).
+      COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back eau
+      # libobjc2 and libdispatch land in the prefix's plain lib/, which the
+      # gnustep layout does not treat as a library root.
+      LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/source
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+          path: source
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/gnustep-patches
+          ref: ${{ env.GNUSTEP_PATCHES_REF }}
+          path: gnustep-patches
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/FreeCoreData
+          ref: ${{ env.FREECOREDATA_REF }}
+          path: FreeCoreData
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ashalkhakov/ODataKit
+          ref: ${{ env.ODATAKIT_REF }}
+          path: ODataKit
+
+      - name: Version
+        run: |
+          if [ -n "$TAG" ]; then
+            echo "APP_VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=0.0.0-build${{ github.run_number }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install packages
+        run: |
+          ./.github/scripts/apt-update.sh
+          sudo apt-get -q -y install \
+            pkg-config libgnutls28-dev libffi-dev libicu-dev libxml2-dev libxslt1-dev \
+            libssl-dev zlib1g-dev libcurl4-gnutls-dev libgmp-dev libsqlite3-dev \
+            libavahi-compat-libdnssd-dev libpthread-workqueue-dev libpq-dev libmariadb-dev \
+            libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev \
+            libfreetype6-dev libfontconfig1-dev libxrender-dev \
+            libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
+            clang file fuse libfuse2 desktop-file-utils fonts-dejavu fonts-liberation python3-pip
+          if [ -x /usr/bin/ld.gold ]; then
+            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 10
+          else
+            sudo apt-get -q -y install lld
+            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld 10
+          fi
+
+      # libdispatch wants CMake 3.26 or newer, and 22.04's is 3.22: from pip,
+      # the same on a runner (which has its own) and in a container.
+      - name: CMake
+        run: |
+          python3 -m pip install --user --quiet 'cmake>=3.26'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/cmake" --version | head -1
+
+      # The recipe hash covers the build script, COMPONENTS, the toolchain and
+      # every patch. Restored and saved apart, so the cache holds the stack
+      # before anything is installed into it for packaging.
+      - name: GNUstep recipe
+        id: recipe
+        run: echo "hash=$(../gnustep-patches/Scripts/build-gnustep.sh --print-recipe-hash)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore GNUstep
+        id: gnustep-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-appimage-ubuntu-22.04-${{ steps.recipe.outputs.hash }}
+
+      - name: Build GNUstep
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: ../gnustep-patches/Scripts/build-gnustep.sh
+
+      - name: Save GNUstep
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-appimage-ubuntu-22.04-${{ steps.recipe.outputs.hash }}
+
+      - name: FreeCoreData, ODataKit and TopoText
+        run: .github/scripts/build-libraries.sh
+
+      - name: Fetch linuxdeploy and the AppImage runtime
+        run: ./Scripts/install-linuxdeploy.sh
+
+      - name: Stamp the version
+        run: ./Scripts/stamp-version.sh "$APP_VERSION"
+
+      - name: Assemble AppDir
+        run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/prepare-appdir.sh
+
+      - name: Package the AppImage
+        run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+
+      # Where it will run: a plain Ubuntu with no GNUstep, and only the
+      # libraries every desktop has (AppImage leaves those to the host). The
+      # image's own server is started, seeded, and the app's self-test
+      # drives the window against it. The host's fonts are removed first, so
+      # the window lays out with the fonts the image carries.
+      - name: Smoke-test the AppImage on a clean system
+        run: |
+          image=$(ls SimpleNotes-Linux-*.AppImage)
+          chmod +x "$image"
+          docker run --rm -v "$PWD:/w" -w /w ubuntu:22.04 bash -c '
+            export DEBIAN_FRONTEND=noninteractive APPIMAGE_EXTRACT_AND_RUN=1
+            for i in 1 2 3; do
+              apt-get update -qq && apt-get install -y -qq --fix-missing xvfb xauth ca-certificates python3 \
+                libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libgl1 libharfbuzz0b > /dev/null && break
+              sleep 10
+            done
+            rm -rf /usr/share/fonts
+            ./'"$image"' --server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &
+            for i in $(seq 1 60); do python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:18090/odata/\")" 2>/dev/null && break; sleep 1; done
+            python3 Examples/SimpleNotes/Tests/seed.py http://127.0.0.1:18090/odata/ || { cat /tmp/server.log; exit 1; }
+            timeout 300 xvfb-run -a ./'"$image"' --self-test http://127.0.0.1:18090/odata/'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-Linux-${{ env.APP_VERSION }}
+          path: ${{ github.workspace }}/source/SimpleNotes-Linux-*.AppImage
+
+      - name: Attach to the release
+        if: env.TAG != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: ${{ github.workspace }}/source/SimpleNotes-Linux-*.AppImage

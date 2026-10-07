@@ -155,6 +155,10 @@
 			isa = PBXBuildFile;
 			fileRef = 3A7E5691DCCCF8CDDA62B26F;
 		};
+		5E4D80EF65B4B9359460DD8B /* SimpleNotes.icns in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 73BE747B72F43F189B02E701;
+		};
 		62FD998ECE6FA8C402E5CE81 /* SNModel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
@@ -790,6 +794,12 @@
 			sourceTree = "<group>";
 			name = TextPanel.xib;
 		};
+		3ED189E6AF571756E33600AA /* SimpleNotes 3.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = "SimpleNotes 3.xcdatamodel";
+			sourceTree = "<group>";
+		};
 		47029EC1BB7F394FB43D846A /* SNMigration.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -852,6 +862,13 @@
 			path = Shared/SNCheck.h;
 			sourceTree = "<group>";
 			name = SNCheck.h;
+		};
+		73BE747B72F43F189B02E701 /* SimpleNotes.icns */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = image.icns;
+			path = Icons/SimpleNotes.icns;
+			sourceTree = "<group>";
+			name = SimpleNotes.icns;
 		};
 		78A4C6E4EA29BE4EF02494EB /* SNSelfTest.m */ = {
 			isa = PBXFileReference;
@@ -1398,6 +1415,7 @@
 				EEA03511188291009AB0171F,
 				F9C5540A3B0482B8474FBF95,
 				095BECCD974EC50D623BA7B9,
+				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1714,9 +1732,10 @@
 			isa = XCVersionGroup;
 			children = (
 				BCCB2602B0C5007DD193EFB5,
+				3ED189E6AF571756E33600AA,
 				3BBC93E5156C8D3EC4A97323,
 			);
-			currentVersion = BCCB2602B0C5007DD193EFB5;
+			currentVersion = 3ED189E6AF571756E33600AA;
 			path = SimpleNotes.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;
