@@ -594,9 +594,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     if (!_textView.text.length && !_note.deletedAt) [_textView becomeFirstResponder];
 }
 
-/* Wider or narrower (turned, a split view): the tables laid out again. */
+/* Wider or narrower (turned, a split view, first laid out): images sized
+   to it again, the tables laid out again. */
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    [_binding textWidthMayHaveChanged];
     [_grids update];
 }
 
@@ -611,6 +613,33 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 - (void)textViewDidChangeSelection:(UITextView *)tv {
     [_binding selectionDidChange];
+}
+
+/* From a table's cell into the note: the keyboard keeps the cell's bar
+   unless told, once the change of first responder is done with, that the
+   note's text view has one of its own. */
+- (void)textViewDidBeginEditing:(UITextView *)tv {
+    [self performSelector:@selector(showFormatBar) withObject:nil afterDelay:0];
+}
+
+- (void)showFormatBar {
+    if (!_textView.isFirstResponder) return;
+    _textView.inputAccessoryView = nil;
+    [_textView reloadInputViews];
+    _textView.inputAccessoryView = _formatBar;
+    [_textView reloadInputViews];
+}
+
+/* What is selected linked, from the menu over it, as in Apple Notes. */
+- (UIMenu *)textView:(UITextView *)tv editMenuForTextInRange:(NSRange)range suggestedActions:(NSArray<UIMenuElement *> *)suggested
+    API_AVAILABLE(ios(16.0)) {
+    if (!range.length || !tv.editable) return [UIMenu menuWithChildren:suggested];
+    UICommand *link = [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil];
+    return [UIMenu menuWithChildren:[suggested arrayByAddingObject:link]];
+}
+
+- (IBAction)hideKeyboard:(id)sender {
+    [self.view endEditing:YES];
 }
 
 /* Typing in lists, as Apple Notes has it (SNTextBinding). */
@@ -703,12 +732,24 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 /* The format bar's menus: commands sent up the responder chain, to this
    controller (the text view is first responder). */
 - (void)makeFormatMenus {
+    /* A row of four, as Apple Notes' Aa has them. */
+    UIMenu *traits = [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
+        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
+        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
+        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil] ]];
+    if (@available(iOS 16.0, *)) traits.preferredElementSize = UIMenuElementSizeSmall;
     _styleItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
-        [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
-        [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
-        [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
-        [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]];
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
+            [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
+            [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
+            [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
+            [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]],
+        traits ]];
+    _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
+        [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
+        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
         [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],

@@ -20,8 +20,6 @@ NS_ASSUME_NONNULL_BEGIN
     NSUInteger _row, _col;
     /* Typed since last saved; cells being set (not typed into). */
     BOOL _dirty, _loading;
-    /* What each system keeps (UIKit: the bar over the keyboard). */
-    id _systemState;
 }
 #pragma mark shared, for the system's part
 // A cell typed in (its binding has written it): laid out again.

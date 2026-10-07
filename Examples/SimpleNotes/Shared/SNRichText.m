@@ -314,6 +314,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         SNSize size = { MAX(1, w * scale), MAX(1, h * scale) };
         a = SNSystemImageAttachment(data, attachment.type, size);
         a.loaded = data != nil;
+        a.textWidth = maxWidth;
     }
     a.attachmentID = attachmentID;
     a.dataHash = data.hash;
@@ -335,6 +336,8 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     NSMapTable<NSTextAttachment *, NSString *> *_pendingAttachments;
     /* Tables' rooms, by attachment id (SNSize values). */
     NSMutableDictionary<NSString *, NSValue *> *_rooms;
+    /* The text's width images were last sized to. */
+    CGFloat _shownWidth;
 }
 
 - (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor {
@@ -357,6 +360,8 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     [self showTagsInRange:NSMakeRange(0, _storage.length)];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storageEdited:)
                                                  name:NSTextStorageDidProcessEditingNotification object:_storage];
+    _shownWidth = [self attachmentWidth];
+    SNSystemObserveResizing(view, self, @selector(resized:));
     return self;
 }
 
@@ -576,6 +581,9 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 - (CGFloat)attachmentWidth {
     NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
     NSTextContainer *c = lm.textContainers.firstObject;
+    /* TextKit 2's text view has no layout manager: its own container. */
+    id view = _view;
+    if (!c && [view respondsToSelector:@selector(textContainer)]) c = [view textContainer];
     CGFloat w = c ? SNSystemContainerWidth(c) - 2 * c.lineFragmentPadding - 4 : 0;
     return w > 40 && w < 4000 ? w : 480;
 }
@@ -584,6 +592,9 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
    with an id has its image (a box while it has not come). */
 - (void)showAttachmentsIn:(NSMutableAttributedString *)target range:(NSRange)range {
     NSString *s = target.string;
+    /* An image is made again when the text is no longer as wide as it was
+       sized to: smaller to fit, or as large as it is again. */
+    CGFloat width = [self attachmentWidth];
     range = NSIntersectionRange(range, NSMakeRange(0, s.length));
     for (NSUInteger i = range.location; i < NSMaxRange(range); i++) {
         if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
@@ -595,11 +606,12 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID]) {
             SNSize size = { 0, 0 };
             if (room) [room getValue:&size];
-            if (room ? SNSameSize(shown.room, size) : (shown.loaded && shown.dataHash == attachment.data.hash && shown.room.width == 0))
+            if (room ? SNSameSize(shown.room, size) : (shown.loaded && shown.dataHash == attachment.data.hash && shown.room.width == 0 &&
+                                                       (shown.textWidth == 0 || shown.textWidth == width)))
                 continue;
             if (!room && !attachment.data) continue;
         }
-        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, [self attachmentWidth], room)
+        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, width, room)
                        range:NSMakeRange(i, 1)];
     }
 }
@@ -615,6 +627,17 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 
 - (void)refreshAttachments {
     [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
+}
+
+- (void)textWidthMayHaveChanged {
+    CGFloat width = [self attachmentWidth];
+    if (width == _shownWidth) return;
+    _shownWidth = width;
+    [self refreshAttachments];
+}
+
+- (void)resized:(NSNotification *)n {
+    [self textWidthMayHaveChanged];
 }
 
 - (void)setRoomSize:(SNSize)size forAttachmentID:(NSString *)attachmentID {

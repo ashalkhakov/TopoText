@@ -28,6 +28,12 @@
     self.backgroundColor = [UIColor clearColor];
     self.opaque = NO;
     self.contentMode = UIViewContentModeRedraw;
+}
+
+/* Each cell a bar of its own: one bar shared by cells, its cell taken away
+   while typed in (a row deleted), stays over the keyboard whoever types
+   next, the note's text too. */
+- (UIToolbar *)makeBar {
     UIToolbar *bar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
     UIBarButtonItem *table = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"tablecells"] menu:[self tableMenu]];
     table.accessibilityLabel = @"Table";
@@ -48,7 +54,7 @@
     UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(endTyping:)];
     bar.items = @[ formatItem, table, space, next, done ];
     [bar sizeToFit];
-    _systemState = bar;
+    return bar;
 }
 
 - (SNGridTextView *)makeCell {
@@ -58,7 +64,7 @@
     tv.font = SNFontFor(nil, NO, NO);
     tv.textColor = SNSystemTextColor();
     tv.textContainerInset = UIEdgeInsetsMake(6, 4, 6, 4);
-    tv.inputAccessoryView = _systemState;
+    tv.inputAccessoryView = [self makeBar];
     tv.delegate = self;
     return tv;
 }
@@ -104,6 +110,9 @@
 #pragma mark the cells' delegate
 
 - (void)textViewDidBeginEditing:(UITextView *)tv {
+    /* From the note's text: the keyboard to show this cell's bar, not the
+       note's. */
+    [tv performSelector:@selector(reloadInputViews) withObject:nil afterDelay:0];
     [self noteCell:tv];
 }
 

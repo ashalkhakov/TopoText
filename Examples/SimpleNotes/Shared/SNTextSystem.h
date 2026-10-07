@@ -31,6 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) NSUInteger dataHash;
 /* A table's room, kept empty for its grid (zero: none). */
 @property (nonatomic) SNSize room;
+/* How wide the text was when an image was sized to it. */
+@property (nonatomic) CGFloat textWidth;
 @end
 
 #pragma mark fonts and colors

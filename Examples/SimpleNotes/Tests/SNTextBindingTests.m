@@ -468,4 +468,28 @@
     XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSItalicFontMask);
 }
 
+/* An image as wide as the text, when the text is narrower: the text made
+   wider (a window, a screen turned), the image is shown wider too. */
+- (void)testAnImageFollowsTheTextsWidth {
+    NSBitmapImageRep *wide = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:800 pixelsHigh:100 bitsPerSample:8 samplesPerPixel:4
+                                                                       hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+#ifdef GNUSTEP
+    NSData *png = [wide representationUsingType:NSPNGFileType properties:@{}];
+#else
+    NSData *png = [wide representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+    NSTextView *tv = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 300, 200)];
+    [_binding unbind];
+    SNTextBinding *binding = [[SNTextBinding alloc] initWithTextView:tv editor:_editor];
+    XCTAssertTrue([binding insertImageData:png inRange:NSMakeRange(0, 0)]);
+    NSTextAttachment *shown = [tv.textStorage attribute:NSAttachmentAttributeName atIndex:0 effectiveRange:NULL];
+    CGFloat narrow = shown.attachmentCell.cellSize.width;
+    XCTAssertLessThan(narrow, 300, @"as wide as the text");
+    [tv setFrameSize:NSMakeSize(700, 200)];
+    [binding textWidthMayHaveChanged];
+    shown = [tv.textStorage attribute:NSAttachmentAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertGreaterThan(shown.attachmentCell.cellSize.width, narrow + 300, @"wider with it");
+    [binding unbind];
+}
+
 @end

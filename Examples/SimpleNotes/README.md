@@ -95,9 +95,9 @@ device does the same, so nothing is lost and all show the same tree.
 
 A web address you type becomes a link, as in Apple Notes. That link is
 only shown, not kept: it's worked out from the text each time.
-**Format > Add Link…** (⌘K; on iOS, the format bar's link button) puts a
-link on the selected text, and that one is part of the note and syncs with
-it.
+**Format > Add Link…** (⌘K; on iOS, **Add Link** in the menu over the
+selected text, or under the format bar's paperclip) puts a link on the
+selected text, and that one is part of the note and syncs with it.
 
 A link can also point to another note: **File > Copy Link to Note** (on iOS,
 press and hold a note in the list) copies a `simplenotes://note/<id>` link.
@@ -105,8 +105,10 @@ Paste it with Add Link, and clicking it opens that note.
 
 ## Images
 
-**File > Attach File…** (⇧⌘A), or paste or drop an image; on iOS, the format
-bar's photo button. An image is one of the note's attachments, with its own
+**File > Attach File…** (⇧⌘A), or paste or drop an image; on iOS, **Choose
+Photo** under the format bar's paperclip. An image is as wide as it is, or
+as the text when the text is narrower; it follows the text's width when the
+window or the screen turns. It's one of the note's attachments, with its own
 record that syncs like a note does. The note's text holds one character for
 it. Images larger than 1600 pixels across are scaled down.
 

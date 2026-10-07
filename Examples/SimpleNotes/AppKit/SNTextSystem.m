@@ -182,6 +182,7 @@ void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
 }
 
 void SNSystemObserveResizing(id view, id observer, SEL selector) {
+    if (![view isKindOfClass:[NSView class]]) return;   /* a test's stand-in */
     [view setPostsFrameChangedNotifications:YES];
     [[NSNotificationCenter defaultCenter] addObserver:observer selector:selector name:NSViewFrameDidChangeNotification object:view];
 }

@@ -39,11 +39,15 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
                                                        PHPickerViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
-// Over the keyboard: the text view's input accessory.
+// Over the keyboard: the text view's input accessory, as Apple Notes'
+// (an iPhone's width): a table, Aa (styles, and bold, italic, underline,
+// strikethrough), a checklist, lists, the paperclip (a photo, a link), and
+// the keyboard put away.
 @property (nonatomic, strong) IBOutlet UIToolbar *formatBar;
-// Its menus: the paragraph's style (Aa), and lists and indentation.
 @property (nonatomic, strong) IBOutlet UIBarButtonItem *styleItem;
 @property (nonatomic, strong) IBOutlet UIBarButtonItem *listItem;
+@property (nonatomic, strong) IBOutlet UIBarButtonItem *attachItem;
+- (IBAction)hideKeyboard:(nullable id)sender;
 - (IBAction)bold:(nullable id)sender;
 - (IBAction)italic:(nullable id)sender;
 - (IBAction)underline:(nullable id)sender;

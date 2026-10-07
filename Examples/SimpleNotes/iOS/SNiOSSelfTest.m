@@ -155,8 +155,22 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
               CGRectGetMaxY(grid.frame) <= CGRectGetMaxY(room) + 2 && grid.frame.size.height > 40,
               [NSString stringWithFormat:@"the grid over its room (%@, %@)", NSStringFromCGRect(grid.frame), NSStringFromCGRect(room)]);
         [grid save];
+        /* From a cell back into the note: the note's bar over the keyboard,
+           not the cell's (UIKit kept the cell's, unless told). */
+        [wtv.window endEditing:YES];
+        SNWait(1, ^BOOL { return NO; });
+        [wtv becomeFirstResponder];
+        wtv.selectedRange = NSMakeRange(0, 0);
+        SNWait(3, ^BOOL { return we.formatBar.window != nil; });
+        SNSay(we.formatBar.window != nil && [grid textViewAtRow:0 column:0].inputAccessoryView.window == nil,
+              @"from a cell into the note: the note's bar over the keyboard");
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
+            /* The bar over the keyboard is in the keyboard's window, which
+               a snapshot of this one leaves out: held up a while, for the
+               simulator's own screenshot (xcrun simctl io screenshot). */
+            fprintf(stderr, "self-test: the keyboard is up\n");
+            SNWait(5, ^BOOL { return NO; });
             [wtv resignFirstResponder];
             SNWait(1, ^BOOL { return NO; });
             SNSnapshot(navigation.view.window, @(snapshot));

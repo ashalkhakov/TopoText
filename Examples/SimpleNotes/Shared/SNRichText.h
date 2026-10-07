@@ -148,6 +148,9 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // Attachments shown again: those a sync has brought since (a text can come
 // before its attachment).
 - (void)refreshAttachments;
+// Images sized to the text's width again, when it changed (AppKit's text
+// view says so itself; UIKit's controller calls this once laid out).
+- (void)textWidthMayHaveChanged;
 // The rest on every paragraph the range touches.
 // A style (nil: body), the paragraphs' list taken off.
 - (void)setStyle:(nullable NSString *)style forParagraphsInRange:(NSRange)range;
