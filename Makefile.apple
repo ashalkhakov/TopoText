@@ -62,9 +62,9 @@ define tt_bundle
 	printf '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>$(1)</string><key>CFBundleIdentifier</key><string>io.github.ashalkhakov.$(1)</string><key>CFBundlePackageType</key><string>BNDL</string><key>CFBundleName</key><string>$(1)</string></dict></plist>\n' > $@/Contents/Info.plist
 endef
 
-$(BUILD)/TopoTextTests.xctest: Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m Tests/TTTableTests.m Tests/TTUndoTests.m $(BUILD)/libTopoText.dylib
+$(BUILD)/TopoTextTests.xctest: Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m Tests/TTTableTests.m Tests/TTUndoTests.m Tests/TTCoreTests.m $(BUILD)/libTopoText.dylib
 	$(call tt_bundle,TopoTextTests)
-	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) -bundle Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m Tests/TTTableTests.m Tests/TTUndoTests.m \
+	$(CC) $(OBJCFLAGS) -mmacosx-version-min=$(MACOS_MIN) $(TT_INC) -bundle Tests/TopoTextTests.m Tests/TopoTextFuzzTests.m Tests/TTTableTests.m Tests/TTUndoTests.m Tests/TTCoreTests.m \
 	  -F$(XCTEST_FRAMEWORKS) -framework XCTest -Wl,-rpath,$(XCTEST_FRAMEWORKS) -Wl,-rpath,$(XCTEST_LIBS) \
 	  -L$(BUILD) -lTopoText -Wl,-rpath,$(ABS_BUILD) -framework Foundation -o $@/Contents/MacOS/TopoTextTests
 

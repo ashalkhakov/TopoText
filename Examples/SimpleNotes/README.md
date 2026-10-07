@@ -500,3 +500,6 @@ stays where the item was.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
+- **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
+  the version every device has seen. SimpleNotes doesn't track that yet; the
+  server could, once devices send deltas rather than whole notes.

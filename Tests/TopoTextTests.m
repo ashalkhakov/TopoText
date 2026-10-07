@@ -1,8 +1,11 @@
 #import <XCTest/XCTest.h>
 #import <TopoText/TopoText.h>
 
-/* TTScripted()'s data, as written on macOS. */
+/* TTScripted()'s data, as written on macOS (format 2). */
 static NSString * const TTGolden =
+    @"545402020807060504030201f0ffffffffffffff0200100112080001010801480604626f6c64020f0104666f6e740504426f64790000046c69737407020501610801016b010f01026f6e020000057363616c6504000000000000f83f00000473697a65031800000002012700100003010e03eda0bd0604626f6c64020f0104666f6e740504426f64790000046c69737407020501610801016b010f01026f6e020000057363616c6504000000000000f83f00000473697a65031800000004020e04edb880200404666f6e740504426f64790000026f6e020000057363616c6504000000000000f83f00000473697a6503180000000b031a000603626967010473697a65001202000e010601200006050a000505776f726c640404666f6e740504426f64790000026f6e020000057363616c6504000000000000f83f00000473697a65031800000111010601210000";
+/* The same, as format 1 wrote it (RGA; no deleters): still read. */
+static NSString * const TTGoldenFormat1 =
     @"545401020807060504030201f0ffffffffffffff02000f0111080001010801480604626f6c64020f0104666f6e740504426f64790000046c69737407020501610801016b010f01026f6e020000057363616c6504000000000000f83f00000473697a6503180000000201070003010e03eda0bd0604626f6c64020f0104666f6e740504426f64790000046c69737407020501610801016b010f01026f6e020000057363616c6504000000000000f83f00000473697a65031800000004020e04edb880200404666f6e740504426f64790000026f6e020000057363616c6504000000000000f83f00000473697a6503180000000b030e03626967010473697a65001102000e010601200006050a000505776f726c640404666f6e740504426f64790000026f6e020000057363616c6504000000000000f83f00000473697a650318000001100106012100";
 
 @interface TopoTextTests : XCTestCase
@@ -306,6 +309,21 @@ static NSString *TTHex(NSData *d) {
     NSMutableString *s = [NSMutableString string];
     for (NSUInteger i = 0; i < d.length; i++) [s appendFormat:@"%02x", ((const uint8_t *)d.bytes)[i]];
     return s;
+}
+
+- (void)testFormat1IsStillRead {
+    NSMutableData *d = [NSMutableData data];
+    for (NSUInteger i = 0; i + 1 < TTGoldenFormat1.length; i += 2) {
+        unsigned b;
+        sscanf([TTGoldenFormat1 substringWithRange:NSMakeRange(i, 2)].UTF8String, "%x", &b);
+        uint8_t byte = (uint8_t)b;
+        [d appendBytes:&byte length:1];
+    }
+    NSError *error = nil;
+    TopoText *old = [TopoText textWithData:d replica:0 error:&error];
+    XCTAssertNotNil(old, @"%@", error);
+    XCTAssertEqualObjects(old.attributedString, TTScripted().attributedString, @"the same text and attributes, in the same order");
+    XCTAssertEqual(((const uint8_t *)old.data.bytes)[2], 2, @"written as format 2");
 }
 
 - (void)testTheBytesAreTheSameEverywhere {

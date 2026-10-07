@@ -7,9 +7,21 @@ The research TopoText builds on, and the papers for what it doesn't do yet.
 - **RGA (Replicated Growable Array).** H.-G. Roh, M. Jeon, J.-S. Kim, J. Lee.
   "Replicated abstract data types: Building blocks for collaborative
   applications." *Journal of Parallel and Distributed Computing* 71(3), 2011.
-  TopoText's sequence: each character has an ID (replica, clock) and is
-  placed after the character it was typed after. A deleted character stays
-  as a tombstone.
+  TopoText's sequence began as RGA: each character has an ID (replica,
+  clock) and is placed after the character it was typed after. A deleted
+  character stays as a tombstone.
+- **Fugue.** M. Weidner, M. Kleppmann. "The Art of the Fugue: Minimizing
+  Interleaving in Collaborative Text Editing." arXiv:2305.00583, 2023.
+  TopoText's ordering now (format 2): each character is the right or the
+  left child of another, and the text is that tree read in order, so text
+  typed backwards at one place by two people does not interleave, as it
+  does in RGA. RGA is Fugue with right children only.
+- **Collecting tombstones.** Deleted characters can go once every copy has
+  seen the deletion (causal stability: C. Baquero, P. S. Almeida, A. Shoker.
+  "Making Operation-based CRDTs Operation-based." *DAIS 2014*). A tombstone
+  something is placed by stays, its ids kept and its records merged, as Yjs
+  keeps the ids of what it collects; the ids collected are remembered, so
+  a late copy cannot bring the text back.
 - **Peritext.** G. Litt, S. Lim, M. Kleppmann, P. van Hardenberg. "Peritext:
   A CRDT for Collaborative Rich Text Editing." *Proc. ACM on
   Human-Computer Interaction* 6 (CSCW2), 2022. Formatting as spans

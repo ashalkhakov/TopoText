@@ -3,25 +3,31 @@
 
 /* The wire format, little-endian, every count and clock a LEB128 varint:
 
-     'T' 'T' 1
+     'T' 'T' 2   (format 2; format 1, the same without 16 and 32, is read
+                 too, and written no more)
      replicas   n, then n u64s, ascending; records name them by index
      version    n, then n (replica index ascending, clock)
      inserts    n, then n records, in the sender's document order:
                   replica, clock, length, flags
                   (1 deleted, 2 has origin, 4 origin is the previous record's
-                   last character, 8 has attributes)
+                   last character, 8 has attributes, 16 the origin's left
+                   child (Fugue), 32 deleted when it is known: by whom)
                   origin replica and clock, unless 4 or none
+                  deleter replica and clock, if 32
                   text, unless deleted: byte count, then WTF-8
                   attributes: n, then n (key, value, clock, replica index + 1
                   or 0 for a birth register), keys in byte order
-     updates    n, then n records: replica, clock, length, flags (1, 8),
-                attributes
+     updates    n, then n records: replica, clock, length, flags (1, 8, 32),
+                deleter, attributes
+     collected  (format 2) n, then n (replica index ascending, k, then k
+                clock ranges ascending: start, length): ids deleted and
+                gone, so that none comes back
 
    Text is WTF-8, UTF-8 that also carries a lone surrogate: a run split by a
    remote insert between the halves of a pair must still encode. Everything is
    written in one order, so the same state is the same bytes on every system. */
 
-static const uint8_t TTMagic[3] = { 'T', 'T', 1 };
+static const uint8_t TTMagic[3] = { 'T', 'T', 2 };
 static const uint8_t TTVersionMagic[3] = { 'T', 'V', 1 };
 enum { TTMaxDepth = 32 };
 
@@ -335,7 +341,9 @@ static TTRun *TTCopyRun(TTRun *run) {
     TTRun *c = [TTRun new];
     c->_r = run->_r; c->_c = run->_c; c->_len = run->_len;
     c->_or = run->_or; c->_oc = run->_oc;
+    c->_left = run->_left;
     c->_deleted = run->_deleted;
+    c->_dr = run->_dr; c->_dc = run->_dc;
     c->_text = run->_text ? [run->_text mutableCopy] : nil;
     c->_attrs = run->_attrs ?: @{};
     return c;
@@ -347,6 +355,7 @@ static TTRun *TTCopyRun(TTRun *run) {
         _inserts = [NSMutableArray array];
         _updates = [NSMutableArray array];
         _version = [NSMutableDictionary dictionary];
+        _collected = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -354,7 +363,8 @@ static TTRun *TTCopyRun(TTRun *run) {
 - (void)addInsert:(TTRun *)run {
     TTRun *last = _inserts.lastObject;
     if (last && last->_r == run->_r && last->_c + last->_len == run->_c && last->_deleted == run->_deleted &&
-        run->_or == run->_r && run->_oc == run->_c - 1 && [last->_attrs isEqualToDictionary:run->_attrs]) {
+        run->_or == run->_r && run->_oc == run->_c - 1 && !run->_left && last->_dr == run->_dr && last->_dc == run->_dc &&
+        [last->_attrs isEqualToDictionary:run->_attrs]) {
         last->_len += run->_len;
         if (run->_text) [(NSMutableString *)last->_text appendString:run->_text];
         return;
@@ -365,7 +375,7 @@ static TTRun *TTCopyRun(TTRun *run) {
 - (void)addUpdate:(TTRun *)run {
     TTRun *last = _updates.lastObject;
     if (last && last->_r == run->_r && last->_c + last->_len == run->_c && last->_deleted == run->_deleted &&
-        [last->_attrs isEqualToDictionary:run->_attrs]) {
+        last->_dr == run->_dr && last->_dc == run->_dc && [last->_attrs isEqualToDictionary:run->_attrs]) {
         last->_len += run->_len;
         return;
     }
@@ -395,8 +405,10 @@ NSData *TTEncodePayload(TTPayload *p) {
         for (TTRun *run in list) {
             TTNote(seen, run->_r);
             TTNote(seen, run->_or);
+            TTNote(seen, run->_dr);
             for (TTRegister *g in run->_attrs.allValues) TTNote(seen, g->_replica);
         }
+    for (NSNumber *r in p.collected) TTNote(seen, r.unsignedLongLongValue);
     NSArray<NSNumber *> *replicas = [seen.allObjects sortedArrayUsingSelector:@selector(compare:)];
     NSMutableDictionary *index = [NSMutableDictionary dictionary];
     for (NSUInteger i = 0; i < replicas.count; i++) index[replicas[i]] = @(i);
@@ -417,13 +429,19 @@ NSData *TTEncodePayload(TTPayload *p) {
     for (TTRun *run in p.inserts) {
         BOOL implicit = run->_or && prev && run->_or == prev->_r && run->_oc == prev->_c + prev->_len - 1;
         BOOL attrs = !run->_deleted && run->_attrs.count;
+        BOOL stamp = run->_deleted && run->_dr;
         TTPutVarint(d, [index[@(run->_r)] unsignedLongLongValue]);
         TTPutVarint(d, run->_c);
         TTPutVarint(d, run->_len);
-        TTPutByte(d, (run->_deleted ? 1 : 0) | (run->_or ? 2 : 0) | (implicit ? 4 : 0) | (attrs ? 8 : 0));
+        TTPutByte(d, (run->_deleted ? 1 : 0) | (run->_or ? 2 : 0) | (implicit ? 4 : 0) | (attrs ? 8 : 0) | (run->_left ? 16 : 0) |
+                     (stamp ? 32 : 0));
         if (run->_or && !implicit) {
             TTPutVarint(d, [index[@(run->_or)] unsignedLongLongValue]);
             TTPutVarint(d, run->_oc);
+        }
+        if (stamp) {
+            TTPutVarint(d, [index[@(run->_dr)] unsignedLongLongValue]);
+            TTPutVarint(d, run->_dc);
         }
         if (!run->_deleted) TTPutBytes(d, TTWTF8(run->_text ?: @""));
         if (attrs) TTPutAttrs(d, run->_attrs, index);
@@ -433,11 +451,34 @@ NSData *TTEncodePayload(TTPayload *p) {
     TTPutVarint(d, p.updates.count);
     for (TTRun *run in p.updates) {
         BOOL attrs = !run->_deleted && run->_attrs.count;
+        BOOL stamp = run->_deleted && run->_dr;
         TTPutVarint(d, [index[@(run->_r)] unsignedLongLongValue]);
         TTPutVarint(d, run->_c);
         TTPutVarint(d, run->_len);
-        TTPutByte(d, (run->_deleted ? 1 : 0) | (attrs ? 8 : 0));
+        TTPutByte(d, (run->_deleted ? 1 : 0) | (attrs ? 8 : 0) | (stamp ? 32 : 0));
+        if (stamp) {
+            TTPutVarint(d, [index[@(run->_dr)] unsignedLongLongValue]);
+            TTPutVarint(d, run->_dc);
+        }
         if (attrs) TTPutAttrs(d, run->_attrs, index);
+    }
+
+    NSMutableArray *gone = [NSMutableArray array];
+    for (NSNumber *r in p.collected)
+        if (p.collected[r].count) [gone addObject:r];
+    [gone sortUsingSelector:@selector(compare:)];
+    TTPutVarint(d, gone.count);
+    for (NSNumber *r in gone) {
+        TTPutVarint(d, [index[r] unsignedLongLongValue]);
+        NSMutableArray<NSValue *> *ranges = [NSMutableArray array];
+        [p.collected[r] enumerateRangesUsingBlock:^(NSRange range, BOOL *stop) {
+            [ranges addObject:[NSValue valueWithRange:range]];
+        }];
+        TTPutVarint(d, ranges.count);
+        for (NSValue *v in ranges) {
+            TTPutVarint(d, v.rangeValue.location);
+            TTPutVarint(d, v.rangeValue.length);
+        }
     }
     return d;
 }
@@ -480,10 +521,14 @@ TTPayload *TTDecodePayload(NSData *data, NSError **error) {
         if (error) *error = TTMakeError(TopoTextErrorCorrupt, @"Not TopoText data");
         return nil;
     }
-    if (((const uint8_t *)data.bytes)[2] != TTMagic[2]) {
+    uint8_t format = ((const uint8_t *)data.bytes)[2];
+    if (format < 1 || format > TTMagic[2]) {
         if (error) *error = TTMakeError(TopoTextErrorFormat, @"Written by a newer TopoText");
         return nil;
     }
+    /* Format 1: no left children, no deleters (RGA is Fugue with right
+       children only, so its order is kept). */
+    uint8_t insertFlags = format == 1 ? 15 : 63, updateFlags = format == 1 ? 9 : 41;
     r.p += 3;
     TTPayload *p = [TTPayload new];
 
@@ -511,8 +556,11 @@ TTPayload *TTDecodePayload(NSData *data, NSError **error) {
         TTRun *run = [TTRun new];
         if (!TTGetSpanOf(&r, run, replicas)) { r.bad = YES; break; }
         uint8_t flags = TTGetByte(&r);
-        if (flags & ~15) { r.bad = YES; break; }
+        if (flags & ~insertFlags) { r.bad = YES; break; }
         run->_deleted = flags & 1;
+        run->_left = (flags & 16) != 0;
+        if ((flags & 16) && !(flags & 2)) { r.bad = YES; break; }
+        if ((flags & 32) && !run->_deleted) { r.bad = YES; break; }
         if (flags & 4) {
             if (!(flags & 2) || !prev) { r.bad = YES; break; }
             run->_or = prev->_r;
@@ -521,6 +569,11 @@ TTPayload *TTDecodePayload(NSData *data, NSError **error) {
             run->_or = TTGetReplica(&r, replicas);
             run->_oc = TTGetVarint(&r);
             if (run->_oc == 0) r.bad = YES;
+        }
+        if (flags & 32) {
+            run->_dr = TTGetReplica(&r, replicas);
+            run->_dc = TTGetVarint(&r);
+            if (run->_dc == 0) r.bad = YES;
         }
         if (!run->_deleted) {
             run->_text = TTGetText(&r);
@@ -538,10 +591,33 @@ TTPayload *TTDecodePayload(NSData *data, NSError **error) {
         TTRun *run = [TTRun new];
         if (!TTGetSpanOf(&r, run, replicas)) { r.bad = YES; break; }
         uint8_t flags = TTGetByte(&r);
-        if (flags & ~9) { r.bad = YES; break; }
+        if (flags & ~updateFlags) { r.bad = YES; break; }
+        if ((flags & 32) && !(flags & 1)) { r.bad = YES; break; }
         run->_deleted = flags & 1;
+        if (flags & 32) {
+            run->_dr = TTGetReplica(&r, replicas);
+            run->_dc = TTGetVarint(&r);
+            if (run->_dc == 0) r.bad = YES;
+        }
         run->_attrs = (flags & 8) ? TTGetAttrs(&r, replicas) : @{};
         [p.updates addObject:run];
+    }
+
+    if (format >= 2) {
+        n = TTGetVarint(&r);
+        if (n > replicas.count) r.bad = YES;
+        for (uint64_t i = 0; i < n && !r.bad; i++) {
+            TTReplica rep = TTGetReplica(&r, replicas);
+            uint64_t k = TTGetVarint(&r);
+            if (k > (uint64_t)(r.end - r.p)) { r.bad = YES; break; }
+            NSMutableIndexSet *set = [NSMutableIndexSet indexSet];
+            for (uint64_t j = 0; j < k && !r.bad; j++) {
+                uint64_t start = TTGetVarint(&r), len = TTGetVarint(&r);
+                if (start == 0 || len == 0 || start >= NSNotFound || len >= NSNotFound - start) { r.bad = YES; break; }
+                [set addIndexesInRange:NSMakeRange((NSUInteger)start, (NSUInteger)len)];
+            }
+            if (!r.bad) p.collected[@(rep)] = set;
+        }
     }
 
     if (r.bad || r.p != r.end) {

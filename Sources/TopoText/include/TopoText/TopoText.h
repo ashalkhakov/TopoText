@@ -150,6 +150,28 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 /* A new copy with both, writing as this one. */
 - (TopoText *)mergedWith:(TopoText *)other;
 
+#pragma mark Tombstones
+
+/* A deleted character keeps its id, and its place, so that edits made
+   before its deletion was seen still find where they go. Once every copy
+   has seen it deleted (its insertion and deletion both in version): if no
+   character is placed by it (text deleted at the end, say), it goes; if one
+   is (text after it in the same run), it stays, as Yjs keeps such ids too,
+   but tombstones next to each other become one record. How many
+   characters went.
+
+   version: what every copy is known to have seen, as one that hears from
+   them all can tell (the lowest of their versions). Got wrong, nothing is
+   lost: the ids that went are kept as ranges (a few numbers), in -data and
+   in deltas. One that comes back from a copy that had not seen it deleted
+   is placed again, still deleted, and that copy deletes it when it hears
+   it went; an edit placed by one is refused as missing history, and
+   -mergeText: takes the whole state, which brings it back. Copies that
+   collected differently have the same text and merge as before, though
+   their -data differs. */
+- (NSUInteger)collectTombstonesSeenBy:(TTVersion *)version;
+@property (nonatomic, readonly) NSUInteger tombstoneCount;
+
 @end
 
 /* Undo of a copy's own edits, as edits on the CRDT. What this copy edits
