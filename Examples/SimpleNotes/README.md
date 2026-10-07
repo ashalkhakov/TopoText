@@ -429,6 +429,19 @@ This runs four things:
 CI runs all of these: macOS and iOS against Apple's Core Data, and GNUstep
 against FreeCoreData, SQLite, PostgreSQL and MariaDB.
 
+## Undo
+
+Undo and Redo work as in any text view, and keep working when a sync
+changes the open note: what you typed, deleted or formatted is undone, and
+what came from another device stays. Typing goes into one undo step until
+you move the insertion point or start a new line. Table cells undo the same
+way; adding or deleting a table's rows and columns can't be undone yet.
+
+The text view's own undo keeps positions, which a merge makes wrong, so it
+is off. `SNTextBinding` keeps the steps instead, by the characters' ids
+(`TopoText (Undo)`), in the window's undo manager (on iOS, an
+`SNUndoManager` that takes only the binding's).
+
 ## Rich text
 
 A note's text uses plain values that sync and merge the same way
@@ -487,5 +500,3 @@ stays where the item was.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Undo across a merge: the undo stack is cleared when a sync changes the
-  open note.

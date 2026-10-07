@@ -100,7 +100,8 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // (a checklist item begun on the last line, say).
 - (NSDictionary<NSString *, id> *)typingAttributes;
 - (void)setTypingAttributes:(NSDictionary<NSString *, id> *)attributes;
-// Cleared when remote edits come in: what it remembers no longer fits.
+// Where undo goes (SNSystemUndoManager says which, by system): the
+// binding's steps, by the characters' ids, which a merge leaves right.
 - (nullable NSUndoManager *)undoManager;
 @end
 

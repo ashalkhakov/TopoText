@@ -27,7 +27,7 @@ ADDITIONAL_OBJCFLAGS += -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 \
 	-fconstant-string-class=NSConstantString -fobjc-exceptions -Wall -Wno-unused-parameter
 
 TopoTextTests_NEEDS_GUI = no
-TopoTextTests_OBJC_FILES = TopoTextTests.m TopoTextFuzzTests.m TTTableTests.m
+TopoTextTests_OBJC_FILES = TopoTextTests.m TopoTextFuzzTests.m TTTableTests.m TTUndoTests.m
 TopoTextTests_INCLUDE_DIRS = $(TT_INCLUDE_DIRS)
 TopoTextTests_LIB_DIRS = -L../obj
 TopoTextTests_OBJC_LIBS += -lTopoText -lXCTest

@@ -152,6 +152,33 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 
 @end
 
+/* Undo of a copy's own edits, as edits on the CRDT. What this copy edits
+   between -beginUndoStep and -endUndoStep is kept by its characters' ids,
+   not by positions. Undone later, after edits from elsewhere were merged
+   in, it does what was meant and nothing else: the text it typed is taken
+   out wherever that is now (what others typed among it stays), what it
+   deleted is put back where it was, and the attributes it set are set back
+   on the characters still there (only the keys it set; others' stay). The
+   undo is an edit of this copy's like any, merged and synced so; and it is
+   recorded in turn, as the step that redoes it. */
+@interface TTUndoStep : NSObject
+@property (nonatomic, readonly, getter=isEmpty) BOOL empty;
+@end
+
+@interface TopoText (Undo)
+/* This copy's edits from now on kept in a new step, or in step (typing that
+   goes on, kept as one), until -endUndoStep. */
+- (void)beginUndoStep;
+- (void)continueUndoStep:(TTUndoStep *)step;
+/* The step recorded (empty when nothing was edited). */
+- (TTUndoStep *)endUndoStep;
+@property (nonatomic, readonly, nullable) TTUndoStep *recordingUndoStep;
+/* step's edits undone, as one new step of this copy's: what that did to the
+   visible text, in order (TTEdit, as a merge's, for a view), and the step
+   that redoes it. */
+- (NSArray<TTEdit *> *)undoStep:(TTUndoStep *)step redoStep:(TTUndoStep *_Nullable *_Nullable)redo;
+@end
+
 /* Paragraphs. A paragraph is the text up to and including a newline (\n),
    or the text after the last one. Formatting of a paragraph as a whole - a
    heading, a list item, whether a checklist item is checked - is set on

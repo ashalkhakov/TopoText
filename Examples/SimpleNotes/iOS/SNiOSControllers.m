@@ -1,6 +1,7 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
+#import "SNUndoTextView.h"
 #import "SNModel.h"
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -593,7 +594,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     NSTextContainer *container = [[NSTextContainer alloc] initWithSize:CGSizeMake(old.bounds.size.width, CGFLOAT_MAX)];
     container.widthTracksTextView = YES;
     [lm addTextContainer:container];
-    UITextView *tv = [[UITextView alloc] initWithFrame:old.frame textContainer:container];
+    /* Undo the binding's, by ids: it survives a sync's merge (SNUndoTextView). */
+    UITextView *tv = [[SNUndoTextView alloc] initWithFrame:old.frame textContainer:container];
     tv.translatesAutoresizingMaskIntoConstraints = NO;
     tv.backgroundColor = old.backgroundColor;
     tv.font = old.font;

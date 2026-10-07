@@ -87,6 +87,13 @@ FOUNDATION_EXPORT NSData *_Nullable SNSystemDataOfAttachment(NSTextAttachment *a
 FOUNDATION_EXPORT CGFloat SNSystemContainerWidth(NSTextContainer *container);
 // Where a text view's text container is, in the view.
 FOUNDATION_EXPORT SNPoint SNSystemTextOrigin(id<SNTextViewing> view);
+// The undo manager a text view's binding keeps its steps in: its window's
+// (AppKit: the text view's own undo is off), its own (UIKit's, which takes
+// only the binding's: SNUndoTextView).
+FOUNDATION_EXPORT NSUndoManager *_Nullable SNSystemUndoManager(id<SNTextViewing> view);
+// A text view's text changed, not by typing (an undo): its delegate told,
+// as typing tells it.
+FOUNDATION_EXPORT void SNSystemTextChanged(id<SNTextViewing> view);
 // A text view's drawing done again (the list markers: a range of its
 // characters, or all).
 FOUNDATION_EXPORT void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range);

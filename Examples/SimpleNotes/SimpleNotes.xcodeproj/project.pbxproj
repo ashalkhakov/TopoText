@@ -87,6 +87,10 @@
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
 		};
+		330A0C62A452B44EBD481FEA /* SNUndoTextView.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E24E63BBA2A66A746F957E15;
+		};
 		34D439D972927301D70C87E5 /* ODataSync.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
@@ -732,6 +736,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		036F46B4B4BE3204D3B8A566 /* SNUndoTextView.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/SNUndoTextView.h;
+			sourceTree = "<group>";
+			name = SNUndoTextView.h;
+		};
 		054A76FC40094ADDD3CBC934 /* SNSmartFolderViewController.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1190,6 +1201,13 @@
 			sourceTree = "<group>";
 			name = seed.py;
 		};
+		E24E63BBA2A66A746F957E15 /* SNUndoTextView.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNUndoTextView.m;
+			sourceTree = "<group>";
+			name = SNUndoTextView.m;
+		};
 		E92F4F34642FF032BAA53F88 /* SNNote.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1392,6 +1410,8 @@
 				6E9D5B559DEB6B7E294A4AB3,
 				0892E92D83242A6457DEFF1A,
 				054A76FC40094ADDD3CBC934,
+				036F46B4B4BE3204D3B8A566,
+				E24E63BBA2A66A746F957E15,
 				CCF418C8E3E8B505943CEE74,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
@@ -1645,6 +1665,7 @@
 				7A872943A4DF7167C961B66A,
 				72A18D153A49CB051B239C79,
 				57C340E00E089F2758BECFEA,
+				330A0C62A452B44EBD481FEA,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,
 				37DFBF31EE8E129D11C4F1E0,

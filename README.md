@@ -73,6 +73,13 @@ array):
   takes its cells with it. A table is exchanged and merged whole, because
   its pieces' clocks are each their own. The papers behind it, and behind
   TopoText's text, are in [docs/References.md](docs/References.md).
+- **Undo** of one's own edits survives others' (`TopoText (Undo)`). Between
+  `-beginUndoStep` and `-endUndoStep` a copy keeps what it edits by the
+  characters' ids, not their positions. Undone after other edits were merged
+  in, it does what was meant: text it typed comes out wherever it is now,
+  text it deleted goes back where it was, and the attributes it set are set
+  back, only those keys. The undo is an ordinary edit, so it merges and
+  syncs. It is recorded in turn, as the step that redoes it.
 - **Values are property-list types**: strings, numbers, data, dates, and arrays
   and dictionaries of them. NSNull removes a key. An editor maps its fonts and
   colours to such values and back.
@@ -226,7 +233,6 @@ pair must still encode.
   not its text, forever. That costs a few bytes per deleted run.
   Collecting them safely needs every replica to have seen the deletion, which
   ODataSync's version vectors could tell.
-- **Undo** of one's own edits, as edits on the CRDT.
 - **Deltas over the wire.** ODataSync sends the whole state of a changed note.
   Exchanging `-deltaSinceVersion:` instead would need an OData action of its
   own, or a peer route.

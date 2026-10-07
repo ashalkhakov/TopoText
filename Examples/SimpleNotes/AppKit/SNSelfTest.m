@@ -165,6 +165,18 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([bike tryToPerform:@selector(toggleBold:) with:nil] &&
               [[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
               @"Bold in a cell, from the menu: the cell's text bold");
+        /* Undo in a cell: its typing undone, as the note's is. (Here all of
+           the test is one event of the run loop, one undo group: begun
+           afresh, so Undo has only this.) */
+        SNWait(0.3, ^BOOL { return NO; });
+        [tv.window.undoManager removeAllActions];
+        bike.selectedRange = NSMakeRange(4, 0);
+        [bike insertText:@"s"];
+        SNWait(0.3, ^BOOL { return NO; });
+        BOOL typedS = [[grid.table textAtRow:0 column:0].string isEqual:@"Bikes"];
+        SNSay(typedS && [bike tryToPerform:@selector(undo:) with:nil] && [[grid.table textAtRow:0 column:0].string isEqual:@"Bike"] &&
+              [bike.string isEqual:@"Bike"], [NSString stringWithFormat:@"Undo in a cell (%@)", [grid.table textAtRow:0 column:0].string]);
+        SNWait(0.3, ^BOOL { return NO; });
         NSMenuItem *titleItem = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(styleTitle:) keyEquivalent:@""];
         SNSay(![window validateMenuItem:titleItem], @"no Title in a cell");
         /* Over its place in the text, which keeps its room. */
@@ -264,6 +276,31 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         }
         SNSay([[other sortOrderOfFolder:workThere] isEqual:@(SNSortByTitle)] && [other countOfNotesInFolder:smartThere] == 2,
               @"the folder's order and the smart folder on the second device");
+        /* Undo after a sync changed the note: what was typed here undone,
+           what came from the other device kept. */
+        [window showAllNotes];
+        [window selectNoteTitled:@"Standup notes"];
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertText:@" undo me"];
+        SNWait(0.3, ^BOOL { return NO; });
+        [notes saveAll];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNNote *standupThere = [other notesInFolder:nil matching:@"Standup"].firstObject;
+        SNNoteEditor *elsewhere = [other editorForNote:standupThere];
+        /* In its second line: the title stays. */
+        [elsewhere.text insertString:@"(Monday) " atIndex:[elsewhere.text.string rangeOfString:@"\n"].location + 1 attributes:nil];
+        [elsewhere textDidChange];
+        [elsewhere close];
+        [other syncAndWait:NULL];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing && [tv.string containsString:@"(Monday) "]; });
+        SNSay([tv.string containsString:@"(Monday) "] && [tv.string hasSuffix:@" undo me"], @"the other device's edit merged into the open note");
+        SNSay([tv tryToPerform:@selector(undo:) with:nil] && [tv.string containsString:@"\n(Monday) sync engine"] && ![tv.string containsString:@"undo me"],
+              [NSString stringWithFormat:@"Undo after the merge: the typing undone, the other's edit kept (%@)", [tv.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        SNSay([tv tryToPerform:@selector(redo:) with:nil] && [tv.string hasSuffix:@" undo me"] && [tv.string containsString:@"(Monday) "],
+              @"and Redo");
         /* A file: a card in the note, written out to be opened. */
         [window showAllNotes];
         [window selectNoteTitled:@"Weekend"];

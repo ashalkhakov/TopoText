@@ -247,6 +247,39 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNWait(0.5, ^BOOL { return NO; });
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
+        /* Undo after a sync changed the note: what was typed here undone,
+           what came from the other device kept. */
+        SNNote *standup = [notes notesInFolder:nil matching:@"Standup"].firstObject;
+        SNEditorViewController *se = [[SNEditorViewController alloc] initWithNotes:notes note:standup];
+        [navigation pushViewController:se animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        UITextView *stv = se.textView;
+        [stv becomeFirstResponder];
+        stv.selectedRange = NSMakeRange(stv.text.length, 0);
+        [stv insertText:@" undo me"];
+        SNWait(0.3, ^BOOL { return NO; });
+        [notes saveAll];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNNoteEditor *elsewhere = [other editorForNote:[other notesInFolder:nil matching:@"Standup"].firstObject];
+        /* In its second line: the title stays. */
+        [elsewhere.text insertString:@"(Monday) " atIndex:[elsewhere.text.string rangeOfString:@"\n"].location + 1 attributes:nil];
+        [elsewhere textDidChange];
+        [elsewhere close];
+        [other syncAndWait:NULL];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing && [stv.text containsString:@"(Monday) "]; });
+        SNSay([stv.text containsString:@"(Monday) "] && [stv.text hasSuffix:@" undo me"], @"the other device's edit merged into the open note");
+        [[UIApplication sharedApplication] sendAction:@selector(undo:) to:nil from:nil forEvent:nil];
+        SNSay([stv.text containsString:@"\n(Monday) sync engine"] && ![stv.text containsString:@"undo me"],
+              [NSString stringWithFormat:@"Undo after the merge: the typing undone, the other's edit kept (%@)",
+                                         [stv.text stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        [[UIApplication sharedApplication] sendAction:@selector(redo:) to:nil from:nil forEvent:nil];
+        SNSay([stv.text hasSuffix:@" undo me"] && [stv.text containsString:@"(Monday) "], @"and Redo");
+        [stv resignFirstResponder];
+        [navigation popViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

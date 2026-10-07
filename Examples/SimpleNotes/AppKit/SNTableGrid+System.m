@@ -21,7 +21,9 @@
     tv.richText = YES;
     tv.importsGraphics = NO;
     tv.drawsBackground = NO;
-    tv.allowsUndo = YES;
+    /* Undo is the cell's binding's (by ids, which a merge leaves right), not
+       the text view's (by positions). */
+    tv.allowsUndo = NO;
     tv.font = SNFontFor(nil, NO, NO);
     tv.textColor = SNSystemTextColor();
     tv.textContainerInset = NSMakeSize(4, 5);

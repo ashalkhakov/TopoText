@@ -73,6 +73,9 @@ static const NSInteger SNMoveToMenuTag = 7001;
 - (void)windowDidLoad {
     [super windowDidLoad];
     [_textView useListLayoutManager];
+    /* Undo is the binding's: by the characters' ids, so it survives a
+       sync's edits; the text view's own (by positions) would not. */
+    _textView.allowsUndo = NO;
     _textView.textContainerInset = NSMakeSize(14, 14);
     _textView.textContainer.widthTracksTextView = YES;
     /* The whole pane is the note's: a click below its last line is in it

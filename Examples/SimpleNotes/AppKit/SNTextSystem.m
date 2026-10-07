@@ -212,6 +212,15 @@ SNPoint SNSystemTextOrigin(id<SNTextViewing> view) {
     return [(NSTextView *)view textContainerOrigin];
 }
 
+NSUndoManager *SNSystemUndoManager(id<SNTextViewing> view) {
+    if ([(id)view isKindOfClass:[NSView class]]) return [(NSView *)view window].undoManager;
+    return view.undoManager;
+}
+
+void SNSystemTextChanged(id<SNTextViewing> view) {
+    if ([(id)view isKindOfClass:[NSTextView class]]) [(NSTextView *)view didChangeText];
+}
+
 void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
     [layoutManager.firstTextView setNeedsDisplay:YES];
 }

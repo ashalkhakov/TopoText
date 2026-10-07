@@ -165,6 +165,16 @@ SNPoint SNSystemTextOrigin(id<SNTextViewing> view) {
     return CGPointMake(inset.left, inset.top);
 }
 
+NSUndoManager *SNSystemUndoManager(id<SNTextViewing> view) {
+    return view.undoManager;
+}
+
+void SNSystemTextChanged(id<SNTextViewing> view) {
+    if (![(id)view isKindOfClass:[UITextView class]]) return;
+    UITextView *tv = (UITextView *)view;
+    if ([tv.delegate respondsToSelector:@selector(textViewDidChange:)]) [tv.delegate textViewDidChange:tv];
+}
+
 void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
     NSUInteger len = layoutManager.textStorage.length;
     range = NSIntersectionRange(range, NSMakeRange(0, len));

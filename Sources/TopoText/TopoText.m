@@ -105,6 +105,57 @@ static inline BOOL TTIdGreater(uint64_t c1, TTReplica r1, uint64_t c2, TTReplica
 }
 @end
 
+#pragma mark undo steps
+
+/* Characters (_r, _c) to (_r, _c + _len - 1): ids, not positions. */
+@interface TTSpan : NSObject {
+@public
+    TTReplica _r;
+    uint64_t _c;
+    NSUInteger _len;
+}
+@end
+@implementation TTSpan
+@end
+
+static TTSpan *TTMakeSpan(TTReplica r, uint64_t c, NSUInteger len) {
+    TTSpan *s = [TTSpan new];
+    s->_r = r;
+    s->_c = c;
+    s->_len = len;
+    return s;
+}
+
+typedef NS_ENUM(NSInteger, TTUndoKind) { TTUndoInserted, TTUndoDeleted, TTUndoAttributes };
+
+/* One edit kept: characters typed (their span); characters deleted (their
+   spans, text, and attributes in runs: location, length, attributes); or
+   attributes set (each span's earlier values of the keys set, NSNull for
+   none). */
+@interface TTUndoRecord : NSObject {
+@public
+    TTUndoKind _kind;
+    NSMutableArray<TTSpan *> *_spans;
+    NSString *_text;
+    NSArray<NSDictionary *> *_runs;
+    NSMutableArray<NSDictionary *> *_old;
+}
+@end
+@implementation TTUndoRecord
+@end
+
+@implementation TTUndoStep {
+@public
+    NSMutableArray<TTUndoRecord *> *_records;
+}
+- (instancetype)init {
+    if ((self = [super init])) _records = [NSMutableArray array];
+    return self;
+}
+- (BOOL)isEmpty { return _records.count == 0; }
+- (NSString *)description { return [NSString stringWithFormat:@"<TTUndoStep %lu edits>", (unsigned long)_records.count]; }
+@end
+
 #pragma mark registers
 
 static NSDictionary *TTVisible(NSDictionary<NSString *, TTRegister *> *regs) {
@@ -160,6 +211,13 @@ static TTReplica TTSeedReplica(NSString *string) {
 
 #pragma mark the text
 
+/* Kept for undo as this copy edits (TopoText (Undo), below). */
+@interface TopoText (UndoRecording)
+- (void)recordInsertOf:(NSUInteger)n;
+- (void)recordDeleteOf:(NSRange)range;
+- (void)recordAttributes:(NSDictionary *)attrs exclusive:(BOOL)exclusive range:(NSRange)range;
+@end
+
 @implementation TopoText {
     TTReplica _replica;
     uint64_t _clock;
@@ -167,6 +225,7 @@ static TTReplica TTSeedReplica(NSString *string) {
     NSMutableDictionary<NSNumber *, NSMutableArray<TTRun *> *> *_byReplica; /* each replica's runs by clock */
     NSMutableDictionary<NSNumber *, NSNumber *> *_seen;                /* the version */
     NSMutableString *_string;                                          /* the live characters */
+    TTUndoStep *_recording;                                            /* this copy's edits kept, for undo */
 }
 
 + (TTReplica)randomReplica {
@@ -397,6 +456,8 @@ static TTReplica TTSeedReplica(NSString *string) {
     TTCheckAttributes(attrs);
     NSUInteger n = string.length;
     if (!n) return;
+    /* Its characters' ids: this copy's next clocks, either way below. */
+    if (_recording) [self recordInsertOf:n];
     NSDictionary *birth = TTBirth(attrs);
     TTReplica or = 0;
     uint64_t oc = 0;
@@ -454,6 +515,7 @@ static TTReplica TTSeedReplica(NSString *string) {
 
 - (void)deleteCharactersInRange:(NSRange)range {
     [self checkRange:range];
+    if (_recording && range.length) [self recordDeleteOf:range];
     for (TTRun *run in [self liveRunsInRange:range]) {
         run->_deleted = YES;
         run->_text = nil;
@@ -479,6 +541,7 @@ static TTReplica TTSeedReplica(NSString *string) {
     NSMutableDictionary *regs = [NSMutableDictionary dictionary];
     for (NSString *k in attrs) regs[k] = [TTRegister registerWithValue:[attrs[k] copy] clock:c replica:_replica];
     TTRegister *removed = [TTRegister registerWithValue:[NSNull null] clock:c replica:_replica];
+    if (_recording) [self recordAttributes:attrs exclusive:exclusive range:range];
     for (TTRun *run in [self liveRunsInRange:range]) {
         NSMutableDictionary *m = [run->_attrs mutableCopy];
         [m addEntriesFromDictionary:regs];
@@ -813,6 +876,171 @@ static TTRun *TTPendingRun(NSDictionary<NSNumber *, NSArray<TTRun *> *> *pending
     TopoText *t = [self copy];
     [t mergeText:other];
     return t;
+}
+
+@end
+
+#pragma mark undo
+
+@implementation TopoText (Undo)
+
+- (TTUndoStep *)recordingUndoStep { return _recording; }
+
+- (void)beginUndoStep { _recording = [TTUndoStep new]; }
+
+- (void)continueUndoStep:(TTUndoStep *)step { _recording = step; }
+
+- (TTUndoStep *)endUndoStep {
+    TTUndoStep *step = _recording ?: [TTUndoStep new];
+    _recording = nil;
+    return step;
+}
+
+/* n characters about to be typed: this copy's next n clocks; typing on
+   right after the last ones kept, the same record, longer. */
+- (void)recordInsertOf:(NSUInteger)n {
+    uint64_t c = _clock + 1;
+    TTUndoRecord *last = _recording->_records.lastObject;
+    TTSpan *span = last && last->_kind == TTUndoInserted ? last->_spans.lastObject : nil;
+    if (span && span->_r == _replica && span->_c + span->_len == c) {
+        span->_len += n;
+        return;
+    }
+    TTUndoRecord *r = [TTUndoRecord new];
+    r->_kind = TTUndoInserted;
+    r->_spans = [NSMutableArray arrayWithObject:TTMakeSpan(_replica, c, n)];
+    [_recording->_records addObject:r];
+}
+
+/* range about to be deleted: its characters' ids, its text and its
+   attributes, to put back. */
+- (void)recordDeleteOf:(NSRange)range {
+    TTUndoRecord *r = [TTUndoRecord new];
+    r->_kind = TTUndoDeleted;
+    r->_spans = [NSMutableArray array];
+    for (TTRun *run in [self liveRunsInRange:range]) [r->_spans addObject:TTMakeSpan(run->_r, run->_c, run->_len)];
+    r->_text = [_string substringWithRange:range];
+    NSMutableArray *runs = [NSMutableArray array];
+    for (NSDictionary *a in [self attributeRuns]) {
+        NSRange ar = NSMakeRange([a[@"location"] unsignedIntegerValue], [a[@"length"] unsignedIntegerValue]);
+        NSRange in = NSIntersectionRange(ar, range);
+        if (in.length) [runs addObject:@{ @"location": @(in.location - range.location), @"length": @(in.length), @"attributes": a[@"attributes"] }];
+    }
+    r->_runs = runs;
+    [_recording->_records addObject:r];
+}
+
+/* Attributes about to be set on range: each run's earlier values of the
+   keys that change (all of its keys, when the set is exclusive). */
+- (void)recordAttributes:(NSDictionary *)attrs exclusive:(BOOL)exclusive range:(NSRange)range {
+    if (!range.length) return;
+    TTUndoRecord *r = [TTUndoRecord new];
+    r->_kind = TTUndoAttributes;
+    r->_spans = [NSMutableArray array];
+    r->_old = [NSMutableArray array];
+    for (TTRun *run in [self liveRunsInRange:range]) {
+        NSDictionary *now = TTVisible(run->_attrs);
+        NSMutableSet *keys = [NSMutableSet setWithArray:attrs.allKeys];
+        if (exclusive) [keys addObjectsFromArray:now.allKeys];
+        NSMutableDictionary *old = [NSMutableDictionary dictionary];
+        for (NSString *k in keys) old[k] = now[k] ?: [NSNull null];
+        [r->_spans addObject:TTMakeSpan(run->_r, run->_c, run->_len)];
+        [r->_old addObject:old];
+    }
+    [_recording->_records addObject:r];
+}
+
+/* Where a span's live characters are now: visible ranges, in order. */
+- (NSArray<NSValue *> *)liveRangesOfSpan:(TTSpan *)span {
+    NSMutableArray *ranges = [NSMutableArray array];
+    uint64_t c = span->_c, end = span->_c + span->_len;
+    while (c < end) {
+        NSUInteger off;
+        TTRun *run = [self runWithReplica:span->_r clock:c offset:&off];
+        if (!run) break;
+        NSUInteger n = (NSUInteger)MIN((uint64_t)(run->_len - off), end - c);
+        if (!run->_deleted) {
+            NSUInteger at = [self visibleIndexOfPosition:[_runs indexOfObjectIdenticalTo:run]] + off;
+            NSValue *last = ranges.lastObject;
+            if (last && NSMaxRange(last.rangeValue) == at)
+                ranges[ranges.count - 1] = [NSValue valueWithRange:NSMakeRange(last.rangeValue.location, last.rangeValue.length + n)];
+            else
+                [ranges addObject:[NSValue valueWithRange:NSMakeRange(at, n)]];
+        }
+        c += n;
+    }
+    return ranges;
+}
+
+/* Where a deleted character stands now: how many live characters come
+   before it. */
+- (NSUInteger)indexOfDeletedReplica:(TTReplica)r clock:(uint64_t)c {
+    NSUInteger off;
+    TTRun *run = [self runWithReplica:r clock:c offset:&off];
+    if (!run) return NSNotFound;
+    NSUInteger at = [self visibleIndexOfPosition:[_runs indexOfObjectIdenticalTo:run]];
+    return run->_deleted ? at : at + off;
+}
+
+/* The attribute edits a view needs for range, as it now is. */
+- (void)addAttributeEditsIn:(NSRange)range to:(NSMutableArray<TTEdit *> *)edits {
+    for (NSDictionary *a in [self attributeRuns]) {
+        NSRange ar = NSMakeRange([a[@"location"] unsignedIntegerValue], [a[@"length"] unsignedIntegerValue]);
+        NSRange in = NSIntersectionRange(ar, range);
+        if (in.length) [edits addObject:[TTEdit editWithKind:TTEditAttributes range:in string:nil attributes:a[@"attributes"]]];
+    }
+}
+
+- (NSArray<TTEdit *> *)undoStep:(TTUndoStep *)step redoStep:(TTUndoStep **)redo {
+    TTUndoStep *outer = _recording;
+    _recording = [TTUndoStep new];
+    NSMutableArray<TTEdit *> *edits = [NSMutableArray array];
+    for (TTUndoRecord *r in step->_records.reverseObjectEnumerator) {
+        switch (r->_kind) {
+        case TTUndoInserted: {
+            /* What was typed taken out, wherever it is; last first, so the
+               ranges before stay where they are. */
+            NSMutableArray<NSValue *> *ranges = [NSMutableArray array];
+            for (TTSpan *s in r->_spans) [ranges addObjectsFromArray:[self liveRangesOfSpan:s]];
+            [ranges sortUsingComparator:^NSComparisonResult(NSValue *a, NSValue *b) {
+                return a.rangeValue.location > b.rangeValue.location ? NSOrderedAscending
+                     : a.rangeValue.location < b.rangeValue.location ? NSOrderedDescending : NSOrderedSame;
+            }];
+            for (NSValue *v in ranges) {
+                [self deleteCharactersInRange:v.rangeValue];
+                [edits addObject:[TTEdit editWithKind:TTEditDelete range:v.rangeValue string:nil attributes:nil]];
+            }
+            break;
+        }
+        case TTUndoDeleted: {
+            /* What was deleted, back where its first character was. */
+            TTSpan *first = r->_spans.firstObject;
+            NSUInteger at = first ? [self indexOfDeletedReplica:first->_r clock:first->_c] : NSNotFound;
+            if (at == NSNotFound) break;
+            for (NSDictionary *run in r->_runs) {
+                NSRange in = NSMakeRange([run[@"location"] unsignedIntegerValue], [run[@"length"] unsignedIntegerValue]);
+                NSString *part = [r->_text substringWithRange:in];
+                [self insertString:part atIndex:at + in.location attributes:run[@"attributes"]];
+                [edits addObject:[TTEdit editWithKind:TTEditInsert range:NSMakeRange(at + in.location, in.length) string:part
+                                           attributes:run[@"attributes"]]];
+            }
+            break;
+        }
+        case TTUndoAttributes: {
+            /* The keys set back, on the characters still there. */
+            for (NSUInteger i = 0; i < r->_spans.count; i++)
+                for (NSValue *v in [self liveRangesOfSpan:r->_spans[i]]) {
+                    [self addAttributes:r->_old[i] range:v.rangeValue];
+                    [self addAttributeEditsIn:v.rangeValue to:edits];
+                }
+            break;
+        }
+        }
+    }
+    TTUndoStep *done = _recording;
+    _recording = outer;
+    if (redo) *redo = done;
+    return edits;
 }
 
 @end
