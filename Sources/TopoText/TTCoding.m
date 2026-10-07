@@ -399,7 +399,7 @@ NSData *TTEncodePayload(TTPayload *p) {
         }
     NSArray<NSNumber *> *replicas = [seen.allObjects sortedArrayUsingSelector:@selector(compare:)];
     NSMutableDictionary *index = [NSMutableDictionary dictionary];
-    [replicas enumerateObjectsUsingBlock:^(NSNumber *r, NSUInteger i, BOOL *stop) { index[r] = @(i); }];
+    for (NSUInteger i = 0; i < replicas.count; i++) index[replicas[i]] = @(i);
 
     NSMutableData *d = [NSMutableData dataWithBytes:TTMagic length:3];
     TTPutVarint(d, replicas.count);

@@ -1,6 +1,7 @@
 #import "SNSelfTest.h"
 #import "SNWindowController.h"
 #import "SNModel.h"
+#import "SNRichText.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -65,6 +66,56 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         for (SNNote *n in [other notesInFolder:nil matching:@"Groceries"]) there = n;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
+
+        /* A checklist: two lines made one from the Format menu, the first
+           ticked by a click on its checkbox, a third item begun by Return. */
+        SNSay([window selectNoteTitled:@"Weekend"], @"another note chosen");
+        NSString *s = tv.string;
+        NSRange lines = NSMakeRange(NSMaxRange([s lineRangeForRange:NSMakeRange(0, 0)]), 0);
+        lines.length = s.length - lines.location;
+        tv.selectedRange = lines;
+        SNSay([tv tryToPerform:@selector(toggleChecklist:) with:nil], @"Checklist from the menu");
+        NSLayoutManager *lm = tv.layoutManager;
+        SNSay([lm isKindOfClass:[SNListLayoutManager class]], @"the text view draws list markers");
+        NSRect line = [lm lineFragmentRectForGlyphAtIndex:[lm glyphRangeForCharacterRange:NSMakeRange(lines.location, 1) actualCharacterRange:NULL].location
+                                    effectiveRange:NULL];
+        NSUInteger box = [(SNListLayoutManager *)lm checkboxAtPoint:NSMakePoint(10, NSMidY(line))];
+        SNSay(box == lines.location, [NSString stringWithFormat:@"a checkbox where the first item's is (%lu)", (unsigned long)box]);
+        if (box != NSNotFound) [window textView:window.textView clickedCheckboxAtIndex:box];
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertText:@"water the plants"];
+        SNWait(2, ^BOOL { return NO; });
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNNote *weekend = nil;
+        for (SNNote *n in [other notesInFolder:nil matching:@"Weekend"]) weekend = n;
+        TopoText *wt = weekend.text;
+        NSArray *paras = wt.paragraphRanges;
+        NSMutableArray *seen = [NSMutableArray array];
+        for (NSValue *v in paras) {
+            NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
+            [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
+        }
+        SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [weekend.body hasSuffix:@"water the plants"],
+              [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+        /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
+           into a picture (the README's screenshots). */
+        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
+        if (snapshot) {
+            tv.selectedRange = NSMakeRange(tv.string.length, 0);
+            NSView *v = window.window.contentView;
+            [v displayIfNeeded];
+            NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
+            [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
+#ifdef GNUSTEP
+            NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+            NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+            SNSay([png writeToFile:@(snapshot) atomically:YES], [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
+        }
 
         /* Deleted from the window, into Recently Deleted on the other device;
            recovered from Recently Deleted, back there too. */

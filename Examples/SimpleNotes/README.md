@@ -1,7 +1,8 @@
 # SimpleNotes
 
-A small Apple Notes: folders, notes in rich text, search, pinning,
-Recently Deleted, and moving notes between folders. It runs
+A small Apple Notes: folders, notes in rich text with headings, lists and
+checklists, search, pinning, Recently Deleted, and moving notes between
+folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
@@ -11,7 +12,7 @@ both edits end up in the note. The note's body is a [TopoText](../../README.md),
 and [ODataSync](https://github.com/ashalkhakov/ODataKit/tree/master/Source/ODataSync)
 merges it through `TTSyncResolver`. The note is not settled for one side.
 
-| The AppKit app, on GNUstep | On iOS |
+| The AppKit app, on GNUstep (the Eau theme) | On iOS |
 |---|---|
 | ![SimpleNotes on GNUstep](Screenshots/gnustep.png) | <img src="Screenshots/ios.png" width="240" alt="SimpleNotes on iOS"> |
 
@@ -38,7 +39,10 @@ The device, in `Shared/`:
 - **`SNTextBinding`**: keeps a text view's `NSTextStorage` (AppKit's or
   UIKit's) and the editor's TopoText the same, in both directions. What the
   user types goes into the text as they type. What a sync merged comes into
-  the storage as edits, and the selection moves along with them.
+  the storage as edits, and the selection moves along with them. It also
+  follows Apple Notes' typing rules for lists (see "Lists and checklists").
+- **`SNListLayoutManager`**: draws list markers and checkboxes beside the
+  text, and tells which checkbox a click or tap landed on.
 - **`SNResolver`**: merges a note's body; its title becomes the merged first
   line. Other properties are taken from whichever side changed them, or from
   the later writer if both did. An edit outlives a deletion that didn't see it.
@@ -142,6 +146,10 @@ The apps:
   make -C Examples/SimpleNotes && openapp Examples/SimpleNotes/SimpleNotes.app
   ```
 
+  For the Eau theme (gnustep-patches' `build-gnustep.sh` builds it), set it
+  in the app's defaults, as our other apps' launchers do:
+  `defaults write SimpleNotes GSTheme Eau`. The self-test does this itself.
+
 To try two devices on one Mac or Linux machine, give a second instance a
 store of its own: `SimpleNotes -SNStore /tmp/second.sqlite`.
 
@@ -162,7 +170,10 @@ This runs four things:
 - **The AppKit app driven from within** (`SimpleNotes --self-test`, under
   `xvfb-run` where there's no display). A note is chosen in the list, text
   is typed into the window's text view, and Bold is sent up the responder
-  chain. Then a second device must see both.
+  chain. Two lines become a checklist, a click on the first checkbox ticks
+  it, and Return starts a third item. A second device must see all of it.
+  With `SN_SELF_TEST_SNAPSHOT=<file.png>`, the window is saved as a picture
+  at that point; that's how the screenshots above were made.
 - **The iOS app's self-test, in a simulator** (`Tests/ios-self-test.sh`;
   macOS only). It does the same through the iOS view controllers.
 
@@ -171,13 +182,47 @@ against FreeCoreData, SQLite, PostgreSQL and MariaDB.
 
 ## Rich text
 
-A note's text uses `bold`, `italic`, `underline`, `strike`, and `style`
-(`title` or `heading`). These are plain values that sync and merge the same
-way everywhere. `SNRichText` turns them into each system's fonts and back.
+A note's text uses plain values that sync and merge the same way
+everywhere. `SNRichText` turns them into each system's fonts, indents and
+list markers, and back.
 
-Formatting is per character, and the last writer wins per attribute, as in
-TopoText. Bold applied to a line does not spread to text someone else
-typed into it at the same time.
+- **Per character:** `bold`, `italic`, `underline`, `strike`.
+- **Per paragraph:** `style` (`title`, `heading`, `subheading`, or `mono`;
+  none is body), `list` (`bullet`, `dash`, `number`, or `check`), `checked`,
+  and `indent` (1 to 8).
+
+Character formatting is per character, and the last writer wins per
+attribute, as in TopoText. Bold applied to a line does not spread to text
+someone else typed into it at the same time.
+
+Paragraph formatting is kept on every character of the paragraph,
+including its newline. When those disagree after a merge, the newline's
+value wins (TopoText's `Paragraphs` category), and the view shows the whole
+paragraph that way. So a line that one device turned into a checklist item
+stays one when another device typed into it meanwhile. A checklist item's
+`checked` is a single register, so the last tick or untick wins.
+
+## Lists and checklists
+
+The Format menu (AppKit) and the format bar's menus (iOS) have Apple Notes'
+paragraph styles and lists, with the same shortcuts: Title ⇧⌘T, Heading ⇧⌘H,
+Subheading ⇧⌘J, Body ⇧⌘B, Monostyled ⇧⌘M, Bulleted List ⇧⌘7, Dashed List
+⇧⌘8, Numbered List ⇧⌘9, Checklist ⇧⌘L, Mark as Checked ⇧⌘U, and indentation
+with ⌘] and ⌘[.
+
+Typing works as in Apple Notes:
+
+- Return in a list item starts the next item. A new checklist item starts
+  unticked.
+- Return on an empty item ends the list, or outdents it first if it is
+  indented.
+- Delete at the start of an item removes its marker. A second Delete joins
+  the line to the one above, which keeps the upper line's formatting.
+- Tab and Shift-Tab indent and outdent an item.
+- Return after a title, heading or subheading starts a body line.
+
+Clicking (or tapping) a checkbox ticks it. Numbered items count up within
+their indent level; items indented further don't interrupt the count.
 
 ## Not yet
 
@@ -185,5 +230,6 @@ typed into it at the same time.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Attachments, checklists, nested folders, and undo across a merge (the undo
-  stack is cleared when a sync changes the open note).
+- Attachments, tables, nested folders, moving checked items to the bottom,
+  and undo across a merge (the undo stack is cleared when a sync changes the
+  open note).

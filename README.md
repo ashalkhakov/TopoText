@@ -59,6 +59,12 @@ array):
   inserts inside that span at the same time; the inserted run keeps the
   attributes it was typed with. This is the Notes race, and it is kept on
   purpose.
+- **Paragraph formatting** (a heading, a list item, whether a checklist item
+  is ticked) is set on every character of the paragraph, its newline too
+  (`addParagraphAttributes:range:`). When those disagree after a merge, the
+  newline's value wins (`paragraphAttributesAtIndex:keys:`); the last
+  paragraph has no newline, so its first character's does. Text typed into a
+  line that was made a list item elsewhere ends up in the item.
 - **Values are property-list types**: strings, numbers, data, dates, and arrays
   and dictionaries of them. NSNull removes a key. An editor maps its fonts and
   colours to such values and back.

@@ -6,15 +6,16 @@
 #pragma once
 #import <AppKit/AppKit.h>
 #import "SNNotes.h"
+#import "SNTextView.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSMenuDelegate>
+@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 @property (nonatomic, strong) IBOutlet NSTableView *folderTable;
 @property (nonatomic, strong) IBOutlet NSTableView *noteTable;
 @property (nonatomic, strong) IBOutlet NSSearchField *searchField;
-@property (nonatomic, strong) IBOutlet NSTextView *textView;
+@property (nonatomic, strong) IBOutlet SNTextView *textView;
 @property (nonatomic, strong) IBOutlet NSTextField *statusField;
 @property (nonatomic, strong) IBOutlet NSButton *syncButton;
 // The open note written, before the app quits.
@@ -47,7 +48,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)toggleStrikethrough:(nullable id)sender;
 - (IBAction)styleTitle:(nullable id)sender;
 - (IBAction)styleHeading:(nullable id)sender;
+- (IBAction)styleSubheading:(nullable id)sender;
 - (IBAction)styleBody:(nullable id)sender;
+- (IBAction)styleMono:(nullable id)sender;
+- (IBAction)toggleBulletList:(nullable id)sender;
+- (IBAction)toggleDashList:(nullable id)sender;
+- (IBAction)toggleNumberList:(nullable id)sender;
+- (IBAction)toggleChecklist:(nullable id)sender;
+- (IBAction)toggleChecked:(nullable id)sender;
+- (IBAction)increaseIndentation:(nullable id)sender;
+- (IBAction)decreaseIndentation:(nullable id)sender;
 - (IBAction)findNote:(nullable id)sender;
 - (IBAction)searchChanged:(nullable id)sender;
 @end

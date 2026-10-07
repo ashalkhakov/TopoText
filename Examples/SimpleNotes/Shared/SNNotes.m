@@ -56,7 +56,7 @@ NSString *SNDateText(NSDate *date) {
     /* An older version's store, brought to this one, history and all. */
     NSURL *momd = modelURL ?: SNModelURLInBundle([NSBundle mainBundle]);
     if ([momd.pathExtension isEqual:@"momd"] &&
-        !SNMigrateStore(storeURL, momd, ^(NSManagedObjectModel *m) { [ODataSyncEngine addBookkeepingToModel:m configuration:nil]; }, error))
+        !SNMigrateStore(storeURL, momd, [ODataSyncEngine class], error))
         return nil;
     NSManagedObjectModel *model = modelURL ? SNModelAt(modelURL) : SNModel();
     if (!model) {
@@ -444,7 +444,8 @@ NSString *SNDateText(NSDate *date) {
     if (_gone) return;
     _gone = YES;
     [self close];
-    if (_didVanish) _didVanish();
+    id<SNNoteEditorDelegate> delegate = _delegate;
+    if ([delegate respondsToSelector:@selector(noteEditorDidVanish:)]) [delegate noteEditorDidVanish:self];
 }
 
 - (void)flush {
@@ -463,7 +464,7 @@ NSString *SNDateText(NSDate *date) {
     if ([stored isKindOfClass:[NSData class]] && ![stored isEqual:_seen]) {
         NSArray *edits = [_text applyData:stored error:NULL];
         _seen = stored;
-        if (edits.count && _didMerge) _didMerge(edits);
+        if (edits.count) [_delegate noteEditor:self didMergeEdits:edits];
     }
     if (!_dirty) return;
     _dirty = NO;

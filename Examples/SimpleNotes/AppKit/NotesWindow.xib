@@ -189,7 +189,7 @@
                                     <rect key="frame" x="0.0" y="0.0" width="558" height="628"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <textView editable="NO" importsGraphics="NO" richText="YES" verticallyResizable="YES" allowsUndo="YES" textCompletion="NO" id="SNw-tx-001">
+                                        <textView editable="NO" importsGraphics="NO" richText="YES" customClass="SNTextView" verticallyResizable="YES" allowsUndo="YES" textCompletion="NO" id="SNw-tx-001">
                                             <rect key="frame" x="0.0" y="0.0" width="558" height="628"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <color key="textColor" name="textColor" catalog="System" colorSpace="catalog"/>

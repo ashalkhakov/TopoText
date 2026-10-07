@@ -114,13 +114,20 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 
 @end
 
+@protocol SNNoteEditorDelegate <NSObject>
+// Remote edits merged into the editor's text, in order, for the view's
+// storage (SNTextBinding's -applyEdits:).
+- (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits;
+@optional
+// The note was deleted (here or elsewhere): the editor is done.
+- (void)noteEditorDidVanish:(SNNoteEditor *)editor;
+@end
+
 @interface SNNoteEditor : NSObject
 @property (nonatomic, readonly) NSManagedObjectID *noteID;
 @property (nonatomic, readonly) TopoText *text;
-// Remote edits merged into text, in order, for the view's storage.
-@property (nonatomic, copy, nullable) void (^didMerge)(NSArray<TTEdit *> *edits);
-// The note was deleted (here or elsewhere): the editor is done.
-@property (nonatomic, copy, nullable) void (^didVanish)(void);
+// Whoever shows the text: told of merges, and of the note going.
+@property (nonatomic, weak, nullable) id<SNNoteEditorDelegate> delegate;
 @property (nonatomic, readonly, getter=isGone) BOOL gone;
 // The user changed text: written and saved a moment later.
 - (void)textDidChange;

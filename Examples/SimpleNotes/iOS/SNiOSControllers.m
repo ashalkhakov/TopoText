@@ -374,17 +374,45 @@ static NSString *SNDaysLeftText(SNNote *note) {
     return self;
 }
 
+/* The XIB's text view, made again on TextKit 1 with a layout manager that
+   draws list markers (its own cannot be swapped for one). */
+- (void)useListLayoutManager {
+    UITextView *old = _textView;
+    NSTextStorage *storage = [[NSTextStorage alloc] init];
+    SNListLayoutManager *lm = [[SNListLayoutManager alloc] init];
+    [storage addLayoutManager:lm];
+    NSTextContainer *container = [[NSTextContainer alloc] initWithSize:CGSizeMake(old.bounds.size.width, CGFLOAT_MAX)];
+    container.widthTracksTextView = YES;
+    [lm addTextContainer:container];
+    UITextView *tv = [[UITextView alloc] initWithFrame:old.frame textContainer:container];
+    tv.translatesAutoresizingMaskIntoConstraints = NO;
+    tv.backgroundColor = old.backgroundColor;
+    tv.font = old.font;
+    tv.alwaysBounceVertical = old.alwaysBounceVertical;
+    tv.allowsEditingTextAttributes = old.allowsEditingTextAttributes;
+    tv.autocapitalizationType = old.autocapitalizationType;
+    UIView *parent = old.superview;
+    [parent insertSubview:tv aboveSubview:old];
+    UILayoutGuide *safe = parent.safeAreaLayoutGuide;
+    [old removeFromSuperview];
+    [NSLayoutConstraint activateConstraints:@[
+        [tv.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor], [tv.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor],
+        [tv.topAnchor constraintEqualToAnchor:safe.topAnchor], [tv.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor] ]];
+    _textView = tv;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     _editor = [_notes editorForNote:_note];
-    _binding = [[SNTextBinding alloc] initWithStorage:_textView.textStorage editor:_editor];
-    UITextView *tv = _textView;
-    _binding.getSelection = ^NSRange { return tv.selectedRange; };
-    _binding.setSelection = ^(NSRange r) { tv.selectedRange = r; };
-    __weak SNEditorViewController *weak = self;
-    _editor.didVanish = ^{ [weak.navigationController popViewControllerAnimated:YES]; };
+    [self useListLayoutManager];
+    _editor.delegate = self;
+    _binding = [[SNTextBinding alloc] initWithTextView:_textView editor:_editor];
     _textView.delegate = self;
-    _textView.typingAttributes = [_binding typingAttributesAt:_textView.textStorage.length];
+    [_binding selectionDidChange];
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapped:)];
+    tap.delegate = self;
+    [_textView addGestureRecognizer:tap];
+    [self makeFormatMenus];
     _textView.textContainerInset = UIEdgeInsetsMake(12, 12, 12, 12);
     _textView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [_formatBar sizeToFit];
@@ -428,27 +456,111 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (void)textViewDidChangeSelection:(UITextView *)tv {
-    if (!tv.selectedRange.length) tv.typingAttributes = [_binding typingAttributesAt:tv.selectedRange.location];
+    [_binding selectionDidChange];
+}
+
+/* Typing in lists, as Apple Notes has it (SNTextBinding). */
+- (BOOL)textView:(UITextView *)tv shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
+    return [_binding shouldChangeTextInRange:range replacementString:text];
+}
+
+- (void)textViewDidChange:(UITextView *)tv {
+    [_binding textDidChange];
+}
+
+#pragma mark the editor's delegate
+
+/* What a sync brought into the note, into the text view. */
+- (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
+    [_binding applyEdits:edits];
+}
+
+- (void)noteEditorDidVanish:(SNNoteEditor *)editor {
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+#pragma mark checkboxes
+
+- (NSUInteger)checkboxAt:(UIGestureRecognizer *)g {
+    if (!_textView.editable) return NSNotFound;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    SNListLayoutManager *lm = (SNListLayoutManager *)_textView.layoutManager;
+    if (![lm isKindOfClass:[SNListLayoutManager class]]) return NSNotFound;
+    return [lm checkboxAtPoint:CGPointMake(p.x - inset.left, p.y - inset.top)];
+}
+
+/* Only a tap on a checkbox: the text view has the others. */
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    return [self checkboxAt:g] != NSNotFound;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return NO;
+}
+
+- (void)tapped:(UITapGestureRecognizer *)g {
+    NSUInteger at = [self checkboxAt:g];
+    if (at == NSNotFound || !_textView.editable) return;
+    NSRange sel = _textView.selectedRange;
+    [_binding toggleCheckedForParagraphsInRange:NSMakeRange(at, 0)];
+    [self formatted:sel];
+}
+
+#pragma mark formatting
+
+/* The format bar's menus: commands sent up the responder chain, to this
+   controller (the text view is first responder). */
+- (void)makeFormatMenus {
+    _styleItem.menu = [UIMenu menuWithTitle:@"" children:@[
+        [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
+        [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
+        [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
+        [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
+        [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]];
+    _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
+        [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
+        [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],
+        [UICommand commandWithTitle:@"Numbered List" image:[UIImage systemImageNamed:@"list.number"] action:@selector(numberList:) propertyList:nil],
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UICommand commandWithTitle:@"Increase Indentation" image:[UIImage systemImageNamed:@"increase.indent"] action:@selector(indent:) propertyList:nil],
+            [UICommand commandWithTitle:@"Decrease Indentation" image:[UIImage systemImageNamed:@"decrease.indent"] action:@selector(outdent:) propertyList:nil] ]] ]];
+}
+
+/* After the binding changed paragraphs: the selection as it was, typing
+   as the text there, the markers drawn again. */
+- (void)formatted:(NSRange)selection {
+    _textView.selectedRange = selection;
+    [_binding selectionDidChange];
+    [_textView.layoutManager invalidateDisplayForCharacterRange:NSMakeRange(0, _textView.textStorage.length)];
 }
 
 /* On the selection; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
     NSRange r = _textView.selectedRange;
-    if (!r.length) {
-        NSMutableDictionary *t = [SNTextAttributes(_textView.typingAttributes) mutableCopy];
-        if ([t[key] boolValue]) [t removeObjectForKey:key]; else t[key] = @YES;
-        _textView.typingAttributes = SNViewAttributes(t);
-        return;
-    }
     [_binding toggle:key inRange:r];
-    _textView.selectedRange = r;
+    if (r.length) _textView.selectedRange = r;
 }
 
 - (void)style:(NSString *)style {
+    if (!_textView.editable) return;
     NSRange r = _textView.selectedRange;
     [_binding setStyle:style forParagraphsInRange:r];
-    _textView.selectedRange = r;
-    _textView.typingAttributes = [_binding typingAttributesAt:NSMaxRange(r)];
+    [self formatted:r];
+}
+
+- (void)list:(NSString *)list {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding toggleList:list forParagraphsInRange:r];
+    [self formatted:r];
+}
+
+- (void)indentBy:(NSInteger)by {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding indentParagraphsInRange:r by:by];
+    [self formatted:r];
 }
 
 - (IBAction)bold:(id)sender { [self toggle:SNBoldKey]; }
@@ -457,6 +569,20 @@ static NSString *SNDaysLeftText(SNNote *note) {
 - (IBAction)strikethrough:(id)sender { [self toggle:SNStrikeKey]; }
 - (IBAction)title:(id)sender { [self style:SNStyleTitle]; }
 - (IBAction)heading:(id)sender { [self style:SNStyleHeading]; }
+- (IBAction)subheading:(id)sender { [self style:SNStyleSubheading]; }
 - (IBAction)body:(id)sender { [self style:nil]; }
+- (IBAction)mono:(id)sender { [self style:SNStyleMono]; }
+- (IBAction)bulletList:(id)sender { [self list:SNListBullet]; }
+- (IBAction)dashList:(id)sender { [self list:SNListDash]; }
+- (IBAction)numberList:(id)sender { [self list:SNListNumber]; }
+- (IBAction)checklist:(id)sender { [self list:SNListCheck]; }
+- (IBAction)toggleChecked:(id)sender {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding toggleCheckedForParagraphsInRange:r];
+    [self formatted:r];
+}
+- (IBAction)indent:(id)sender { [self indentBy:1]; }
+- (IBAction)outdent:(id)sender { [self indentBy:-1]; }
 
 @end

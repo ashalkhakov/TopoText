@@ -118,7 +118,7 @@
     @autoreleasepool { [[self deviceAt:store model:_momd] addNoteInFolder:nil]; }
     NSDate *before = [[NSFileManager defaultManager] attributesOfItemAtPath:store.path error:NULL].fileModificationDate;
     NSError *error = nil;
-    XCTAssertTrue(SNMigrateStore(store, _momd, ^(NSManagedObjectModel *m) { [ODataSyncEngine addBookkeepingToModel:m configuration:nil]; }, &error));
+    XCTAssertTrue(SNMigrateStore(store, _momd, [ODataSyncEngine class], &error));
     XCTAssertEqualObjects([[NSFileManager defaultManager] attributesOfItemAtPath:store.path error:NULL].fileModificationDate, before);
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[store.path stringByAppendingString:@".old"]]);
 }

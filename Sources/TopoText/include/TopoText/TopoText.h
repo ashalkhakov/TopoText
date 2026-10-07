@@ -152,4 +152,31 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 
 @end
 
+/* Paragraphs. A paragraph is the text up to and including a newline (\n),
+   or the text after the last one. Formatting of a paragraph as a whole - a
+   heading, a list item, whether a checklist item is checked - is set on
+   every character of it, its newline too; and when they disagree (text was
+   typed into it while it was changed elsewhere, two paragraphs were
+   joined), its newline's stands: the last paragraph's, which has none, its
+   first character's. So text typed into a line made a checklist item
+   elsewhere ends up in the item, and an item's checked state is one
+   register, the last writer's. Which keys are a paragraph's is the
+   caller's to say. */
+@interface TopoText (Paragraphs)
+/* The paragraph holding index (index == length: the last one), its newline
+   included. */
+- (NSRange)paragraphRangeForIndex:(NSUInteger)index;
+/* Every paragraph's range, in order; an empty last one included when the
+   text ends with a newline (or is empty). */
+- (NSArray<NSValue *> *)paragraphRanges;
+/* The paragraph's attributes of these keys: its newline's, or for the last
+   paragraph, its first character's. Empty for an empty last paragraph. */
+- (NSDictionary<NSString *, id> *)paragraphAttributesAtIndex:(NSUInteger)index keys:(NSSet<NSString *> *)keys;
+/* These keys set (NSNull: removed) on every character of each paragraph the
+   range touches, newlines included: one edit. */
+- (void)addParagraphAttributes:(NSDictionary<NSString *, id> *)attrs range:(NSRange)range;
+@end
+
 NS_ASSUME_NONNULL_END
+
+

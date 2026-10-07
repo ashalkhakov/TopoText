@@ -1,5 +1,6 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
+#import "SNRichText.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -59,6 +60,54 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNNote *there = [other notesInFolder:nil matching:@"Groceries"].firstObject;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
+
+        /* A checklist: two lines made one from the format bar, the first
+           ticked where its checkbox is, a third item begun by Return. */
+        SNNote *weekendHere = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
+        SNEditorViewController *we = [[SNEditorViewController alloc] initWithNotes:notes note:weekendHere];
+        [navigation pushViewController:we animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        UITextView *wtv = we.textView;
+        NSUInteger first = [wtv.text rangeOfString:@"\n"].location + 1;
+        [wtv becomeFirstResponder];
+        wtv.selectedRange = NSMakeRange(first, wtv.text.length - first);
+        /* Up the responder chain from the text view, as the format bar's
+           menu commands go. */
+        SNSay([[UIApplication sharedApplication] sendAction:@selector(checklist:) to:nil from:nil forEvent:nil],
+              @"Checklist goes up the responder chain");
+        SNListLayoutManager *lm = (SNListLayoutManager *)wtv.layoutManager;
+        SNSay([lm isKindOfClass:[SNListLayoutManager class]], @"the text view draws list markers");
+        CGRect line = [lm lineFragmentRectForGlyphAtIndex:[lm glyphIndexForCharacterAtIndex:first] effectiveRange:NULL];
+        SNSay([lm checkboxAtPoint:CGPointMake(12, CGRectGetMidY(line))] == first, @"a checkbox where the first item's is");
+        wtv.selectedRange = NSMakeRange(first, 0);
+        [we toggleChecked:nil];
+        wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
+        [wtv insertText:@"\n"];
+        [wtv insertText:@"water the plants"];
+        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
+        if (snapshot) {
+            [wtv resignFirstResponder];
+            SNWait(1, ^BOOL { return NO; });
+            UIView *v = navigation.view.window;
+            UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithBounds:v.bounds];
+            UIImage *image = [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
+                [v drawViewHierarchyInRect:v.bounds afterScreenUpdates:YES];
+            }];
+            SNSay([UIImagePNGRepresentation(image) writeToFile:@(snapshot) atomically:YES], @"a snapshot");
+        }
+        [navigation popViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        TopoText *wt = [other notesInFolder:nil matching:@"Weekend"].firstObject.text;
+        NSMutableArray *seen = [NSMutableArray array];
+        for (NSValue *v in wt.paragraphRanges) {
+            NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
+            [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
+        }
+        SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [wt.string hasSuffix:@"water the plants"],
+              [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
 
         /* Deleted, into Recently Deleted on the other device; recovered
            from the editor's Recover, back there too. */
