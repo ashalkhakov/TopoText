@@ -306,6 +306,13 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         if (room) [room getValue:&size];
         a = room ? SNSystemRoomAttachment(size) : SNSystemImageAttachment(nil, nil, size);
         a.loaded = room != nil;
+    } else if ([attachment.kind isEqual:SNAttachmentKindFile]) {
+        /* A card: its icon, its name, its kind and size. */
+        NSString *name = [attachment.entity.attributesByName objectForKey:@"name"] ? attachment.name : nil;
+        if (!name.length) name = @"File";
+        a = SNSystemFileAttachment(data, name, SNFileDescription(name, data.length), MIN(maxWidth, 360));
+        a.loaded = data != nil;
+        a.textWidth = maxWidth;
     } else {
         double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
         if (data && (w < 1 || h < 1)) SNSystemImagePixels(data, &w, &h);
@@ -577,6 +584,11 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     return [_editor respondsToSelector:@selector(addTableWithRows:columns:)] ? [_editor addTableWithRows:rows columns:columns] : nil;
 }
 
+- (NSString *)addFileData:(NSData *)data name:(NSString *)name {
+    if (!data || data.length > SNAttachmentMaxFileBytes || ![_editor respondsToSelector:@selector(addFileData:name:type:)]) return nil;
+    return [_editor addFileData:data name:name type:SNTypeOfFileNamed(name)];
+}
+
 /* How wide an image may be shown: the text's width. */
 - (CGFloat)attachmentWidth {
     NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
@@ -647,7 +659,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     [self refreshAttachments];
 }
 
-/* A pasted image saved as one of the note's attachments, its id; its view
+/* A pasted image (or file) saved as one of the note's attachments, its id; its view
    attachment is given the id once the view's edit is done (not while the
    storage is still processing it). */
 - (NSString *)attachmentForPasted:(NSTextAttachment *)pasted {
@@ -655,9 +667,15 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     if (made) return made;
     NSString *type = nil;
     double w = 0, h = 0;
-    NSData *data = SNImageDataForAttachment(SNSystemDataOfAttachment(pasted), &type, &w, &h);
-    if (!data) return nil;
-    made = [self addImageData:data type:type width:w height:h];
+    NSData *raw = SNSystemDataOfAttachment(pasted);
+    NSData *data = SNImageDataForAttachment(raw, &type, &w, &h);
+    if (data) {
+        made = [self addImageData:data type:type width:w height:h];
+    } else {
+        /* Not an image: a file, by its name (a PDF dropped, say). */
+        NSString *name = pasted.fileWrapper.preferredFilename ?: pasted.fileWrapper.filename;
+        if (raw && name.length) made = [self addFileData:raw name:name];
+    }
     if (!made) return nil;
     [_pendingAttachments setObject:made forKey:pasted];
     [self performSelector:@selector(idsForPastedAttachments) withObject:nil afterDelay:0];
@@ -704,6 +722,13 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     unichar c = SNAttachmentCharacter;
     [_storage replaceCharactersInRange:range
                   withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+}
+
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name inRange:(NSRange)range {
+    NSString *made = [self addFileData:data name:name.length ? name : @"File"];
+    if (!made) return NO;
+    [self insertAttachment:made inRange:range];
+    return YES;
 }
 
 - (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range {

@@ -73,6 +73,18 @@
                                     <action selector="newFolder:" target="-1" id="SNm-ac-202"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="New Smart Folder…" keyEquivalent="N" id="SNm-mi-920">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="newSmartFolder:" target="-1" id="SNm-ac-920"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Edit Smart Folder…" id="SNm-mi-921">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="editSmartFolder:" target="-1" id="SNm-ac-921"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Rename Folder…" id="SNm-mi-203">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
@@ -369,6 +381,38 @@
                                             <modifierMask key="keyEquivalentModifierMask"/>
                                             <connections>
                                                 <action selector="sortByTitle:" target="-1" id="SNm-ac-804"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Sort Folder By" id="SNm-mi-922">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Sort Folder By" id="SNm-mn-922">
+                                    <items>
+                                        <menuItem title="Default" id="SNm-mi-923">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortFolderByDefault:" target="-1" id="SNm-ac-923"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="SNm-mi-924"/>
+                                        <menuItem title="Date Edited" id="SNm-mi-925">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortFolderByDateEdited:" target="-1" id="SNm-ac-925"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Date Created" id="SNm-mi-926">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortFolderByDateCreated:" target="-1" id="SNm-ac-926"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Title" id="SNm-mi-927">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="sortFolderByTitle:" target="-1" id="SNm-ac-927"/>
                                             </connections>
                                         </menuItem>
                                     </items>

@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 // What a note has and a cell has not: attachments (images, tables).
 - (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns;
 - (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height;
+- (NSString *)addFileData:(NSData *)data name:(NSString *)name type:(nullable NSString *)type;
 - (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 @end
 

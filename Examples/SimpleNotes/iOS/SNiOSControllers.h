@@ -6,6 +6,7 @@
 #import <UIKit/UIKit.h>
 #import "SNNotes.h"
 #import <PhotosUI/PhotosUI.h>
+#import <QuickLook/QuickLook.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -36,7 +37,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
 // SNEditorViewController.xib: the text view, and the format bar.
 @interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate,
-                                                       PHPickerViewControllerDelegate>
+                                                       PHPickerViewControllerDelegate, UIDocumentPickerDelegate,
+                                                       QLPreviewControllerDataSource>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory, as Apple Notes'
@@ -68,6 +70,13 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)addLink:(nullable id)sender;
 // Photos into the note (the photo picker).
 - (IBAction)attachPhoto:(nullable id)sender;
+// Files into the note (the document picker): an image as one, any other
+// as a card, which a tap shows (Quick Look).
+- (IBAction)attachFile:(nullable id)sender;
+// A file's data into the note at the insertion point, as a file picked.
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name;
+// A file attachment shown (Quick Look), as its card tapped.
+- (BOOL)previewFileOfAttachment:(NSString *)attachmentID;
 // An image's data into the note at the insertion point (as a photo picked).
 - (void)insertImageData:(NSData *)data;
 // A table at the insertion point (2 x 2), its first cell typed in. A table

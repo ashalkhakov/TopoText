@@ -109,6 +109,35 @@ SNTextAttachment *SNSystemImageAttachment(NSData *data, NSString *type, SNSize s
     return a;
 }
 
+/* A file's card, Apple Notes' kind: a rounded box, an icon, the file's
+   name, and under it what it is. */
+SNTextAttachment *SNSystemFileAttachment(NSData *data, NSString *name, NSString *detail, CGFloat width) {
+    CGSize size = CGSizeMake(MAX(160, width), 60);
+    UIImage *card = [[[UIGraphicsImageRenderer alloc] initWithSize:size] imageWithActions:^(UIGraphicsImageRendererContext *c) {
+        UIBezierPath *round = [UIBezierPath bezierPathWithRoundedRect:CGRectInset(CGRectMake(0, 0, size.width, size.height), 0.5, 0.5)
+                                                         cornerRadius:10];
+        [[UIColor secondarySystemFillColor] setFill];
+        [round fill];
+        [[UIColor separatorColor] setStroke];
+        [round stroke];
+        UIImage *icon = [[UIImage systemImageNamed:@"doc.fill"] imageWithTintColor:[UIColor systemBlueColor]
+                                                                     renderingMode:UIImageRenderingModeAlwaysOriginal];
+        [icon drawInRect:CGRectMake(14, 14, 26, 32)];
+        NSMutableParagraphStyle *clip = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+        clip.lineBreakMode = NSLineBreakByTruncatingTail;
+        [name drawInRect:CGRectMake(52, 10, size.width - 62, 22)
+          withAttributes:@{ NSFontAttributeName: [UIFont boldSystemFontOfSize:16], NSForegroundColorAttributeName: [UIColor labelColor],
+                            NSParagraphStyleAttributeName: clip }];
+        [detail drawInRect:CGRectMake(52, 33, size.width - 62, 18)
+            withAttributes:@{ NSFontAttributeName: [UIFont systemFontOfSize:13], NSForegroundColorAttributeName: [UIColor secondaryLabelColor],
+                              NSParagraphStyleAttributeName: clip }];
+    }];
+    SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:nil ofType:nil];
+    a.image = card;
+    a.bounds = CGRectMake(0, 0, size.width, size.height);
+    return a;
+}
+
 SNTextAttachment *SNSystemRoomAttachment(SNSize size) {
     SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:nil ofType:nil];
     UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];

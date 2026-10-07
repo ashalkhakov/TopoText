@@ -134,6 +134,41 @@ SNTextAttachment *SNSystemImageAttachment(NSData *data, NSString *type, SNSize s
     return a;
 }
 
+/* A file's card, Apple Notes' kind: a rounded box, the file's icon, its
+   name, and under it what it is. */
+SNTextAttachment *SNSystemFileAttachment(NSData *data, NSString *name, NSString *detail, CGFloat width) {
+    NSSize size = NSMakeSize(MAX(160, width), 52);
+    NSImage *card = [[NSImage alloc] initWithSize:size];
+    [card lockFocus];
+    NSRect box = NSInsetRect(NSMakeRect(0, 0, size.width, size.height), 0.5, 0.5);
+    NSBezierPath *round = [NSBezierPath bezierPathWithRoundedRect:box xRadius:8 yRadius:8];
+    [[NSColor colorWithCalibratedWhite:0.5 alpha:0.10] setFill];
+    [round fill];
+    [[NSColor colorWithCalibratedWhite:0.5 alpha:0.35] setStroke];
+    [round stroke];
+    NSImage *icon = [[NSWorkspace sharedWorkspace] iconForFileType:name.pathExtension.length ? name.pathExtension : @"txt"];
+    [icon drawInRect:NSMakeRect(10, 10, 32, 32) fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
+    NSMutableParagraphStyle *clip = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
+    clip.lineBreakMode = NSLineBreakByTruncatingTail;
+    [name drawInRect:NSMakeRect(52, 26, size.width - 62, 18)
+      withAttributes:@{ NSFontAttributeName: [NSFont boldSystemFontOfSize:13], NSForegroundColorAttributeName: [NSColor textColor],
+                        NSParagraphStyleAttributeName: clip }];
+    [detail drawInRect:NSMakeRect(52, 9, size.width - 62, 16)
+        withAttributes:@{ NSFontAttributeName: [NSFont systemFontOfSize:11], NSForegroundColorAttributeName: [NSColor grayColor],
+                          NSParagraphStyleAttributeName: clip }];
+    [card unlockFocus];
+    SNTextAttachment *a;
+    if (data) {
+        NSFileWrapper *file = [[NSFileWrapper alloc] initRegularFileWithContents:data];
+        file.preferredFilename = name;
+        a = [[SNTextAttachment alloc] initWithFileWrapper:file];
+    } else {
+        a = [[SNTextAttachment alloc] init];
+    }
+    a.attachmentCell = [[NSTextAttachmentCell alloc] initImageCell:card];
+    return a;
+}
+
 /* A room: as large as it is said to be, and nothing drawn in it. */
 @interface SNRoomCell : NSTextAttachmentCell
 @property (nonatomic) NSSize room;

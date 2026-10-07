@@ -3,6 +3,7 @@
 #import "SNTableGrid.h"
 #import "SNModel.h"
 #import <PhotosUI/PhotosUI.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 
@@ -33,6 +34,13 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
         done(a.textFields.firstObject.text ?: @"");
     }]];
+    [c presentViewController:a animated:YES completion:nil];
+}
+
+/* Said, and OK. */
+static void SNTell(UIViewController *c, NSString *title, NSString *message) {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
     [c presentViewController:a animated:YES completion:nil];
 }
 
@@ -505,6 +513,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     SNTextBinding *_binding;
     /* The note's tables, each over its place in the text. */
     SNTableGrids *_grids;
+    /* The file Quick Look shows. */
+    NSURL *_previewed;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note {
@@ -693,9 +703,24 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [link isKindOfClass:[NSURL class]] ? link : nil;
 }
 
-/* Only a tap on a checkbox or a link: the text view has the others. */
+/* The file's card under a tap: its attachment's id; nil for none. */
+- (NSString *)fileAt:(UIGestureRecognizer *)g {
+    NSTextStorage *ts = _textView.textStorage;
+    if (!ts.length) return nil;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    p = CGPointMake(p.x - inset.left, p.y - inset.top);
+    NSLayoutManager *lm = _textView.layoutManager;
+    NSUInteger glyph = [lm glyphIndexForPoint:p inTextContainer:_textView.textContainer];
+    CGRect box = [lm boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
+    if (!CGRectContainsPoint(box, p)) return nil;
+    NSString *attachmentID = [_binding attachmentIDAt:[lm characterIndexForGlyphAtIndex:glyph]];
+    return [[_notes attachmentWithID:attachmentID].kind isEqual:SNAttachmentKindFile] ? attachmentID : nil;
+}
+
+/* Only a tap on a checkbox, a link or a file: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil;
+    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
 }
 
 /* A link to a note opens its editor; any other, in its own application. */
@@ -714,6 +739,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSString *file = [self checkboxAt:g] == NSNotFound ? [self fileAt:g] : nil;
+    if (file) {
+        [self previewFileOfAttachment:file];
+        return;
+    }
     NSURL *link = [self checkboxAt:g] == NSNotFound ? [self linkAt:g] : nil;
     if (link) {
         [self openLink:link];
@@ -749,6 +779,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         traits ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
+        [UICommand commandWithTitle:@"Attach File" image:[UIImage systemImageNamed:@"doc"] action:@selector(attachFile:) propertyList:nil],
         [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
@@ -871,6 +902,58 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
                 [self insertImageData:data];
             });
         }];
+}
+
+- (IBAction)attachFile:(id)sender {
+    if (!_textView.editable) return;
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeItem ] asCopy:YES];
+    picker.allowsMultipleSelection = YES;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)picker didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    for (NSURL *url in urls) {
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        NSRange r = _textView.selectedRange;
+        if (data && [_binding insertImageData:data inRange:r]) {
+            _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+            [_binding selectionDidChange];
+            [_grids update];
+            continue;
+        }
+        if (![self insertFileData:data name:url.lastPathComponent])
+            SNTell(self, data.length > SNAttachmentMaxFileBytes ? @"Larger than 25 MB" : @"Not read",
+                   [NSString stringWithFormat:@"“%@” was not attached.", url.lastPathComponent]);
+    }
+}
+
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name {
+    if (!data || !_textView.editable) return NO;
+    NSRange r = _textView.selectedRange;
+    if (![_binding insertFileData:data name:name inRange:r]) return NO;
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+    [_grids update];
+    return YES;
+}
+
+- (BOOL)previewFileOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = attachmentID ? [_notes attachmentWithID:attachmentID] : nil;
+    _previewed = a ? [_notes fileURLOfAttachment:a] : nil;
+    if (!_previewed) return NO;
+    QLPreviewController *preview = [[QLPreviewController alloc] init];
+    preview.dataSource = self;
+    [self presentViewController:preview animated:YES completion:nil];
+    return YES;
+}
+
+- (NSInteger)numberOfPreviewItemsInPreviewController:(QLPreviewController *)controller {
+    return _previewed ? 1 : 0;
+}
+
+- (id<QLPreviewItem>)previewController:(QLPreviewController *)controller previewItemAtIndex:(NSInteger)index {
+    return _previewed;
 }
 
 - (void)insertImageData:(NSData *)data {

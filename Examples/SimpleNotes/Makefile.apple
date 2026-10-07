@@ -25,7 +25,7 @@ MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m
 # The model's files, spaces escaped: Xcode names a version "SimpleNotes 2".
 MODEL_FILES := $(shell find SimpleNotes.xcdatamodeld -type f | sed 's/ /\\ /g')
 # The rich text and tables, and AppKit's part of them (SNTextSystem).
-SHARED = $(MODEL) Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m \
+SHARED = $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m \
 	AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m
 DEVELOPER := $(shell xcode-select -p)
 XCTEST_FRAMEWORKS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/Library/Frameworks
@@ -50,8 +50,8 @@ $(BUILD)/simplenotes-server: Server/SNServer.m $(MODEL) libraries
 	@mkdir -p $(BUILD)
 	$(CC) $(FLAGS) $(INC) Server/SNServer.m $(MODEL) $(LIBS) -o $@
 
-$(BUILD)/sn-check: Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNResolver.m libraries
-	$(CC) $(FLAGS) $(INC) Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNResolver.m $(LIBS) -o $@
+$(BUILD)/sn-check: Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m libraries
+	$(CC) $(FLAGS) $(INC) Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m $(LIBS) -o $@
 
 $(BUILD)/SimpleNotesTests.xctest: Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m $(SHARED) $(BUILD)/SimpleNotes.momd libraries
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources

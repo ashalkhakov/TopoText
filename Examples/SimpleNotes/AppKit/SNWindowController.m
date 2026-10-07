@@ -2,6 +2,7 @@
 #import "SNRichText.h"
 #import "SNModel.h"
 #import "SNTableGrid.h"
+#import "SNSmartFolderPanel.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -197,7 +198,9 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (void)reloadNotes {
-    NSManagedObjectID *selected = _editor.noteID ?: [self selectedNote].objectID;
+    /* The note chosen in the list, else the one open: a note being closed
+       saves as it goes, and must not take the choice back to itself. */
+    NSManagedObjectID *selected = [self selectedNote].objectID ?: _editor.noteID;
     _reloading = YES;
     NSString *search = _searchField.stringValue;
     if ([self showsDeleted]) {
@@ -205,7 +208,8 @@ static const NSInteger SNMoveToMenuTag = 7001;
     } else {
         NSArray *notes = _shownTag ? [_notes notesTagged:_shownTag matching:search] : [_notes notesInFolder:[self selectedFolder] matching:search];
         NSMutableArray *rows = [NSMutableArray array];
-        for (SNNoteGroup *g in [_notes groupsOfNotes:notes]) {
+        SNSortOrder order = [_notes sortOrderForFolder:_shownTag ? nil : [self selectedFolder]];
+        for (SNNoteGroup *g in [_notes groupsOfNotes:notes sortedBy:order]) {
             if (g.title) [rows addObject:g.title];
             [rows addObjectsFromArray:g.notes];
         }
@@ -267,7 +271,9 @@ static const NSInteger SNMoveToMenuTag = 7001;
         return [NSString stringWithFormat:@"Recently Deleted  (%lu)", (unsigned long)_notes.countOfDeletedNotes];
     if ([item isKindOfClass:[SNFolder class]]) {
         SNFolder *f = item;
-        return [NSString stringWithFormat:@"%@  (%lu)", f.name.length ? f.name : @"Untitled", (unsigned long)[_notes countOfNotesInFolder:f]];
+        /* A smart folder: a gear before its name, as Apple Notes' icon. */
+        return [NSString stringWithFormat:@"%@%@  (%lu)", [_notes isSmartFolder:f] ? @"\u2699\uFE0E " : @"",
+                                          f.name.length ? f.name : @"Untitled", (unsigned long)[_notes countOfNotesInFolder:f]];
     }
     if (item == SNAllNotesItem) return [NSString stringWithFormat:@"All Notes  (%lu)", (unsigned long)[_notes countOfNotesInFolder:nil]];
     return [NSString stringWithFormat:@"%@  (%lu)", item, (unsigned long)[_notes countOfNotesTagged:[item substringFromIndex:1]]];
@@ -370,11 +376,15 @@ static const NSInteger SNMoveToMenuTag = 7001;
             proposedChildIndex:(NSInteger)index {
     if ([[info draggingPasteboard] stringForType:SNNoteDragType]) {
         if (![item isKindOfClass:[SNFolder class]] && item != SNAllNotesItem && item != SNDeletedItem) return NSDragOperationNone;
+        /* Nothing goes into a smart folder: its rules choose. */
+        if ([_notes isSmartFolder:item]) return NSDragOperationNone;
     } else {
         SNFolder *dragged = [self draggedObject:info type:SNFolderDragType];
         if (!dragged) return NSDragOperationNone;
         if (!item || item == SNAllNotesItem) item = SNAllNotesItem;
-        else if (![item isKindOfClass:[SNFolder class]] || item == dragged || [_notes folder:item isInFolder:dragged]) return NSDragOperationNone;
+        else if (![item isKindOfClass:[SNFolder class]] || item == dragged || [_notes folder:item isInFolder:dragged] ||
+                 [_notes isSmartFolder:item])
+            return NSDragOperationNone;
     }
     [outline setDropItem:item dropChildIndex:NSOutlineViewDropOnItemIndex];
     return NSDragOperationMove;
@@ -404,6 +414,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     NSArray *tree = _notes.folderTree;
     if (tree.count) [menu addItem:[NSMenuItem separatorItem]];
     for (SNFolder *f in tree) {
+        if ([_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
         NSString *title = [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"];
         NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:title action:@selector(moveNoteToFolder:) keyEquivalent:@""];
@@ -506,8 +517,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
     _grids = nil;
     [_binding unbind];
     _binding = nil;
-    [_editor close];
+    /* Let go of first: closing saves, and the list reloads meanwhile. */
+    SNNoteEditor *closing = _editor;
     _editor = nil;
+    [closing close];
 }
 
 - (void)openNote:(SNNote *)note {
@@ -623,6 +636,25 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [self chooseItem:f];
 }
 
+/* A smart folder, as Apple Notes': its name and rules asked for. */
+- (IBAction)newSmartFolder:(id)sender {
+    SNSmartFolderPanel *panel = [[SNSmartFolderPanel alloc] initWithName:@"Smart Folder" filter:[[SNSmartFilter alloc] init]];
+    if (![panel runModal]) return;
+    SNFolder *f = [_notes addSmartFolderNamed:panel.name filter:panel.filter inFolder:nil];
+    [self reloadFolders];
+    [self chooseItem:f];
+}
+
+- (IBAction)editSmartFolder:(id)sender {
+    SNFolder *f = [self selectedFolder];
+    SNSmartFilter *filter = f ? [_notes filterOfFolder:f] : nil;
+    if (!filter) return;
+    SNSmartFolderPanel *panel = [[SNSmartFolderPanel alloc] initWithName:f.name ?: @"" filter:filter];
+    if (![panel runModal]) return;
+    [_notes renameFolder:f to:panel.name];
+    [_notes setFilter:panel.filter ofFolder:f];
+}
+
 - (IBAction)renameFolder:(id)sender {
     SNFolder *f = [self selectedFolder];
     if (!f) return;
@@ -635,7 +667,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (!f) return;
     NSAlert *alert = [[NSAlert alloc] init];
     alert.messageText = [NSString stringWithFormat:@"Delete the folder “%@”?", f.name ?: @""];
-    alert.informativeText = [_notes foldersInFolder:f].count
+    alert.informativeText = [_notes isSmartFolder:f] ? @"Its notes stay where they are." : [_notes foldersInFolder:f].count
         ? @"The folders in it are deleted too. Their notes go to Recently Deleted, where they can be recovered for 30 days."
         : @"Its notes go to Recently Deleted, where they can be recovered for 30 days.";
     [alert addButtonWithTitle:@"Delete"];
@@ -719,18 +751,43 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [tv didChangeText];
 }
 
+/* Images shown as images; any other file as a card, opened from it. */
 - (IBAction)attachFile:(id)sender {
-    if (!_binding || !_textView.isEditable) return;
+    if (!_binding || !_textView.isEditable || [self typingInTable]) return;
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedFileTypes = @[ @"png", @"jpg", @"jpeg", @"gif", @"tiff", @"tif", @"heic", @"bmp" ];
     panel.allowsMultipleSelection = YES;
     if ([panel runModal] != NSModalResponseOK) return;
-    for (NSURL *url in panel.URLs)
-        if (![self attachImageData:[NSData dataWithContentsOfURL:url]]) {
-            NSAlert *alert = [[NSAlert alloc] init];
-            alert.messageText = [NSString stringWithFormat:@"“%@” is not an image SimpleNotes can show.", url.lastPathComponent];
-            [alert runModal];
-        }
+    for (NSURL *url in panel.URLs) {
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        if ([self attachImageData:data] || [self attachFileData:data name:url.lastPathComponent]) continue;
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = data.length > SNAttachmentMaxFileBytes
+            ? [NSString stringWithFormat:@"“%@” is larger than 25 MB.", url.lastPathComponent]
+            : [NSString stringWithFormat:@"“%@” could not be read.", url.lastPathComponent];
+        [alert runModal];
+    }
+}
+
+- (BOOL)attachFileData:(NSData *)data name:(NSString *)name {
+    if (!_binding || !_textView.isEditable || !data) return NO;
+    NSRange r = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return NO;
+    if (![_binding insertFileData:data name:name inRange:r]) return NO;
+    [_textView didChangeText];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    return YES;
+}
+
+/* A file's card double-clicked: the file opened in its own application. */
+- (void)textView:(NSTextView *)tv doubleClickedOnCell:(id<NSTextAttachmentCell>)cell inRect:(NSRect)rect atIndex:(NSUInteger)index {
+    if (tv != _textView) return;
+    [self openFileOfAttachment:[_binding attachmentIDAt:index]];
+}
+
+- (BOOL)openFileOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = attachmentID ? [_notes attachmentWithID:attachmentID] : nil;
+    NSURL *url = a ? [_notes fileURLOfAttachment:a] : nil;
+    return url && [[NSWorkspace sharedWorkspace] openURL:url];
 }
 
 - (BOOL)attachImageData:(NSData *)data {
@@ -780,6 +837,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
 - (IBAction)sortByDateCreated:(id)sender { _notes.sortOrder = SNSortByDateCreated; }
 - (IBAction)sortByTitle:(id)sender { _notes.sortOrder = SNSortByTitle; }
 - (IBAction)toggleGroupByDate:(id)sender { _notes.groupsByDate = !_notes.groupsByDate; }
+/* View > Sort Folder By: the folder shown, its own order (Default: the
+   device's), synced with it. */
+- (void)sortFolderBy:(NSNumber *)order {
+    SNFolder *f = [self selectedFolder];
+    if (f) [_notes setSortOrder:order ofFolder:f];
+}
+- (IBAction)sortFolderByDefault:(id)sender { [self sortFolderBy:nil]; }
+- (IBAction)sortFolderByDateEdited:(id)sender { [self sortFolderBy:@(SNSortByDateEdited)]; }
+- (IBAction)sortFolderByDateCreated:(id)sender { [self sortFolderBy:@(SNSortByDateCreated)]; }
+- (IBAction)sortFolderByTitle:(id)sender { [self sortFolderBy:@(SNSortByTitle)]; }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     SEL a = item.action;
@@ -795,6 +862,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(emptyRecentlyDeleted:)) return _notes.countOfDeletedNotes > 0;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
+    if (a == @selector(editSmartFolder:)) return [_notes isSmartFolder:[self selectedFolder]];
+    if (a == @selector(sortFolderByDefault:) || a == @selector(sortFolderByDateEdited:) || a == @selector(sortFolderByDateCreated:) ||
+        a == @selector(sortFolderByTitle:)) {
+        SNFolder *f = [self selectedFolder];
+        NSNumber *own = f ? [_notes sortOrderOfFolder:f] : nil;
+        NSNumber *mine = a == @selector(sortFolderByDateEdited:) ? @(SNSortByDateEdited) : a == @selector(sortFolderByDateCreated:) ? @(SNSortByDateCreated)
+                       : a == @selector(sortFolderByTitle:) ? @(SNSortByTitle) : nil;
+        item.state = f && (mine ? [own isEqual:mine] : !own) ? NSControlStateValueOn : NSControlStateValueOff;
+        return f != nil;
+    }
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;

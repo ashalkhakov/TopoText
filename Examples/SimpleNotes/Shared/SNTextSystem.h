@@ -73,6 +73,9 @@ FOUNDATION_EXPORT CGFloat SNSystemPointsPerPixel(void);
 
 // An image (nil: a grey box, while it has not come) size points large.
 FOUNDATION_EXPORT SNTextAttachment *SNSystemImageAttachment(NSData *_Nullable data, NSString *_Nullable type, SNSize size);
+// A file, as a card (the system's icon for it, its name, what it is) as
+// wide as width; data kept in it (copied out, dragged out, as the file).
+FOUNDATION_EXPORT SNTextAttachment *SNSystemFileAttachment(NSData *_Nullable data, NSString *name, NSString *detail, CGFloat width);
 // A room: as large as size, nothing drawn in it.
 FOUNDATION_EXPORT SNTextAttachment *SNSystemRoomAttachment(SNSize size);
 // What a view's attachment holds, as data (one pasted or dropped).

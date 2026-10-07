@@ -131,6 +131,14 @@
 				);
 			};
 		};
+		42A80778769E29C7DC69B57E /* SNSmartFolderPanel.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 41670A389C12C54CF89C242D;
+		};
+		42ACC18869EA501737FA02E2 /* SNSmartFilter.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 97D0F5F29F835BA15429813C;
+		};
 		46A498C888CEA38E5FDEC855 /* OTelKit.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = F6D896F11584BB5C77EEEA7A;
@@ -279,6 +287,10 @@
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
 		};
+		AC1307ED585C96E4A0074734 /* SmartFolderPanel.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 7E6A0E52D2824B01873D4747;
+		};
 		AC28625FEB238C24115CFE5A /* SNMigration.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
@@ -394,6 +406,10 @@
 		E05ABAA287682CBC6906D83E /* ODataSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
+		};
+		E717F2ED317246A1601D506D /* SNSmartFilter.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 97D0F5F29F835BA15429813C;
 		};
 		E99FA8F062284DC3A9F31691 /* ODataIncrementalStore.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
@@ -782,6 +798,13 @@
 			path = SimpleNotes.app;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		25BBA47832C568E4C754BC83 /* SNSmartFolderPanel.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNSmartFolderPanel.h;
+			sourceTree = "<group>";
+			name = SNSmartFolderPanel.h;
+		};
 		2725B1B9F5ED2F0BA4FFB0F3 /* SNFolder.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -849,6 +872,13 @@
 			lastKnownFileType = wrapper.xcdatamodel;
 			path = "SimpleNotes 3.xcdatamodel";
 			sourceTree = "<group>";
+		};
+		41670A389C12C54CF89C242D /* SNSmartFolderPanel.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNSmartFolderPanel.m;
+			sourceTree = "<group>";
+			name = SNSmartFolderPanel.m;
 		};
 		47029EC1BB7F394FB43D846A /* SNMigration.h */ = {
 			isa = PBXFileReference;
@@ -982,6 +1012,13 @@
 			sourceTree = "<group>";
 			name = SNResolver.h;
 		};
+		7E6A0E52D2824B01873D4747 /* SmartFolderPanel.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/SmartFolderPanel.xib;
+			sourceTree = "<group>";
+			name = SmartFolderPanel.xib;
+		};
 		824A3193518B99D32009123E /* NotesWindow.xib */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = file.xib;
@@ -1009,6 +1046,13 @@
 			path = AppKit/SNTextView.m;
 			sourceTree = "<group>";
 			name = SNTextView.m;
+		};
+		97D0F5F29F835BA15429813C /* SNSmartFilter.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNSmartFilter.m;
+			sourceTree = "<group>";
+			name = SNSmartFilter.m;
 		};
 		9830E7D38501D4B632E0C8F2 /* SNTextSystem.m */ = {
 			isa = PBXFileReference;
@@ -1114,6 +1158,13 @@
 			sourceTree = "<group>";
 			name = SNTextSystem.m;
 		};
+		DF6E4590561AFD1E2D8B2DA3 /* SNSmartFilter.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNSmartFilter.h;
+			sourceTree = "<group>";
+			name = SNSmartFilter.h;
+		};
 		E203A76E7D15AD19DD76A352 /* seed.py */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.script.python;
@@ -1127,6 +1178,12 @@
 			path = Shared/SNNote.m;
 			sourceTree = "<group>";
 			name = SNNote.m;
+		};
+		EAA6D90405A32298355B9AF5 /* SimpleNotes 5.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = "SimpleNotes 5.xcdatamodel";
+			sourceTree = "<group>";
 		};
 		F3FA6CE187CC612529B3727F /* SNSelfTest.h */ = {
 			isa = PBXFileReference;
@@ -1212,11 +1269,14 @@
 				94DE5DF5B274EF78A7375493,
 				DB05A5F09546462524E26DCA,
 				7B4D0C1B7C0CC0E7BCA52B3B,
+				25BBA47832C568E4C754BC83,
+				41670A389C12C54CF89C242D,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
 				93905B50397F393A04D89B2C,
 				824A3193518B99D32009123E,
 				3BD4E32C20887A161DAC86F3,
+				7E6A0E52D2824B01873D4747,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1268,6 +1328,8 @@
 				4A9856BDDEBD09A136FC953C,
 				A6AD243562BFE2DA0E510338,
 				FC73A466CE6A4BC79D15A841,
+				DF6E4590561AFD1E2D8B2DA3,
+				97D0F5F29F835BA15429813C,
 				7E6474CC5566165BCB367580,
 				C5BF2DACC29D3CD90AB653ED,
 				1512BC10FA77B286C0749560,
@@ -1537,6 +1599,7 @@
 				EEA03511188291009AB0171F,
 				F9C5540A3B0482B8474FBF95,
 				095BECCD974EC50D623BA7B9,
+				AC1307ED585C96E4A0074734,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1566,6 +1629,7 @@
 				37DFBF31EE8E129D11C4F1E0,
 				025651F2BB52DB27CF566C7C,
 				6333306B7D1ED627E640309C,
+				E717F2ED317246A1601D506D,
 				099EC221977E4E9C431EA752,
 				86BC567CCDCCAB940C7793DF,
 				1AEA465EF57405F1763F16F7,
@@ -1598,6 +1662,7 @@
 				34F4CD95AC29D3E0EA84037E,
 				5B455969B2358702B11C8D4F,
 				FD8857A760C31A14282BD27A,
+				42A80778769E29C7DC69B57E,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
 				F48063A33E82F7318AC1D2FF,
@@ -1605,6 +1670,7 @@
 				D2A1E2BABE67FC85240D71EB,
 				3831F7787A1EC21E9B6A9344,
 				9A875137FA1C56A505E3F568,
+				42ACC18869EA501737FA02E2,
 				8325B3AFD178A1008D2AB02F,
 				D0EFBF4E8A299CC4F4ED3DBD,
 				31315B895C7B07BAF6DA0F94,
@@ -1865,9 +1931,10 @@
 				BCCB2602B0C5007DD193EFB5,
 				3ED189E6AF571756E33600AA,
 				4B17F92C591BD198105AEF35,
+				EAA6D90405A32298355B9AF5,
 				3BBC93E5156C8D3EC4A97323,
 			);
-			currentVersion = 4B17F92C591BD198105AEF35;
+			currentVersion = EAA6D90405A32298355B9AF5;
 			path = SimpleNotes.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

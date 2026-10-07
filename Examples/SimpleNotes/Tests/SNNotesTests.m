@@ -463,6 +463,91 @@
     a.sortOrder = was;
 }
 
+/* A folder sorted its own way (View > Sort Folder By), on every device;
+   the others as the device sorts. */
+- (void)testAFolderHasItsOwnOrderEverywhere {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *home = [a addFolderNamed:@"Home"];
+    NSArray *titles = @[ @"Cherry", @"apple", @"Banana" ];
+    for (NSString *t in titles) [self edit:[a addNoteInFolder:home] on:a with:^(TopoText *text) {
+        [text insertString:t atIndex:0 attributes:nil];
+    }];
+    XCTAssertNil([a sortOrderOfFolder:home], @"the device's, to begin with");
+    [a setSortOrder:@(SNSortByTitle) ofFolder:home];
+    XCTAssertEqual([a sortOrderForFolder:home], SNSortByTitle);
+    XCTAssertEqual([a sortOrderForFolder:nil], a.sortOrder, @"All Notes: the device's");
+    XCTAssertEqualObjects([[a notesInFolder:home matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry" ]));
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = [b foldersInFolder:nil].firstObject;
+    XCTAssertEqualObjects([b sortOrderOfFolder:there], @(SNSortByTitle), @"synced with the folder");
+    XCTAssertEqualObjects([[b notesInFolder:there matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry" ]));
+    [b setSortOrder:nil ofFolder:there];
+    XCTAssertNil([b sortOrderOfFolder:there], @"back to the device's");
+}
+
+#pragma mark smart folders
+
+- (void)testASmartFolderHasTheNotesItsRulesTake {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *home = [a addFolderNamed:@"Home"], *work = [a addFolderNamed:@"Work"];
+    SNNote *groceries = [a addNoteInFolder:home], *standup = [a addNoteInFolder:work], *ideas = [a addNoteInFolder:nil];
+    [self edit:groceries on:a with:^(TopoText *t) {
+        [t insertString:@"Groceries #errands\nmilk\neggs" atIndex:0 attributes:nil];
+        [t addParagraphAttributes:@{ @"list": @"check" } range:NSMakeRange(19, 5)];
+        [t addParagraphAttributes:@{ @"list": @"check", @"checked": @YES } range:NSMakeRange(24, 4)];
+    }];
+    [self edit:standup on:a with:^(TopoText *t) { [t insertString:@"Standup #work #errands" atIndex:0 attributes:nil]; }];
+    [self edit:ideas on:a with:^(TopoText *t) { [t insertString:@"Ideas #work" atIndex:0 attributes:nil]; }];
+    [a setNote:ideas pinned:YES];
+
+    SNSmartFilter *errands = [[SNSmartFilter alloc] init];
+    errands.tags = @[ @"errands" ];
+    SNFolder *smart = [a addSmartFolderNamed:@"Errands" filter:errands inFolder:nil];
+    XCTAssertTrue([a isSmartFolder:smart]);
+    XCTAssertFalse([a isSmartFolder:home]);
+    XCTAssertEqualObjects([NSSet setWithArray:[[a notesInFolder:smart matching:nil] valueForKey:@"title"]],
+                          ([NSSet setWithObjects:@"Groceries #errands", @"Standup #work #errands", nil]), @"from every folder");
+    XCTAssertEqual([a countOfNotesInFolder:smart], 2u);
+    XCTAssertEqual([a notesInFolder:smart matching:@"standup"].count, 1u, @"and searched");
+
+    /* All of the rules, or any. */
+    SNSmartFilter *f = [[SNSmartFilter alloc] init];
+    f.tags = @[ @"work", @"errands" ];
+    XCTAssertEqualObjects([self titles:a filter:f], [NSSet setWithObject:@"Standup #work #errands"], @"both tags");
+    f.anyTag = YES;
+    XCTAssertEqual([self titles:a filter:f].count, 3u, @"either tag");
+    SNSmartFilter *g = [[SNSmartFilter alloc] init];
+    g.checklists = SNChecklistRuleUnticked;
+    XCTAssertEqualObjects([self titles:a filter:g], [NSSet setWithObject:@"Groceries #errands"], @"an item not ticked");
+    g.pinnedOnly = YES;
+    XCTAssertEqual([self titles:a filter:g].count, 0u, @"and pinned: none");
+    g.matchesAny = YES;
+    XCTAssertEqual([self titles:a filter:g].count, 2u, @"or pinned: two");
+    XCTAssertEqualObjects([SNSmartFilter filterWithString:g.string], g, @"kept as text, read back the same");
+
+    /* Nothing goes into it; a note made in it is in no folder. */
+    [a moveNote:groceries toFolder:smart];
+    XCTAssertEqual(groceries.folder, home);
+    XCTAssertNil([a addNoteInFolder:smart].folder);
+    XCTAssertFalse([a moveFolder:work toFolder:smart]);
+
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = nil;
+    for (SNFolder *x in [b folders])
+        if ([x.name isEqual:@"Errands"]) there = x;
+    XCTAssertEqualObjects([b filterOfFolder:there], errands, @"its rules synced with it");
+    XCTAssertEqual([b countOfNotesInFolder:there], 2u);
+}
+
+- (NSSet *)titles:(SNNotes *)device filter:(SNSmartFilter *)filter {
+    NSMutableSet *out = [NSMutableSet set];
+    for (SNNote *n in [device notesInFolder:nil matching:nil])
+        if ([filter matchesNote:n now:[NSDate date]]) [out addObject:n.title];
+    return out;
+}
+
 #pragma mark attachments
 
 - (void)testAnAttachmentGoesToTheOtherDevice {
@@ -490,6 +575,21 @@
     [self sync:b];
     [self sync:a];
     XCTAssertNil([a attachmentWithID:attachmentID], @"and everywhere");
+}
+
+- (void)testAFileGoesToTheOtherDevice {
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    NSData *pdf = [@"%PDF-1.4 a little document" dataUsingEncoding:NSUTF8StringEncoding];
+    SNAttachment *file = [a addFileToNote:note data:pdf name:@"Lease.pdf" type:@"application/pdf"];
+    XCTAssertEqualObjects(file.kind, SNAttachmentKindFile);
+    [self sync:a];
+    [self sync:b];
+    SNAttachment *came = [b attachmentWithID:file.id];
+    XCTAssertEqualObjects(came.data, pdf);
+    XCTAssertEqualObjects(came.name, @"Lease.pdf");
+    XCTAssertEqualObjects(came.type, @"application/pdf");
+    XCTAssertEqualObjects([a addFileToNote:note data:pdf name:@"x" type:nil].type, @"application/octet-stream", @"a type, always");
 }
 
 - (void)testATableEditedOnTwoDevicesIsMerged {

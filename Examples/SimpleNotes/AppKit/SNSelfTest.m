@@ -227,6 +227,52 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         notes.groupsByDate = grouped;
         [window showAllNotes];
         [window selectNoteTitled:@"Weekend"];
+        /* A folder sorted its own way, from View > Sort Folder By; synced. */
+        SNFolder *work = nil;
+        for (SNFolder *f in notes.folders) if ([f.name isEqual:@"Work"]) work = f;
+        [window showFolderNamed:@"Work"];
+        NSMenuItem *byTitle = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(sortFolderByTitle:) keyEquivalent:@""];
+        SNSay([tv tryToPerform:@selector(sortFolderByTitle:) with:nil] && [[notes sortOrderOfFolder:work] isEqual:@(SNSortByTitle)] &&
+              [window validateMenuItem:byTitle] && byTitle.state == NSControlStateValueOn,
+              @"Sort Folder By Title from the menu, ticked");
+        [window showAllNotes];
+        NSMenuItem *byTitleHere = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(sortFolderByTitle:) keyEquivalent:@""];
+        SNSay(![window validateMenuItem:byTitleHere], @"not for All Notes");
+        /* A smart folder: every note tagged #work, from any folder. */
+        SNSmartFilter *workTagged = [[SNSmartFilter alloc] init];
+        workTagged.tags = @[ @"work" ];
+        [notes addSmartFolderNamed:@"Work Things" filter:workTagged inFolder:nil];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay([[window sidebarRows] containsObject:@"Work Things"] && [window showFolderNamed:@"Work Things"] &&
+              [[window shownRows] containsObject:@"Standup notes"] && [[window shownRows] containsObject:@"Ideas"] &&
+              ![[window shownRows] containsObject:@"Weekend"],
+              [NSString stringWithFormat:@"a smart folder lists the notes its rules take (%@)", [[window shownRows] componentsJoinedByString:@" | "]]);
+        NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
+        SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNFolder *workThere = nil, *smartThere = nil;
+        for (SNFolder *f in other.folders) {
+            if ([f.name isEqual:@"Work"]) workThere = f;
+            if ([f.name isEqual:@"Work Things"]) smartThere = f;
+        }
+        SNSay([[other sortOrderOfFolder:workThere] isEqual:@(SNSortByTitle)] && [other countOfNotesInFolder:smartThere] == 2,
+              @"the folder's order and the smart folder on the second device");
+        /* A file: a card in the note, written out to be opened. */
+        [window showAllNotes];
+        [window selectNoteTitled:@"Weekend"];
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        NSData *pdf = [@"%PDF-1.4 a lease" dataUsingEncoding:NSUTF8StringEncoding];
+        SNSay([window attachFileData:pdf name:@"Lease.pdf"], @"a file attached");
+        NSString *fileID = [tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        NSTextAttachment *card = [tv.textStorage attribute:NSAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        SNAttachment *lease = fileID ? [notes attachmentWithID:fileID] : nil;
+        NSURL *written = lease ? [notes fileURLOfAttachment:lease] : nil;
+        SNSay([lease.kind isEqual:SNAttachmentKindFile] && card.attachmentCell.cellSize.height > 40 &&
+              [written.lastPathComponent isEqual:@"Lease.pdf"] && [[NSData dataWithContentsOfURL:written] isEqual:pdf],
+              [NSString stringWithFormat:@"shown as a card, written out to be opened (%@)", written.path]);
 
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */
