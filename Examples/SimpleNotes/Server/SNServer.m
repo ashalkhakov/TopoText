@@ -28,6 +28,9 @@
 //                proxy that signs users in, or JWTIssuer and JWTAudience
 //   AllowAnonymous  NO: a request that names no one is refused, once a
 //                sign-in is set (default YES, for trying it out)
+//   AllowAnonymousMetadata  NO: $metadata too is refused to one not
+//                signed in (default YES: the apps read there how to sign
+//                in)
 //   Notebooks    PerUser: each signed-in user has their own folders and
 //                notes (SNNotebooks.h); Shared: every device has all of
 //                them. Default: PerUser once a sign-in is set
@@ -54,7 +57,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -152,7 +155,8 @@ static NSURL *SNURL(id value) {
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
     /* How to sign in ($metadata's Authorization), to a device not signed
-       in yet: SNSignIn reads it there. */
+       in yet: SNSignIn reads it there. AllowAnonymousMetadata NO turns it
+       off (ODataServiceModule reads it). */
     _service.allowsAnonymousMetadata = YES;
     /* Devices not yet updated write in their model's version: each version
        adds to the one before, and renames Updated Edited (SNUpgradeBody). */
@@ -165,7 +169,6 @@ static NSURL *SNURL(id value) {
     BOOL signIn = [c setting:@"TrustedUserHeader"] || [c setting:@"JWTIssuer"] || [c setting:@"IntrospectionEndpoint"];
     NSString *peerKey = [c setting:@"PeerKey"];
     BOOL peers = signIn && ![peerKey isEqual:@"None"];
-    if (peers) SNOfferPeerTokens(_service);
     if (notebooks ? [notebooks caseInsensitiveCompare:@"PerUser"] == NSOrderedSame : signIn) SNServeNotebookPerUser(_service);
     NSString *heir = [c setting:@"GiveUnownedTo"];
     if (heir.length) {

@@ -284,7 +284,17 @@ addition:
   GNUstep, but not on Apple's Core Data, so a server on macOS uses SQLite.
 - `StoreURL Temporary` is a throwaway store, for trying things out.
 - `AllowAnonymous NO` refuses requests that don't say who they're from,
-  once a sign-in is set. Every device syncs every note: one shared notebook.
+  once a sign-in is set.
+- `AllowAnonymousMetadata NO` refuses `$metadata` too. By default anyone may
+  read it, since that's where the apps learn how to sign in.
+- `Notebooks` is `PerUser` (the default once a sign-in is set: each user
+  has their own folders and notes) or `Shared` (every device syncs every
+  note).
+- `GiveUnownedTo <user>` gives the notes made while the notebook was shared
+  to that user (their sign-in's subject), at start.
+- `PeerKey` is the file of the key the server signs peer tokens with, which
+  let a user's devices nearby sync with each other while offline. It's made
+  the first time, beside a SQLite store; `None` turns peer tokens off.
 
 Each setting can also be an environment variable: `SN_` and the setting's
 name in capitals, words split by `_` (`SN_STORE_URL`, `SN_SERVICE_ROOT`,
@@ -334,8 +344,30 @@ HTTPServerKit's proxy settings work as `SN_` variables too:
   accepts only requests that carry the proxy's secret.
 - `SN_CORS_ORIGINS` sets the allowed origins.
 
-Sign-in with OIDC (`SN_JWT_ISSUER`, `SN_JWT_AUDIENCE`) works the same way.
-Separating each user's notes is still to come (see "Not yet").
+#### Signing in with Keycloak (or another OpenID Connect provider)
+
+1. In the realm, add a client with Client ID `simplenotes`: public (no
+   client authentication), with **OAuth 2.0 Device Authorization Grant**
+   on. The apps sign in with a code entered in a browser, so they need no
+   redirect URI.
+2. Run the server with the realm as its issuer:
+
+   ```sh
+   docker run -p 8080:8080 -v notes:/data \
+     -e SN_SERVICE_ROOT=https://notes.example.com/odata/ \
+     -e SN_JWT_ISSUER=https://id.example.com/realms/<realm> \
+     -e SN_ALLOW_ANONYMOUS=NO \
+     ghcr.io/ashalkhakov/simplenotes-server
+   ```
+
+   `SN_JWT_AUDIENCE` additionally checks the tokens' audience, if your
+   realm sets one.
+3. In the app, choose Sync… (on iOS, the server button), type the server's
+   address, and Sign In. A browser opens on the provider's page with the
+   code filled in; once you sign in there, the app syncs as you.
+
+Each user has a notebook of their own. `$metadata` stays readable without
+signing in, so the app can find out where to sign in.
 
 ### On Linux, without Docker
 
@@ -494,12 +526,25 @@ are out of place move, and each move is a deletion plus an insertion. So if
 another device was typing into an item at the moment it moved, that text
 stays where the item was.
 
+## Devices nearby
+
+Sync › Devices Nearby… (on the desktop) syncs your notes directly with
+your other devices on the same network, without the server
+(ODataSync's peer sync).
+
+- **Serve my notes to devices nearby** makes this computer one the others
+  can reach. It's advertised over Bonjour (Avahi on Linux), served over TLS,
+  and stays on across launches.
+- A device syncs with another by one of two things. A **peer token** comes
+  from your server while you're signed in, and lasts a day; your devices
+  then trust each other even offline. **Pairing** is for a device that
+  shares no server with this one: Show Pairing Code on one, Pair With
+  Code… on the other (the code is good once, for two minutes).
+- Edits made apart merge as they do through the server.
+
 ## Not yet
 
-- **One shared notebook.** A notebook per user means a handler on the
-  server (an `ODataSyncSetHandler` that filters by the signed-in user).
-- **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
-  ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
+- **Devices nearby on iOS.** The iOS app syncs through the server only.
 - **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
   the version every device has seen. SimpleNotes doesn't track that yet; the
   server could, once devices send deltas rather than whole notes.

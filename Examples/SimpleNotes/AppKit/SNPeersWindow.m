@@ -127,7 +127,7 @@ NSString * const SNServePeersDefaultsKey = @"SNServePeers";
 - (IBAction)copyPairingCode:(id)sender {
     if (!_codeLabel.stringValue.length) return;
     NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
-    [pasteboard clearContents];
+    [pasteboard declareTypes:@[ NSPasteboardTypeString ] owner:nil];   /* GNUstep has no -clearContents */
     [pasteboard setString:_codeLabel.stringValue forType:NSPasteboardTypeString];
 }
 

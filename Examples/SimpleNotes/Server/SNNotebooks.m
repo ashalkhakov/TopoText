@@ -78,29 +78,6 @@ NSDictionary *SNPeerSigningKeyAt(NSURL *file, NSError **error) {
     return made;
 }
 
-/* PeerToken, answered by the service's part of ODataSync once there is one. */
-@interface SNPeerTokenOperations : NSObject <ODataSyncPeerTokenActions>
-@property (nonatomic, weak) ODataSyncService *histories;
-@end
-
-@implementation SNPeerTokenOperations
-- (NSDictionary *)peerTokenWithReplica:(NSString *)replica thumbprint:(NSString *)thumbprint reply:(ODataReply *)reply {
-    ODataSyncService *histories = _histories;
-    if (!histories) {
-        [reply failWithError:[NSError errorWithDomain:NSCocoaErrorDomain code:NSFeatureUnsupportedError
-                                             userInfo:@{ NSLocalizedDescriptionKey: @"This service issues no peer tokens" }]];
-        return nil;
-    }
-    return [histories peerTokenWithReplica:replica thumbprint:thumbprint reply:reply];
-}
-@end
-
-void SNOfferPeerTokens(ODataService *service) {
-    service.serviceOperations = [[SNPeerTokenOperations alloc] init];
-}
-
 void SNIssuePeerTokens(ODataSyncService *histories, NSDictionary *signingKey) {
-    SNPeerTokenOperations *operations = histories.service.serviceOperations;
-    if ([operations isKindOfClass:[SNPeerTokenOperations class]]) operations.histories = histories;
     histories.peerTokens = [[ODataSyncPeerTokenIssuer alloc] initWithIssuer:histories.service.serviceRoot.absoluteString signingKey:signingKey];
 }

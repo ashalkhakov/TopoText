@@ -297,21 +297,9 @@ static NSDictionary *SNJSON(NSData *data) {
 
 - (ODataConfiguration *)configuration {
     ODataConfiguration *c = [[ODataConfiguration alloc] initWithURL:_serviceRoot options:nil];
+    /* Asked for credentials once the server refuses a request (a sync
+       does not read $metadata, behind the sign-in on most servers). */
     c.credentialProvider = self;
-    /* How the server signs in, as learnt from its $metadata (a sync does
-       not read it): so the configuration asks this for its credentials. */
-    ODataSchemaAuthorization *a = [[ODataSchemaAuthorization alloc] init];
-    if (_kind == SNSignInOpenID) {
-        a.name = @"OpenIDConnect";
-        a.kind = @"OpenIDConnect";
-        a.issuerURL = _issuer;
-        c.authorizations = @[ a ];
-    } else if (_kind == SNSignInPassword) {
-        a.name = @"Basic";
-        a.kind = @"Http";
-        a.scheme = @"basic";
-        c.authorizations = @[ a ];
-    }
     return c;
 }
 

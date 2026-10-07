@@ -681,7 +681,6 @@
     NSDictionary *key = HSGenerateSigningKey(&error);
     XCTAssertNotNil(key, @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
-    SNOfferPeerTokens(_service);   /* as the server does once a sign-in is set */
     HSJWTAuthenticator *jwt = [[HSJWTAuthenticator alloc] initWithIssuer:@"https://id.test" audience:nil];
     jwt.keySet = @{ @"keys": @[ HSPublicKey(key) ] };
     _service.authenticator = jwt;
