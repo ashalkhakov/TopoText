@@ -287,7 +287,7 @@ def simplenotes(topotext_ids):
                                      'SNEditorViewController.xib', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
     icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
-    server = {n: F('Server/' + n) for n in ('SNServer.m',)}
+    server = {n: F('Server/' + n) for n in ('SNServer.m', 'SNNotebooks.h', 'SNNotebooks.m')}
     tests = {n: F('Tests/' + n) for n in ('seed.py',)}
 
     frameworks = ['TopoText', 'TopoTextSync'] + ODATAKIT_ORDER
@@ -336,7 +336,7 @@ def simplenotes(topotext_ids):
     # The server: a tool; Xcode compiles its model beside it, where it looks.
     src = phase(p, 'simplenotes-server', 'PBXSourcesBuildPhase', 'Sources',
                 [build_file(p, 'simplenotes-server', 'Sources', ref, c) for ref, c in
-                 sources_of(server, ['SNServer.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
+                 sources_of(server, ['SNServer.m', 'SNNotebooks.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
     fw = phase(p, 'simplenotes-server', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
     s = {'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'PRODUCT_NAME': 'simplenotes-server', 'SKIP_INSTALL': 'YES',

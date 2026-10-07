@@ -57,6 +57,10 @@
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
 		};
+		1D628DFD086981FFCD224B1D /* SNNotebooks.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 0E28CF600D1F26B783917DFC;
+		};
 		20327598F541A2BE0FF21B15 /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
@@ -764,6 +768,13 @@
 			sourceTree = "<group>";
 			name = SNNote.h;
 		};
+		0E28CF600D1F26B783917DFC /* SNNotebooks.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Server/SNNotebooks.m;
+			sourceTree = "<group>";
+			name = SNNotebooks.m;
+		};
 		0F63D94BCE525DAD30B53B51 /* main.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1111,6 +1122,13 @@
 			sourceTree = "<group>";
 			name = SNiOSSelfTest.h;
 		};
+		9D60CF54002C7C866FD039CD /* SNNotebooks.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Server/SNNotebooks.h;
+			sourceTree = "<group>";
+			name = SNNotebooks.h;
+		};
 		A42FDCBD28CC874D78BF7443 /* SNTableGrid.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1219,6 +1237,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.xcdatamodel;
 			path = "SimpleNotes 5.xcdatamodel";
+			sourceTree = "<group>";
+		};
+		EBF4039D9DB14DFD733691CF /* SimpleNotes 6.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = "SimpleNotes 6.xcdatamodel";
 			sourceTree = "<group>";
 		};
 		F3FA6CE187CC612529B3727F /* SNSelfTest.h */ = {
@@ -1440,6 +1464,8 @@
 			isa = PBXGroup;
 			children = (
 				99E1B2886F448CC0C50995D2,
+				9D60CF54002C7C866FD039CD,
+				0E28CF600D1F26B783917DFC,
 			);
 			sourceTree = "<group>";
 			name = Server;
@@ -1685,6 +1711,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CEC41A05EBF780F532ACBE1E,
+				1D628DFD086981FFCD224B1D,
 				144C28E98CC0E78EF5C3A32C,
 				20327598F541A2BE0FF21B15,
 				3B84FACBA94F3E3FB501528F,
@@ -1974,9 +2001,10 @@
 				3ED189E6AF571756E33600AA,
 				4B17F92C591BD198105AEF35,
 				EAA6D90405A32298355B9AF5,
+				EBF4039D9DB14DFD733691CF,
 				3BBC93E5156C8D3EC4A97323,
 			);
-			currentVersion = EAA6D90405A32298355B9AF5;
+			currentVersion = EBF4039D9DB14DFD733691CF;
 			path = SimpleNotes.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

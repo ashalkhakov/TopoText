@@ -50,7 +50,7 @@ SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/T
 SimpleNotes_COREDATA_CODEGEN = yes
 
 TOOL_NAME = simplenotes-server
-simplenotes-server_OBJC_FILES = Server/SNServer.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m
+simplenotes-server_OBJC_FILES = Server/SNServer.m Server/SNNotebooks.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m
 simplenotes-server_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
 simplenotes-server_COREDATA_CODEGEN = yes
 simplenotes-server_INCLUDE_DIRS = $(SN_INCLUDES)

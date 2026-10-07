@@ -7,6 +7,8 @@
 #import <ODataSync/ODataSyncService.h>
 #import "SNModel.h"
 #import "SNNotes.h"
+#import "SNNotebooks.h"
+#import <ODataIncrementalStore/ODataConfiguration.h>
 
 @interface SNNotesTests : XCTestCase <SNNoteEditorDelegate>
 @end
@@ -667,6 +669,84 @@
     NSArray *want = @[ @[ @"Milk", @"2 l" ], @[ @"Eggs", @"" ] ];
     XCTAssertEqualObjects([a tableOfAttachment:made].strings, want);
     XCTAssertEqualObjects([b tableOfAttachment:there].strings, want);
+}
+
+#pragma mark a notebook per user
+
+/* The service again, its sets each user's own (SNNotebooks.h), signing in
+   by an access token (a JWT) of an issuer it trusts: the test's. */
+- (NSDictionary *)serveNotebooksPerUser {
+    NSError *error = nil;
+    NSDictionary *key = HSGenerateSigningKey(&error);
+    XCTAssertNotNil(key, @"%@", error);
+    _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
+    HSJWTAuthenticator *jwt = [[HSJWTAuthenticator alloc] initWithIssuer:@"https://id.test" audience:nil];
+    jwt.keySet = @{ @"keys": @[ HSPublicKey(key) ] };
+    _service.authenticator = jwt;
+    _service.allowsAnonymousRequests = YES;   /* as the server's AllowAnonymous */
+    SNServeNotebookPerUser(_service);
+    _histories = [[ODataSyncService alloc] initWithService:_service];
+    return key;
+}
+
+/* A device signed in as subject (nil: no one). */
+- (SNNotes *)deviceOf:(NSString *)subject key:(NSDictionary *)key {
+    SNNotes *d = [self device];
+    ODataConfiguration *c = [[ODataConfiguration alloc] initWithURL:d.serviceRoot options:nil];
+    if (subject) {
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        c.accessToken = HSSignJWT(@{ @"iss": @"https://id.test", @"sub": subject, @"iat": @((long)now), @"exp": @((long)now + 3600) }, key, NULL);
+        XCTAssertNotNil(c.accessToken);
+    }
+    d.configuration = c;
+    return d;
+}
+
+- (void)testEachUserHasANotebookOfTheirOwn {
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNNotes *alice = [self deviceOf:@"alice" key:key], *aliceAgain = [self deviceOf:@"alice" key:key], *bob = [self deviceOf:@"bob" key:key];
+    SNFolder *home = [alice addFolderNamed:@"Alice's"];
+    [self edit:[alice addNoteInFolder:home] on:alice with:^(TopoText *t) { [t insertString:@"Alice's secret" atIndex:0 attributes:nil]; }];
+    [self edit:[bob addNoteInFolder:nil] on:bob with:^(TopoText *t) { [t insertString:@"Bob's list" atIndex:0 attributes:nil]; }];
+    [self sync:alice];
+    [self sync:bob];
+    [self sync:aliceAgain];
+    [self sync:alice];
+    XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"only hers");
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"on each of her devices");
+    XCTAssertEqualObjects([[aliceAgain folders] valueForKey:@"name"], @[ @"Alice's" ]);
+    XCTAssertEqualObjects([[bob notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Bob's list" ], @"only his");
+    XCTAssertEqual(bob.folders.count, 0u, @"none of her folders");
+    /* A deletion is told to its owner only. */
+    SNNote *secret = [aliceAgain notesInFolder:nil matching:nil].firstObject;
+    [aliceAgain deleteNote:secret];
+    [aliceAgain deleteNoteImmediately:secret];
+    [self sync:aliceAgain];
+    [self sync:alice];
+    [self sync:bob];
+    XCTAssertEqual([alice notesInFolder:nil matching:nil].count, 0u);
+    XCTAssertEqual([bob notesInFolder:nil matching:nil].count, 1u);
+    /* No one signed in: the rows no one owns, none of theirs. */
+    SNNotes *nobody = [self deviceOf:nil key:key];
+    [self sync:nobody];
+    XCTAssertEqual([nobody notesInFolder:nil matching:nil].count, 0u);
+    /* At the server, each row its owner's. */
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    c.persistentStoreCoordinator = _server;
+    NSArray *rows = [c executeFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteEntity] error:NULL];
+    XCTAssertEqualObjects([rows valueForKey:@"owner"], @[ @"bob" ]);
+}
+
+- (void)testRowsNoOneOwnsAreGivenToAUser {
+    SNNotes *before = [self device];   /* the notebook shared, no sign-in */
+    [self edit:[before addNoteInFolder:[before addFolderNamed:@"Old"]] on:before with:^(TopoText *t) { [t insertString:@"From before" atIndex:0 attributes:nil]; }];
+    [self sync:before];
+    NSError *error = nil;
+    XCTAssertEqual(SNGiveUnownedRows(_server, @"alice", &error), 2u, @"%@", error);
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNNotes *alice = [self deviceOf:@"alice" key:key];
+    [self sync:alice];
+    XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"From before" ]);
 }
 
 @end

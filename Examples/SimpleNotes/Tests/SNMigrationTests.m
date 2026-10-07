@@ -77,7 +77,7 @@
 - (void)migrateFrom:(NSString *)mom {
     NSURL *store = [self temporaryStore];
     NSURL *older = [_momd URLByAppendingPathComponent:mom];
-    XCTAssertEqual(SNModelVersions(_momd).count, 5u);
+    XCTAssertEqual(SNModelVersions(_momd).count, 6u);
     NSString *replica = nil;
     @autoreleasepool {
         SNNotes *old = [self deviceAt:store model:older];
@@ -88,7 +88,7 @@
         /* Typed, saved, not sent: in the store's history only. */
         [self type:@", and after" into:note on:old];
         XCTAssertNotNil([note.entity.attributesByName objectForKey:@"title"]);
-        XCTAssertNil([note.folder.entity.attributesByName objectForKey:@"filter"], @"before version 5, no smart folders");
+        XCTAssertNil([note.entity.attributesByName objectForKey:@"owner"], @"before version 6, no owners");
     }
 
     /* The app updated: the device opened with the current model migrates
@@ -137,6 +137,10 @@
 
 - (void)testAVersion4StoreIsMigratedAndWhatWaitedIsSent {
     [self migrateFrom:@"SimpleNotes 4.mom"];
+}
+
+- (void)testAVersion5StoreIsMigratedAndWhatWaitedIsSent {
+    [self migrateFrom:@"SimpleNotes 5.mom"];
 }
 
 - (void)testAStoreOfTheCurrentVersionIsLeftAlone {
