@@ -63,6 +63,8 @@ static NSString *SNDaysLeftText(SNNote *note) {
     SNNotes *_notes;
     NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
     NSArray<NSString *> *_tags;
+    /* The server being signed in to, until it is (then the notes'). */
+    SNSignIn *_signIn;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -164,11 +166,82 @@ static NSString *SNDaysLeftText(SNNote *note) {
         typed = [typed stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (typed.length && ![typed hasSuffix:@"/"]) typed = [typed stringByAppendingString:@"/"];
         NSURL *root = typed.length > 7 ? [NSURL URLWithString:typed] : nil;
-        if (root.host.length) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
-        else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
-        self->_notes.serviceRoot = root.host.length ? root : nil;
-        [self->_notes sync];
+        if (!root.host.length) {
+            [self useServer:nil signIn:nil];
+            return;
+        }
+        [self signInToServer:root];
     });
+}
+
+/* Signed in as the server asks, then synced with (SNSignIn). */
+- (void)signInToServer:(NSURL *)root {
+    [_signIn cancel];
+    _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+    _signIn.delegate = self;
+    [_signIn learn];
+}
+
+- (void)useServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+    if (root) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
+    else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
+    signIn.delegate = nil;
+    _notes.configuration = signIn ? signIn.configuration : nil;
+    _notes.serviceRoot = root;
+    [_notes sync];
+}
+
+#pragma mark signing in
+
+- (void)signInDidLearn:(SNSignIn *)signIn {
+    if (signIn.signedIn) {
+        [self useServer:signIn.serviceRoot signIn:signIn];
+        return;
+    }
+    if (signIn.kind == SNSignInPassword) {
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In" message:signIn.serviceRoot.host
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+        [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
+            f.placeholder = @"User name";
+            f.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        }];
+        [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
+            f.placeholder = @"Password";
+            f.secureTextEntry = YES;
+        }];
+        [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [a addAction:[UIAlertAction actionWithTitle:@"Sign In" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+            [signIn signInWithUser:a.textFields[0].text ?: @"" password:a.textFields[1].text ?: @""];
+        }]];
+        [self presentViewController:a animated:YES completion:nil];
+        return;
+    }
+    [signIn begin];
+}
+
+/* The code, and the provider's page to enter it on (opened in Safari). */
+- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In"
+        message:[NSString stringWithFormat:@"Open %@ and enter the code\n\n%@", page.host ?: page.absoluteString, code]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+        [signIn cancel];
+    }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"Open Page" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        [[UIApplication sharedApplication] openURL:completePage ?: page options:@{} completionHandler:nil];
+    }]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+
+- (void)signInDidFinish:(SNSignIn *)signIn {
+    if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
+    [self useServer:signIn.serviceRoot signIn:signIn];
+    if (signIn.userName.length) SNTell(self, @"Signed In", [NSString stringWithFormat:@"Signed in as %@.", signIn.userName]);
+}
+
+- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
+    if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
+    SNTell(self, @"Not Signed In", error.localizedDescription ?: @"");
 }
 
 /* All Notes; the folders, those in a folder under it; Recently Deleted,

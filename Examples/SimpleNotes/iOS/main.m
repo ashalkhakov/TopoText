@@ -7,6 +7,7 @@
 @interface SNiOSAppDelegate : UIResponder <UIApplicationDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @property (nonatomic, strong) SNNotes *notes;
+@property (nonatomic, strong) SNSignIn *signIn;
 @end
 
 @implementation SNiOSAppDelegate
@@ -23,7 +24,13 @@
     _notes = [[SNNotes alloc] initWithStoreURL:store error:&error];
     if (!_notes) NSLog(@"SimpleNotes: the notes do not open: %@", error);
     NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
-    if (server.length) _notes.serviceRoot = [NSURL URLWithString:server];
+    if (server.length) {
+        /* Signed in as it was last time: the tokens kept for it. */
+        NSURL *root = [NSURL URLWithString:server];
+        _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+        _notes.configuration = _signIn.configuration;
+        _notes.serviceRoot = root;
+    }
     if (SNSelfTestRoot) _notes.serviceRoot = SNSelfTestRoot;
     else _notes.syncInterval = 30;
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[SNFoldersViewController alloc] initWithNotes:_notes]];

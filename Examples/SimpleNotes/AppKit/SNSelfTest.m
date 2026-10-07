@@ -4,8 +4,22 @@
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
+#import "SNSyncPanel.h"
 
 NSURL *SNSelfTestRoot;
+
+/* What the Sync window chose. */
+@interface SNSyncChoice : NSObject <SNSyncPanelDelegate>
+@property (nonatomic, strong) NSURL *root;
+@property (nonatomic) BOOL chosen;
+@end
+
+@implementation SNSyncChoice
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+    _root = root;
+    _chosen = YES;
+}
+@end
 
 static int SNFailed;
 
@@ -264,6 +278,19 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSmartFolderPanel *panel = [[SNSmartFolderPanel alloc] initWithName:@"Work Things" filter:workTagged];
         SNSay(panel.window && panel.nameField && panel.tagsField && panel.editedPopUp.numberOfItems == 6 &&
               panel.checklistsPopUp.numberOfItems == 4 && panel.pinnedBox, @"the smart folder panel loads");
+        /* The Sync window: this computer only warned of; a server that asks
+           for no sign-in chosen as it is (learnt from its $metadata). */
+        SNSyncPanel *sync = [[SNSyncPanel alloc] initWithServer:nil];
+        SNSyncChoice *choice = [[SNSyncChoice alloc] init];
+        sync.delegate = choice;
+        SNSay(sync.window && sync.serverField && sync.codeLabel && sync.localButton.state == NSControlStateValueOn && !sync.warningLabel.isHidden,
+              @"the Sync window loads, this computer only warned of");
+        [sync syncWithServer:nil];
+        sync.serverField.stringValue = notes.serviceRoot.absoluteString;
+        [sync ok:nil];
+        SNWait(10, ^BOOL { return choice.chosen; });
+        SNSay(choice.chosen && [choice.root isEqual:notes.serviceRoot] && sync.warningLabel.isHidden && sync.signIn.kind == SNSignInNone,
+              [NSString stringWithFormat:@"a server with no sign-in chosen (%@)", choice.root]);
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
         SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
         [notes sync];

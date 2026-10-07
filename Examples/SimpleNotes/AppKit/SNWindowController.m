@@ -102,7 +102,8 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (void)showStatus:(NSString *)status {
-    NSString *where = _notes.serviceRoot ? _notes.serviceRoot.host : @"this device only (Server… to sync)";
+    /* This computer only: said each time, as nothing backs the notes up. */
+    NSString *where = _notes.serviceRoot ? _notes.serviceRoot.host : @"on this computer only, not synced or backed up (Sync… to sync)";
     _statusField.stringValue = [NSString stringWithFormat:@"%@ — %@", status, where];
     _syncButton.enabled = _notes.serviceRoot && !_notes.syncing;
 }

@@ -296,6 +296,14 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
               [NSString stringWithFormat:@"Projects under Work (%@)", [folders componentsJoinedByString:@", "]]);
         SNSay([ft numberOfRowsInSection:3] == 3, @"the tags listed");
+        /* The server's sheet: a server that asks for no sign-in, learnt from
+           its $metadata, synced with as it is. */
+        NSURL *was = notes.serviceRoot;
+        notes.serviceRoot = nil;
+        [(SNFoldersViewController *)root signInToServer:was];
+        SNWait(10, ^BOOL { return [notes.serviceRoot isEqual:was]; });
+        SNSay([notes.serviceRoot isEqual:was], @"a server with no sign-in, synced with as it is");
+        SNWait(30, ^BOOL { return !notes.syncing; });
         /* A smart folder from its form: every note tagged #work. */
         SNSmartFilter *workTagged = [[SNSmartFilter alloc] init];
         workTagged.tags = @[ @"work" ];

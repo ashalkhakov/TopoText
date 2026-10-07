@@ -26,7 +26,7 @@
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-102"/>
-                            <menuItem title="Server…" keyEquivalent="," id="SNm-mi-103">
+                            <menuItem title="Sync…" keyEquivalent="," id="SNm-mi-103">
                                 <connections>
                                     <action selector="chooseServer:" target="SNa-pp-del" id="SNm-ac-103"/>
                                 </connections>
@@ -436,7 +436,7 @@ CA
                                     <action selector="sync:" target="-1" id="SNm-ac-501"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Server…" id="SNm-mi-502">
+                            <menuItem title="Sync…" id="SNm-mi-502">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="chooseServer:" target="SNa-pp-del" id="SNm-ac-502"/>

@@ -27,6 +27,10 @@
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
 		};
+		0FCC9C9E0E329BC98E59E527 /* SyncPanel.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 7B171DA9ABD39A0E778CE234;
+		};
 		123BF91B2FF0039DAA8CD216 /* SNWindowController.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 1DDFCCB317D232BCC759DB30;
@@ -64,6 +68,10 @@
 		20327598F541A2BE0FF21B15 /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
+		};
+		25879058FDC79CC840CE424F /* SNSignIn.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E432D0D1BDAEABC5F8DE44B6;
 		};
 		2604E5E45D970E74E74A46A4 /* ODataKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -199,6 +207,10 @@
 			isa = PBXBuildFile;
 			fileRef = 73BE747B72F43F189B02E701;
 		};
+		62A2E8AABDEEBB81A24162A0 /* SNSignIn.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E432D0D1BDAEABC5F8DE44B6;
+		};
 		62FD998ECE6FA8C402E5CE81 /* SNModel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
@@ -227,6 +239,10 @@
 			isa = PBXBuildFile;
 			fileRef = B74881DD4B1A684D8FBFF1A2;
 		};
+		78691EDAA70C27B6E68BBF1A /* SNSyncPanel.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = D70D32CA3559A9A3C8792783;
+		};
 		7A872943A4DF7167C961B66A /* SNTextSystem.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 9830E7D38501D4B632E0C8F2;
@@ -234,6 +250,10 @@
 		7D57F0905FE829A58A1E304E /* ODataIncrementalStore.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 7EE0BBC99032BF20C4EA757C;
+		};
+		7E28E0CE996D7FC9B8BE562B /* SNSecretStore.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 60B496EE8C7BBF49E296082F;
 		};
 		8152A672A522F7404E26785B /* TopoTextSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -314,6 +334,10 @@
 		AFA70D614CF3E8DDF203D508 /* TopoText.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
+		};
+		B78CA39A9E8041CE0CAC7200 /* SNSecretStore.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = D9DEA82153A953D9E395018F;
 		};
 		BBB25EACB49C6339C40C46E8 /* ODataService.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
@@ -920,6 +944,13 @@
 			sourceTree = "<group>";
 			name = SNSmartFolderPanel.m;
 		};
+		44BFF922A6C593FCEB928AA9 /* SNSignIn.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNSignIn.h;
+			sourceTree = "<group>";
+			name = SNSignIn.h;
+		};
 		47029EC1BB7F394FB43D846A /* SNMigration.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -989,6 +1020,13 @@
 			sourceTree = "<group>";
 			name = Debug.xcconfig;
 		};
+		60B496EE8C7BBF49E296082F /* SNSecretStore.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNSecretStore.m;
+			sourceTree = "<group>";
+			name = SNSecretStore.m;
+		};
 		61C49631D69D1072A58600F6 /* SNTextView.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1030,6 +1068,13 @@
 			path = AppKit/SNSelfTest.m;
 			sourceTree = "<group>";
 			name = SNSelfTest.m;
+		};
+		7B171DA9ABD39A0E778CE234 /* SyncPanel.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/SyncPanel.xib;
+			sourceTree = "<group>";
+			name = SyncPanel.xib;
 		};
 		7B4D0C1B7C0CC0E7BCA52B3B /* SNTableGrid+System.m */ = {
 			isa = PBXFileReference;
@@ -1198,12 +1243,33 @@
 			path = ../../../ODataKit/ODataKit.xcodeproj;
 			sourceTree = "<group>";
 		};
+		D70D32CA3559A9A3C8792783 /* SNSyncPanel.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNSyncPanel.m;
+			sourceTree = "<group>";
+			name = SNSyncPanel.m;
+		};
+		D9DEA82153A953D9E395018F /* SNSecretStore.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNSecretStore.m;
+			sourceTree = "<group>";
+			name = SNSecretStore.m;
+		};
 		DB05A5F09546462524E26DCA /* SNTextSystem.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
 			path = AppKit/SNTextSystem.m;
 			sourceTree = "<group>";
 			name = SNTextSystem.m;
+		};
+		DEA5B0CE6DF1EE709FE2B2EA /* SNSyncPanel.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNSyncPanel.h;
+			sourceTree = "<group>";
+			name = SNSyncPanel.h;
 		};
 		DF6E4590561AFD1E2D8B2DA3 /* SNSmartFilter.h */ = {
 			isa = PBXFileReference;
@@ -1225,6 +1291,13 @@
 			path = iOS/SNUndoTextView.m;
 			sourceTree = "<group>";
 			name = SNUndoTextView.m;
+		};
+		E432D0D1BDAEABC5F8DE44B6 /* SNSignIn.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNSignIn.m;
+			sourceTree = "<group>";
+			name = SNSignIn.m;
 		};
 		E92F4F34642FF032BAA53F88 /* SNNote.m */ = {
 			isa = PBXFileReference;
@@ -1331,12 +1404,16 @@
 				7B4D0C1B7C0CC0E7BCA52B3B,
 				25BBA47832C568E4C754BC83,
 				41670A389C12C54CF89C242D,
+				DEA5B0CE6DF1EE709FE2B2EA,
+				D70D32CA3559A9A3C8792783,
+				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
 				93905B50397F393A04D89B2C,
 				824A3193518B99D32009123E,
 				3BD4E32C20887A161DAC86F3,
 				7E6A0E52D2824B01873D4747,
+				7B171DA9ABD39A0E778CE234,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1398,6 +1475,8 @@
 				A42FDCBD28CC874D78BF7443,
 				4BF9FDEC707B7DC37EFF6199,
 				117AF9FFC9CA6E63B5C2C73A,
+				44BFF922A6C593FCEB928AA9,
+				E432D0D1BDAEABC5F8DE44B6,
 				719BCFED3ECD01936BB14F74,
 				848C622D1A0C34A6F10D548E,
 				47029EC1BB7F394FB43D846A,
@@ -1436,6 +1515,7 @@
 				054A76FC40094ADDD3CBC934,
 				036F46B4B4BE3204D3B8A566,
 				E24E63BBA2A66A746F957E15,
+				60B496EE8C7BBF49E296082F,
 				CCF418C8E3E8B505943CEE74,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
@@ -1666,6 +1746,7 @@
 				F9C5540A3B0482B8474FBF95,
 				095BECCD974EC50D623BA7B9,
 				AC1307ED585C96E4A0074734,
+				0FCC9C9E0E329BC98E59E527,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1692,6 +1773,7 @@
 				72A18D153A49CB051B239C79,
 				57C340E00E089F2758BECFEA,
 				330A0C62A452B44EBD481FEA,
+				7E28E0CE996D7FC9B8BE562B,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,
 				37DFBF31EE8E129D11C4F1E0,
@@ -1701,6 +1783,7 @@
 				099EC221977E4E9C431EA752,
 				86BC567CCDCCAB940C7793DF,
 				1AEA465EF57405F1763F16F7,
+				25879058FDC79CC840CE424F,
 				AC28625FEB238C24115CFE5A,
 				5C0532B74F67EA76B21EA1B7,
 			);
@@ -1732,6 +1815,8 @@
 				5B455969B2358702B11C8D4F,
 				FD8857A760C31A14282BD27A,
 				42A80778769E29C7DC69B57E,
+				78691EDAA70C27B6E68BBF1A,
+				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
 				F48063A33E82F7318AC1D2FF,
@@ -1743,6 +1828,7 @@
 				8325B3AFD178A1008D2AB02F,
 				D0EFBF4E8A299CC4F4ED3DBD,
 				31315B895C7B07BAF6DA0F94,
+				62A2E8AABDEEBB81A24162A0,
 				029C0375BBB48CBAAD4B77F8,
 				ED73A187727B64A1E926DC28,
 			);

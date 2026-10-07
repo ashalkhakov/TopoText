@@ -8,16 +8,20 @@
 #import <PhotosUI/PhotosUI.h>
 #import <QuickLook/QuickLook.h>
 #import "SNSmartFolderViewController.h"
+#import "SNSignIn.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate>
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The smart folder form, for a new one (folder nil) or one to edit.
 - (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;
+// The server's sheet's address, signed in to as the server asks (a code
+// for OpenID Connect, a user and password), then synced with.
+- (void)signInToServer:(NSURL *)serviceRoot;
 @end
 
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>

@@ -227,7 +227,11 @@ static NSDictionary *SNJSON(NSData *data) {
 
 - (void)pollLater {
     [_poll invalidate];
-    _poll = [NSTimer scheduledTimerWithTimeInterval:_interval target:self selector:@selector(poll:) userInfo:nil repeats:NO];
+    /* In every mode: an alert or a menu open does not stop it. */
+    _poll = [NSTimer timerWithTimeInterval:_interval target:self selector:@selector(poll:) userInfo:nil repeats:NO];
+    /* GNUstep's common modes leave out the default one: named too. */
+    [[NSRunLoop mainRunLoop] addTimer:_poll forMode:NSDefaultRunLoopMode];
+    [[NSRunLoop mainRunLoop] addTimer:_poll forMode:NSRunLoopCommonModes];
 }
 
 - (void)poll:(NSTimer *)timer {

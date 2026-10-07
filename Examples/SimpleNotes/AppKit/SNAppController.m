@@ -2,12 +2,21 @@
 #import "SNNotes.h"
 #import "SNWindowController.h"
 #import "SNSelfTest.h"
+#import "SNSyncPanel.h"
 
 NSString * const SNServerDefaultsKey = @"SNServer";
+/* Whether where to keep the notes was chosen once (else Sync… opens). */
+static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
+
+@interface SNAppController () <SNSyncPanelDelegate>
+@end
 
 @implementation SNAppController {
     SNNotes *_notes;
     SNWindowController *_window;
+    /* The server's sign-in (its credentials, for each sync). */
+    SNSignIn *_signIn;
+    SNSyncPanel *_panel;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
@@ -28,7 +37,13 @@ NSString * const SNServerDefaultsKey = @"SNServer";
         return;
     }
     NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
-    if (server.length) _notes.serviceRoot = [NSURL URLWithString:server];
+    NSURL *root = server.length ? [NSURL URLWithString:server] : nil;
+    if (root) {
+        /* Signed in as it was last time: the tokens kept for it. */
+        _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+        _notes.configuration = _signIn.configuration;
+        _notes.serviceRoot = root;
+    }
     _notes.syncInterval = 30;
     _window = [[SNWindowController alloc] initWithNotes:_notes];
     [_window showWindow:nil];
@@ -42,6 +57,8 @@ NSString * const SNServerDefaultsKey = @"SNServer";
         return;
     }
     [_notes sync];
+    /* The first time: where to keep the notes, chosen. */
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:SNSyncChosenDefaultsKey] && !root) [self chooseServer:nil];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)app {
@@ -61,22 +78,22 @@ NSString * const SNServerDefaultsKey = @"SNServer";
     [_window showWindow:nil];
 }
 
+/* Sync…: this computer only, or a server and its sign-in (SNSyncPanel). */
 - (IBAction)chooseServer:(id)sender {
-    NSString *now = _notes.serviceRoot.absoluteString ?: @"http://127.0.0.1:8080/odata/";
-    NSString *typed = SNAskForText(@"Server", @"The SimpleNotes server's address (empty: this device only):", now);
-    if (!typed) return;
-    typed = [typed stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (typed.length && ![typed hasSuffix:@"/"]) typed = [typed stringByAppendingString:@"/"];
-    NSURL *root = typed.length ? [NSURL URLWithString:typed] : nil;
-    if (typed.length && (!root.host.length || !([root.scheme isEqual:@"http"] || [root.scheme isEqual:@"https"]))) {
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = @"That is not a server's address.";
-        alert.informativeText = @"For example: http://192.168.1.10:8080/odata/";
-        [alert runModal];
-        return;
-    }
-    if (root) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
-    else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
+    _panel = [[SNSyncPanel alloc] initWithServer:_notes.serviceRoot];
+    _panel.delegate = self;
+    [_panel.window center];
+    [_panel showWindow:nil];
+}
+
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:YES forKey:SNSyncChosenDefaultsKey];
+    if (root) [defaults setObject:root.absoluteString forKey:SNServerDefaultsKey];
+    else [defaults removeObjectForKey:SNServerDefaultsKey];
+    _signIn = signIn;
+    signIn.delegate = nil;
+    _notes.configuration = signIn ? signIn.configuration : nil;
     _notes.serviceRoot = root;
     [_notes sync];
 }
