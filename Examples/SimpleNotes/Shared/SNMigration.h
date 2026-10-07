@@ -17,15 +17,19 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef void (^SNBookkeeping)(NSManagedObjectModel *model);
+// What adds bookkeeping to a model: ODataSyncEngine (a device's),
+// ODataSyncService (the server's).
+@protocol SNBookkeeper <NSObject>
++ (void)addBookkeepingToModel:(NSManagedObjectModel *)model configuration:(nullable NSString *)configuration;
+@end
 
 // Each version of the compiled model at momdURL, oldest first by name.
 FOUNDATION_EXPORT NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdURL);
 
 // The store at storeURL (SQLite) brought to the current version, with
-// bookkeeping added to each version as its users add it. Nothing to do (no
+// the bookkeeper's bookkeeping added to each version. Nothing to do (no
 // store yet, or one of the current version): YES. A store of no version the
 // model has: NO, with the error. The store before is kept beside it (.old).
-FOUNDATION_EXPORT BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, SNBookkeeping bookkeeping, NSError **error);
+FOUNDATION_EXPORT BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error);
 
 NS_ASSUME_NONNULL_END

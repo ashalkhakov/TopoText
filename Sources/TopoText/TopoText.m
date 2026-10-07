@@ -431,9 +431,10 @@ static TTReplica TTSeedReplica(NSString *string) {
     [_string insertString:string atIndex:index];
 }
 
-/* Live runs cut at range's ends, then each one in it visited. */
-- (void)visitLiveRange:(NSRange)range with:(void (^)(TTRun *run))block {
-    if (!range.length) return;
+/* The live runs in range, in order, cut at its ends first. */
+- (NSArray<TTRun *> *)liveRunsInRange:(NSRange)range {
+    NSMutableArray<TTRun *> *runs = [NSMutableArray array];
+    if (!range.length) return runs;
     NSUInteger pos, off;
     TTRun *run = [self liveRunAt:range.location position:&pos offset:&off];
     if (off) {
@@ -446,17 +447,18 @@ static TTReplica TTSeedReplica(NSString *string) {
         if (run->_deleted) continue;
         if (run->_len > left) [self split:run at:left position:pos - 1];
         left -= run->_len;
-        block(run);
+        [runs addObject:run];
     }
+    return runs;
 }
 
 - (void)deleteCharactersInRange:(NSRange)range {
     [self checkRange:range];
-    [self visitLiveRange:range with:^(TTRun *run) {
+    for (TTRun *run in [self liveRunsInRange:range]) {
         run->_deleted = YES;
         run->_text = nil;
         run->_attrs = @{};
-    }];
+    }
     [_string deleteCharactersInRange:range];
 }
 
@@ -477,14 +479,14 @@ static TTReplica TTSeedReplica(NSString *string) {
     NSMutableDictionary *regs = [NSMutableDictionary dictionary];
     for (NSString *k in attrs) regs[k] = [TTRegister registerWithValue:[attrs[k] copy] clock:c replica:_replica];
     TTRegister *removed = [TTRegister registerWithValue:[NSNull null] clock:c replica:_replica];
-    [self visitLiveRange:range with:^(TTRun *run) {
+    for (TTRun *run in [self liveRunsInRange:range]) {
         NSMutableDictionary *m = [run->_attrs mutableCopy];
         [m addEntriesFromDictionary:regs];
         if (exclusive)
             for (NSString *k in run->_attrs)
                 if (!regs[k] && ![run->_attrs[k]->_value isKindOfClass:[NSNull class]]) m[k] = removed;
         run->_attrs = m;
-    }];
+    }
 }
 
 - (void)addAttributes:(NSDictionary *)attrs range:(NSRange)range {
@@ -524,16 +526,19 @@ static void TTDiff(NSString *a, NSString *b, NSRange *mine, NSRange *theirs) {
     [self replaceCharactersInRange:mine withString:[string substringWithRange:theirs] attributes:attrs];
 }
 
-/* gnustep-base has no -enumerateAttributesInRange:options:usingBlock:. */
-static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^block)(NSDictionary *attrs, NSRange range)) {
+/* The ranges of s's runs of the same attributes in range, in order
+   (gnustep-base has no -enumerateAttributesInRange:options:usingBlock:). */
+static NSArray<NSValue *> *TTAttributeRuns(NSAttributedString *s, NSRange range) {
+    NSMutableArray *runs = [NSMutableArray array];
     NSUInteger i = range.location;
     while (i < NSMaxRange(range)) {
         NSRange run;
-        NSDictionary *attrs = [s attributesAtIndex:i longestEffectiveRange:&run inRange:range];
+        [s attributesAtIndex:i longestEffectiveRange:&run inRange:range];
         run = NSIntersectionRange(run, NSMakeRange(i, NSMaxRange(range) - i));
-        block(attrs ?: @{}, run);
+        [runs addObject:[NSValue valueWithRange:run]];
         i = NSMaxRange(run);
     }
+    return runs;
 }
 
 - (void)setAttributedString:(NSAttributedString *)target {
@@ -541,12 +546,16 @@ static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^bloc
     NSRange mine, theirs;
     TTDiff(_string, string, &mine, &theirs);
     [self deleteCharactersInRange:mine];
-    __block NSUInteger at = mine.location;
-    TTEachAttributeRun(target, theirs, ^(NSDictionary *attrs, NSRange range) {
-        [self insertString:[string substringWithRange:range] atIndex:at attributes:attrs];
+    NSUInteger at = mine.location;
+    for (NSValue *v in TTAttributeRuns(target, theirs)) {
+        NSRange range = v.rangeValue;
+        [self insertString:[string substringWithRange:range] atIndex:at
+                attributes:[target attributesAtIndex:range.location effectiveRange:NULL]];
         at += range.length;
-    });
-    TTEachAttributeRun(target, NSMakeRange(0, string.length), ^(NSDictionary *attrs, NSRange range) {
+    }
+    for (NSValue *v in TTAttributeRuns(target, NSMakeRange(0, string.length))) {
+        NSRange range = v.rangeValue;
+        NSDictionary *attrs = [target attributesAtIndex:range.location effectiveRange:NULL] ?: @{};
         NSUInteger i = range.location;
         while (i < NSMaxRange(range)) {
             NSRange ours;
@@ -555,7 +564,7 @@ static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^bloc
             if (![have isEqualToDictionary:attrs]) [self setAttributes:attrs range:part];
             i = NSMaxRange(part);
         }
-    });
+    }
 }
 
 #pragma mark positions
@@ -628,21 +637,24 @@ static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^bloc
     return TTEncodePayload(p);
 }
 
+/* The run of a delta's inserts so far holding (r, c): pending holds each
+   replica's, by clock. */
+static TTRun *TTPendingRun(NSDictionary<NSNumber *, NSArray<TTRun *> *> *pending, TTReplica r, uint64_t c) {
+    NSArray<TTRun *> *a = pending[@(r)];
+    NSUInteger lo = 0, hi = a.count;
+    while (lo < hi) {
+        NSUInteger mid = (lo + hi) / 2;
+        if (a[mid]->_c <= c) lo = mid + 1; else hi = mid;
+    }
+    return lo && c < a[lo - 1]->_c + a[lo - 1]->_len ? a[lo - 1] : nil;
+}
+
 /* Before anything changes: every origin known here or earlier in the delta,
    every character an update names known, no id twice. */
 - (BOOL)checkPayload:(TTPayload *)p error:(NSError **)error {
     NSMutableDictionary<NSNumber *, NSMutableArray<TTRun *> *> *pending = [NSMutableDictionary dictionary];
-    TTRun *(^inPending)(TTReplica, uint64_t) = ^TTRun *(TTReplica r, uint64_t c) {
-        NSArray<TTRun *> *a = pending[@(r)];
-        NSUInteger lo = 0, hi = a.count;
-        while (lo < hi) {
-            NSUInteger mid = (lo + hi) / 2;
-            if (a[mid]->_c <= c) lo = mid + 1; else hi = mid;
-        }
-        return lo && c < a[lo - 1]->_c + a[lo - 1]->_len ? a[lo - 1] : nil;
-    };
     for (TTRun *rec in p.inserts) {
-        if (rec->_or && ![self knowsReplica:rec->_or clock:rec->_oc] && !inPending(rec->_or, rec->_oc)) {
+        if (rec->_or && ![self knowsReplica:rec->_or clock:rec->_oc] && !TTPendingRun(pending, rec->_or, rec->_oc)) {
             if (error) *error = TTMakeError(TopoTextErrorMissingHistory, @"A delta for a copy that has seen more than this one");
             return NO;
         }
@@ -664,7 +676,7 @@ static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^bloc
         uint64_t c = rec->_c, end = rec->_c + rec->_len;
         while (c < end) {
             NSUInteger off;
-            TTRun *run = [self runWithReplica:rec->_r clock:c offset:&off] ?: inPending(rec->_r, c);
+            TTRun *run = [self runWithReplica:rec->_r clock:c offset:&off] ?: TTPendingRun(pending, rec->_r, c);
             if (!run) {
                 if (error) *error = TTMakeError(TopoTextErrorMissingHistory, @"A delta for a copy that has seen more than this one");
                 return NO;

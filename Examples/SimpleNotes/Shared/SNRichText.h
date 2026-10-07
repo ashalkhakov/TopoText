@@ -67,22 +67,41 @@ FOUNDATION_EXPORT SNFont *SNFontFor(NSString *_Nullable style, BOOL bold, BOOL i
 // newline says.
 FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 
+// What a binding needs of its text view. AppKit's NSTextView and UIKit's
+// UITextView have all of it (they are declared so below).
+@protocol SNTextViewing <NSObject>
+- (NSTextStorage *)textStorage;
+- (NSRange)selectedRange;
+- (void)setSelectedRange:(NSRange)range;
+// What is typed next is formatted so. An empty last paragraph has no
+// character to keep its paragraph's formatting: the binding keeps it here
+// (a checklist item begun on the last line, say).
+- (NSDictionary<NSString *, id> *)typingAttributes;
+- (void)setTypingAttributes:(NSDictionary<NSString *, id> *)attributes;
+// Cleared when remote edits come in: what it remembers no longer fits.
+- (nullable NSUndoManager *)undoManager;
+@end
+
+#if TARGET_OS_IPHONE
+@interface UITextView (SNTextViewing) <SNTextViewing>
+@end
+#else
+@interface NSTextView (SNTextViewing) <SNTextViewing>
+@end
+#endif
+
 @interface SNTextBinding : NSObject
-// The storage set to the editor's text, and kept so.
-- (instancetype)initWithStorage:(NSTextStorage *)storage editor:(SNNoteEditor *)editor NS_DESIGNATED_INITIALIZER;
+// The view's storage set to the editor's text, and kept so. The view's
+// controller is the editor's delegate, and hands its merges to -applyEdits:.
+- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
+@property (nonatomic, readonly, weak) id<SNTextViewing> view;
 @property (nonatomic, readonly) NSTextStorage *storage;
 @property (nonatomic, readonly) SNNoteEditor *editor;
-// The view's selection, for remote edits to move it along.
-@property (nonatomic, copy, nullable) NSRange (^getSelection)(void);
-@property (nonatomic, copy, nullable) void (^setSelection)(NSRange range);
-// After remote edits came in (an undo stack no longer matches).
-@property (nonatomic, copy, nullable) void (^didApplyRemoteEdits)(void);
-// The view's typing attributes: what is typed next is formatted so. An empty
-// last paragraph has no character to keep its paragraph's formatting, and
-// keeps it there (a checklist item begun on the last line, say).
-@property (nonatomic, copy, nullable) NSDictionary<NSString *, id> *(^getTypingAttributes)(void);
-@property (nonatomic, copy, nullable) void (^setTypingAttributes)(NSDictionary<NSString *, id> *attributes);
+// What a sync merged into the editor's text (SNNoteEditorDelegate's
+// -noteEditor:didMergeEdits:), done to the storage; the selection moved
+// along.
+- (void)applyEdits:(NSArray<TTEdit *> *)edits;
 
 #pragma mark Formatting
 // On the range's characters; with none selected, on what is typed next.

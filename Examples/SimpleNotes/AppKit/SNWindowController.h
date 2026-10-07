@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSMenuDelegate>
+@interface SNWindowController : NSWindowController <NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 @property (nonatomic, strong) IBOutlet NSTableView *folderTable;
 @property (nonatomic, strong) IBOutlet NSTableView *noteTable;

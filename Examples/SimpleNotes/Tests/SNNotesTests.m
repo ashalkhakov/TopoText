@@ -8,11 +8,13 @@
 #import "SNModel.h"
 #import "SNNotes.h"
 
-@interface SNNotesTests : XCTestCase
+@interface SNNotesTests : XCTestCase <SNNoteEditorDelegate>
 @end
 
 @implementation SNNotesTests {
     NSMutableArray<NSURL *> *_files;
+    /* What an open editor was told was merged into it. */
+    NSMutableArray<TTEdit *> *_merged;
     ODataService *_service;
     ODataSyncService *_histories;
     NSPersistentStoreCoordinator *_server;
@@ -132,6 +134,10 @@
     XCTAssertEqualObjects([self onlyNote:a].body, @"keep me!", @"back where it was deleted");
 }
 
+- (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
+    [_merged addObjectsFromArray:edits];
+}
+
 /* An editor open through a sync: what came is merged into what it shows,
    and what was typed meanwhile is kept and sent. */
 - (void)testAnOpenEditorIsMergedWith {
@@ -140,8 +146,8 @@
     [self sync:a];
     [self sync:b];
     SNNoteEditor *open = [b editorForNote:[self onlyNote:b]];
-    NSMutableArray *merged = [NSMutableArray array];
-    open.didMerge = ^(NSArray<TTEdit *> *edits) { [merged addObjectsFromArray:edits]; };
+    NSMutableArray *merged = _merged = [NSMutableArray array];
+    open.delegate = self;
     [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:@"zero " atIndex:0 attributes:nil]; }];
     [self sync:a];
     /* Typed on b, not yet written, when b syncs. */

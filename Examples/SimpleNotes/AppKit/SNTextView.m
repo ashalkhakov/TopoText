@@ -10,12 +10,14 @@
 
 - (void)mouseDown:(NSEvent *)event {
     SNListLayoutManager *lm = (SNListLayoutManager *)self.layoutManager;
-    if (self.isEditable && _clickedCheckbox && [lm isKindOfClass:[SNListLayoutManager class]]) {
+    id<SNTextViewDelegate> delegate = (id<SNTextViewDelegate>)self.delegate;
+    if (self.isEditable && [lm isKindOfClass:[SNListLayoutManager class]] &&
+        [delegate respondsToSelector:@selector(textView:clickedCheckboxAtIndex:)]) {
         NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
         NSPoint origin = self.textContainerOrigin;
         NSUInteger at = [lm checkboxAtPoint:NSMakePoint(p.x - origin.x, p.y - origin.y)];
         if (at != NSNotFound) {
-            _clickedCheckbox(at);
+            [delegate textView:self clickedCheckboxAtIndex:at];
             return;
         }
     }

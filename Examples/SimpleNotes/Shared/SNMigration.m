@@ -17,7 +17,7 @@ static NSArray<NSString *> *SNStoreFiles(NSURL *url) {
     return @[ url.path, [url.path stringByAppendingString:@"-wal"], [url.path stringByAppendingString:@"-shm"] ];
 }
 
-BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, SNBookkeeping bookkeeping, NSError **error) {
+BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error) {
     if (![[NSFileManager defaultManager] fileExistsAtPath:storeURL.path]) return YES;
     NSDictionary *options = @{ NSPersistentHistoryTrackingKey: @YES };
     NSDictionary *metadata = [NSPersistentStoreCoordinator metadataForPersistentStoreOfType:NSSQLiteStoreType URL:storeURL
@@ -29,12 +29,12 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, SNBookkeeping bookkeeping, 
                                             userInfo:@{ NSLocalizedDescriptionKey: @"No compiled model to migrate to." }];
         return NO;
     }
-    bookkeeping(current);
+    [bookkeeper addBookkeepingToModel:current configuration:nil];
     if ([current isConfiguration:nil compatibleWithStoreMetadata:metadata]) return YES;
 
     NSManagedObjectModel *source = nil;
     for (NSManagedObjectModel *version in SNModelVersions(momdURL)) {
-        bookkeeping(version);
+        [bookkeeper addBookkeepingToModel:version configuration:nil];
         if ([version isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = version;
     }
     if (!source) {

@@ -69,8 +69,12 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNWait(0.5, ^BOOL { return NO; });
         UITextView *wtv = we.textView;
         NSUInteger first = [wtv.text rangeOfString:@"\n"].location + 1;
+        [wtv becomeFirstResponder];
         wtv.selectedRange = NSMakeRange(first, wtv.text.length - first);
-        [we checklist:nil];
+        /* Up the responder chain from the text view, as the format bar's
+           menu commands go. */
+        SNSay([[UIApplication sharedApplication] sendAction:@selector(checklist:) to:nil from:nil forEvent:nil],
+              @"Checklist goes up the responder chain");
         SNListLayoutManager *lm = (SNListLayoutManager *)wtv.layoutManager;
         SNSay([lm isKindOfClass:[SNListLayoutManager class]], @"the text view draws list markers");
         CGRect line = [lm lineFragmentRectForGlyphAtIndex:[lm glyphIndexForCharacterAtIndex:first] effectiveRange:NULL];

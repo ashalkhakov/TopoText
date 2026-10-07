@@ -23,7 +23,7 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 @end
 
 // SNEditorViewController.xib: the text view, and the format bar.
-@interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate>
+@interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory.

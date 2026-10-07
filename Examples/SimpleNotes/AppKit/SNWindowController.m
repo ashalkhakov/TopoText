@@ -292,29 +292,33 @@ static const NSInteger SNMoveToMenuTag = 7001;
         return;
     }
     _editor = [_notes editorForNote:note];
-    _binding = [[SNTextBinding alloc] initWithStorage:_textView.textStorage editor:_editor];
-    SNTextView *tv = _textView;
-    _binding.getSelection = ^NSRange { return tv.selectedRange; };
-    _binding.setSelection = ^(NSRange r) { tv.selectedRange = r; };
-    _binding.getTypingAttributes = ^NSDictionary * { return tv.typingAttributes; };
-    _binding.setTypingAttributes = ^(NSDictionary *attrs) {
-        tv.typingAttributes = attrs;
-        ((SNListLayoutManager *)tv.layoutManager).extraLineAttributes = attrs;
-    };
-    /* Edits from elsewhere: what undo remembers no longer fits the text. */
-    _binding.didApplyRemoteEdits = ^{ [tv.undoManager removeAllActions]; };
-    __weak SNWindowController *weak = self;
-    _editor.didVanish = ^{ [weak openNote:nil]; };
-    _textView.clickedCheckbox = ^(NSUInteger paragraph) {
-        [weak format:^(SNTextBinding *b, NSRange r) { [b toggleCheckedForParagraphsInRange:r]; } at:NSMakeRange(paragraph, 0)];
-    };
+    _editor.delegate = self;
+    _binding = [[SNTextBinding alloc] initWithTextView:_textView editor:_editor];
     /* In Recently Deleted, a note is read, not written: Recover first. */
     _textView.editable = !note.deletedAt;
     _textView.selectedRange = NSMakeRange(_textView.textStorage.length, 0);
     [_binding selectionDidChange];
 }
 
+#pragma mark the editor's delegate
+
+/* What a sync brought into the open note, into the text view. */
+- (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
+    if (editor == _editor) [_binding applyEdits:edits];
+}
+
+- (void)noteEditorDidVanish:(SNNoteEditor *)editor {
+    if (editor == _editor) [self openNote:nil];
+}
+
 #pragma mark the text view's delegate
+
+- (void)textView:(SNTextView *)tv clickedCheckboxAtIndex:(NSUInteger)index {
+    NSRange r = NSMakeRange(index, 0);
+    if (![self beginFormattingAt:r]) return;
+    [_binding toggleCheckedForParagraphsInRange:r];
+    [self endFormatting];
+}
 
 /* Typing in lists, as Apple Notes has it (SNTextBinding). */
 - (BOOL)textView:(NSTextView *)tv shouldChangeTextInRange:(NSRange)range replacementString:(NSString *)string {
@@ -449,17 +453,15 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark formatting
 
-/* A change of the paragraphs a range touches, undoably. */
-- (void)format:(void (^)(SNTextBinding *binding, NSRange range))change at:(NSRange)range {
-    if (!_binding || !_textView.isEditable) return;
-    NSRange paragraphs = [_binding paragraphsRangeForRange:range];
-    if (![_textView shouldChangeTextInRange:paragraphs replacementString:nil]) return;
-    change(_binding, range);
-    [_textView didChangeText];
+/* Paragraph formatting, undoably: begun over the paragraphs a range
+   touches, ended once the binding has changed them. */
+- (BOOL)beginFormattingAt:(NSRange)range {
+    if (!_binding || !_textView.isEditable) return NO;
+    return [_textView shouldChangeTextInRange:[_binding paragraphsRangeForRange:range] replacementString:nil];
 }
 
-- (void)paragraphs:(void (^)(SNTextBinding *binding, NSRange range))change {
-    [self format:change at:_textView.selectedRange];
+- (void)endFormatting {
+    [_textView didChangeText];
 }
 
 /* On the selection, undoably; with none, on what is typed next. */
@@ -476,11 +478,24 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (void)style:(NSString *)style {
-    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b setStyle:style forParagraphsInRange:r]; }];
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding setStyle:style forParagraphsInRange:r];
+    [self endFormatting];
 }
 
 - (void)list:(NSString *)list {
-    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b toggleList:list forParagraphsInRange:r]; }];
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding toggleList:list forParagraphsInRange:r];
+    [self endFormatting];
+}
+
+- (void)indentBy:(NSInteger)by {
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding indentParagraphsInRange:r by:by];
+    [self endFormatting];
 }
 
 - (IBAction)toggleBold:(id)sender { [self toggle:SNBoldKey]; }
@@ -497,14 +512,13 @@ static const NSInteger SNMoveToMenuTag = 7001;
 - (IBAction)toggleNumberList:(id)sender { [self list:SNListNumber]; }
 - (IBAction)toggleChecklist:(id)sender { [self list:SNListCheck]; }
 - (IBAction)toggleChecked:(id)sender {
-    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b toggleCheckedForParagraphsInRange:r]; }];
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding toggleCheckedForParagraphsInRange:r];
+    [self endFormatting];
 }
-- (IBAction)increaseIndentation:(id)sender {
-    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b indentParagraphsInRange:r by:1]; }];
-}
-- (IBAction)decreaseIndentation:(id)sender {
-    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b indentParagraphsInRange:r by:-1]; }];
-}
+- (IBAction)increaseIndentation:(id)sender { [self indentBy:1]; }
+- (IBAction)decreaseIndentation:(id)sender { [self indentBy:-1]; }
 
 /* A Format menu item (NO for any other): whether it applies, and ticked when the selection
    is so already. */

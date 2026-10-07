@@ -9,7 +9,8 @@
 #import "SNModel.h"
 #import "SNNotes.h"
 
-@interface SNTextBindingTests : XCTestCase
+/* The test is the text view: its storage, selection and typing. */
+@interface SNTextBindingTests : XCTestCase <SNTextViewing>
 @end
 
 @implementation SNTextBindingTests {
@@ -33,26 +34,16 @@
     _editor = [_notes editorForNote:note];
     [_editor.text insertString:@"Hello world" atIndex:0 attributes:nil];
     _storage = [[NSTextStorage alloc] init];
-    _binding = [[SNTextBinding alloc] initWithStorage:_storage editor:_editor];
-    __weak SNTextBindingTests *weak = self;
-    _binding.getSelection = ^NSRange {
-        SNTextBindingTests *me = weak;
-        return me ? me->_selection : NSMakeRange(0, 0);
-    };
-    _binding.setSelection = ^(NSRange r) {
-        SNTextBindingTests *me = weak;
-        if (me) me->_selection = r;
-    };
-    _binding.getTypingAttributes = ^NSDictionary * {
-        SNTextBindingTests *me = weak;
-        return me ? me->_typing : nil;
-    };
-    _binding.setTypingAttributes = ^(NSDictionary *attrs) {
-        SNTextBindingTests *me = weak;
-        if (me) me->_typing = attrs;
-    };
+    _binding = [[SNTextBinding alloc] initWithTextView:self editor:_editor];
     _typing = [_binding typingAttributesAt:_storage.length];
 }
+
+- (NSTextStorage *)textStorage { return _storage; }
+- (NSRange)selectedRange { return _selection; }
+- (void)setSelectedRange:(NSRange)range { _selection = range; }
+- (NSDictionary *)typingAttributes { return _typing ?: @{}; }
+- (void)setTypingAttributes:(NSDictionary *)attributes { _typing = attributes; }
+- (NSUndoManager *)undoManager { return nil; }
 
 - (void)tearDown {
     [_binding unbind];
@@ -106,7 +97,7 @@
     [elsewhere addAttributes:@{ SNUnderlineKey: @YES } range:NSMakeRange(3, 5)];
     [elsewhere deleteCharactersInRange:NSMakeRange(8, 1)];  /* the space */
     NSArray *edits = [_editor.text mergeText:elsewhere];
-    _editor.didMerge(edits);
+    [_binding applyEdits:edits];
     XCTAssertEqualObjects(_storage.string, @">> Helloworld");
     XCTAssertEqualObjects(_editor.text.string, _storage.string);
     XCTAssertEqual([[_storage attribute:NSUnderlineStyleAttributeName atIndex:3 effectiveRange:NULL] integerValue], NSUnderlineStyleSingle);
@@ -239,7 +230,7 @@
     /* Meanwhile, typed here into the line. */
     _selection = NSMakeRange(2, 0);
     [self key:@"l"];
-    _editor.didMerge([_editor.text mergeText:elsewhere]);
+    [_binding applyEdits:[_editor.text mergeText:elsewhere]];
     XCTAssertEqualObjects(_storage.string, @"Millk\nEggs");
     for (NSUInteger i = 0; i < 6; i++)
         XCTAssertEqualObjects([_storage attribute:SNListAttributeName atIndex:i effectiveRange:NULL], SNListCheck, @"at %lu", (unsigned long)i);

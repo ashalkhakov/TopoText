@@ -122,7 +122,7 @@ static NSURL *SNURL(id value) {
     NSError *failure = nil;
     if (sqlite) {
         if ([modelURL.pathExtension isEqual:@"momd"] &&
-            !SNMigrateStore(url, modelURL, ^(NSManagedObjectModel *m) { [ODataSyncService addBookkeepingToModel:m configuration:nil]; }, &failure)) {
+            !SNMigrateStore(url, modelURL, [ODataSyncService class], &failure)) {
             if (error) *error = failure;
             return NO;
         }

@@ -81,7 +81,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
                                     effectiveRange:NULL];
         NSUInteger box = [(SNListLayoutManager *)lm checkboxAtPoint:NSMakePoint(10, NSMidY(line))];
         SNSay(box == lines.location, [NSString stringWithFormat:@"a checkbox where the first item's is (%lu)", (unsigned long)box]);
-        if (box != NSNotFound && window.textView.clickedCheckbox) window.textView.clickedCheckbox(box);
+        if (box != NSNotFound) [window textView:window.textView clickedCheckboxAtIndex:box];
         tv.selectedRange = NSMakeRange(tv.string.length, 0);
         [tv insertNewline:nil];
         [tv insertText:@"water the plants"];
