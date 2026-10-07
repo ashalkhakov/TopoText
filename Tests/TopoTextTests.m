@@ -322,4 +322,68 @@ static NSString *TTHex(NSData *d) {
     XCTAssertNil([TTVersion versionWithData:[NSData data] error:NULL]);
 }
 
+#pragma mark paragraphs
+
+static NSSet *TTListKeys(void) { return [NSSet setWithObjects:@"list", @"checked", nil]; }
+
+- (void)testParagraphRanges {
+    TopoText *t = TTText(1, @"one\ntwo\n");
+    XCTAssertEqualObjects(t.paragraphRanges, (@[ [NSValue valueWithRange:NSMakeRange(0, 4)], [NSValue valueWithRange:NSMakeRange(4, 4)],
+                                                [NSValue valueWithRange:NSMakeRange(8, 0)] ]));
+    XCTAssertEqual([t paragraphRangeForIndex:5].location, 4u);
+    XCTAssertEqual([t paragraphRangeForIndex:3].length, 4u, @"a newline is its paragraph's");
+    XCTAssertEqual([t paragraphRangeForIndex:8].length, 0u, @"the empty last one");
+}
+
+- (void)testParagraphAttributesAreOnEveryCharacterAndTheNewlineDecides {
+    TopoText *t = TTText(1, @"milk\neggs");
+    [t addParagraphAttributes:@{ @"list": @"check" } range:NSMakeRange(1, 0)];
+    XCTAssertEqualObjects([t attributesAtIndex:0 effectiveRange:NULL], @{ @"list": @"check" });
+    XCTAssertEqualObjects([t attributesAtIndex:4 effectiveRange:NULL], @{ @"list": @"check" }, @"its newline too");
+    XCTAssertEqualObjects([t attributesAtIndex:5 effectiveRange:NULL], @{}, @"the next paragraph not");
+    XCTAssertEqualObjects([t paragraphAttributesAtIndex:2 keys:TTListKeys()], @{ @"list": @"check" });
+    /* The last paragraph: its first character. */
+    [t addParagraphAttributes:@{ @"list": @"bullet" } range:NSMakeRange(6, 1)];
+    XCTAssertEqualObjects([t paragraphAttributesAtIndex:9 keys:TTListKeys()], @{ @"list": @"bullet" });
+    /* Only the keys asked for. */
+    [t addAttributes:@{ @"bold": @YES } range:NSMakeRange(0, 5)];
+    XCTAssertEqualObjects([t paragraphAttributesAtIndex:0 keys:TTListKeys()], @{ @"list": @"check" });
+}
+
+/* Typed into a line as it was made a checklist item elsewhere: in the item. */
+- (void)testTextTypedIntoAParagraphChangedElsewhereIsInIt {
+    TopoText *a = TTText(1, @"buy milk\nlater");
+    TopoText *b = [a copyWithReplica:2];
+    [a addParagraphAttributes:@{ @"list": @"check" } range:NSMakeRange(0, 0)];
+    [b insertString:@" and eggs" atIndex:8 attributes:nil];
+    TTSync(a, b);
+    XCTAssertEqualObjects(a.string, @"buy milk and eggs\nlater");
+    for (NSUInteger i = 0; i < 17; i++)
+        XCTAssertEqualObjects([a paragraphAttributesAtIndex:i keys:TTListKeys()], @{ @"list": @"check" });
+    XCTAssertEqualObjects([a attributesAtIndex:10 effectiveRange:NULL], @{}, @"the characters disagree; the paragraph does not");
+    XCTAssertEqualObjects(a.data, b.data);
+}
+
+/* Checked on one device, unchecked on another: one register, the last
+   writer's, the same on both. */
+- (void)testCheckedIsOneRegister {
+    TopoText *a = TTText(1, @"item\n");
+    [a addParagraphAttributes:@{ @"list": @"check" } range:NSMakeRange(0, 0)];
+    TopoText *b = [a copyWithReplica:2];
+    [a addParagraphAttributes:@{ @"checked": @YES } range:NSMakeRange(0, 0)];
+    [b addParagraphAttributes:@{ @"checked": [NSNull null] } range:NSMakeRange(0, 0)];
+    TTSync(a, b);
+    XCTAssertEqualObjects([a paragraphAttributesAtIndex:0 keys:TTListKeys()], [b paragraphAttributesAtIndex:0 keys:TTListKeys()]);
+    XCTAssertEqualObjects([a paragraphAttributesAtIndex:0 keys:TTListKeys()], @{ @"list": @"check" }, @"replica 2 wrote last");
+}
+
+/* Two paragraphs joined: the surviving newline's style is the paragraph's. */
+- (void)testJoiningParagraphsTakesTheSurvivingNewlines {
+    TopoText *t = TTText(1, @"head\nitem\n");
+    [t addParagraphAttributes:@{ @"list": @"bullet" } range:NSMakeRange(5, 0)];
+    [t deleteCharactersInRange:NSMakeRange(4, 1)];  /* the first newline */
+    XCTAssertEqualObjects(t.string, @"headitem\n");
+    XCTAssertEqualObjects([t paragraphAttributesAtIndex:0 keys:TTListKeys()], @{ @"list": @"bullet" });
+}
+
 @end

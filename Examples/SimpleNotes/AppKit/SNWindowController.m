@@ -52,6 +52,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 - (void)windowDidLoad {
     [super windowDidLoad];
+    [_textView useListLayoutManager];
     _textView.textContainerInset = NSMakeSize(14, 14);
     _textView.textContainer.widthTracksTextView = YES;
     /* The whole pane is the note's: a click below its last line is in it
@@ -292,17 +293,49 @@ static const NSInteger SNMoveToMenuTag = 7001;
     }
     _editor = [_notes editorForNote:note];
     _binding = [[SNTextBinding alloc] initWithStorage:_textView.textStorage editor:_editor];
-    NSTextView *tv = _textView;
+    SNTextView *tv = _textView;
     _binding.getSelection = ^NSRange { return tv.selectedRange; };
     _binding.setSelection = ^(NSRange r) { tv.selectedRange = r; };
+    _binding.getTypingAttributes = ^NSDictionary * { return tv.typingAttributes; };
+    _binding.setTypingAttributes = ^(NSDictionary *attrs) {
+        tv.typingAttributes = attrs;
+        ((SNListLayoutManager *)tv.layoutManager).extraLineAttributes = attrs;
+    };
     /* Edits from elsewhere: what undo remembers no longer fits the text. */
     _binding.didApplyRemoteEdits = ^{ [tv.undoManager removeAllActions]; };
     __weak SNWindowController *weak = self;
     _editor.didVanish = ^{ [weak openNote:nil]; };
+    _textView.clickedCheckbox = ^(NSUInteger paragraph) {
+        [weak format:^(SNTextBinding *b, NSRange r) { [b toggleCheckedForParagraphsInRange:r]; } at:NSMakeRange(paragraph, 0)];
+    };
     /* In Recently Deleted, a note is read, not written: Recover first. */
     _textView.editable = !note.deletedAt;
-    _textView.typingAttributes = [_binding typingAttributesAt:_textView.textStorage.length];
     _textView.selectedRange = NSMakeRange(_textView.textStorage.length, 0);
+    [_binding selectionDidChange];
+}
+
+#pragma mark the text view's delegate
+
+/* Typing in lists, as Apple Notes has it (SNTextBinding). */
+- (BOOL)textView:(NSTextView *)tv shouldChangeTextInRange:(NSRange)range replacementString:(NSString *)string {
+    if (tv != _textView || !_binding) return YES;
+    return [_binding shouldChangeTextInRange:range replacementString:string];
+}
+
+- (void)textDidChange:(NSNotification *)n {
+    if (n.object == _textView) [_binding textDidChange];
+}
+
+- (void)textViewDidChangeSelection:(NSNotification *)n {
+    if (n.object == _textView) [_binding selectionDidChange];
+}
+
+/* Shift-Tab: an item outdented. */
+- (BOOL)textView:(NSTextView *)tv doCommandBySelector:(SEL)command {
+    if (tv != _textView || !_binding || command != @selector(insertBacktab:)) return NO;
+    if (![_binding paragraphAttributesAt:tv.selectedRange.location][SNListKey]) return NO;
+    [self decreaseIndentation:nil];
+    return YES;
 }
 
 #pragma mark actions
@@ -409,37 +442,45 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
-    if (a == @selector(toggleBold:) || a == @selector(toggleItalic:) || a == @selector(toggleUnderline:) ||
-        a == @selector(toggleStrikethrough:) || a == @selector(styleTitle:) || a == @selector(styleHeading:) || a == @selector(styleBody:))
-        return _binding != nil && _textView.isEditable;
+    BOOL enabled = NO;
+    if ([self validateFormatItem:item enabled:&enabled]) return enabled;
     return YES;
 }
 
 #pragma mark formatting
 
-/* On the selection, undoably; with none, on what is typed next. */
-- (void)format:(void (^)(SNTextBinding *binding, NSRange range))change typing:(NSString *)key {
-    if (!_binding) return;
-    NSRange range = _textView.selectedRange;
-    if (key && !range.length) {
-        NSMutableDictionary *t = [SNTextAttributes(_textView.typingAttributes) mutableCopy];
-        if ([t[key] boolValue]) [t removeObjectForKey:key]; else t[key] = @YES;
-        _textView.typingAttributes = SNViewAttributes(t);
-        return;
-    }
-    if (!key) range = [_textView.string paragraphRangeForRange:range];
-    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
+/* A change of the paragraphs a range touches, undoably. */
+- (void)format:(void (^)(SNTextBinding *binding, NSRange range))change at:(NSRange)range {
+    if (!_binding || !_textView.isEditable) return;
+    NSRange paragraphs = [_binding paragraphsRangeForRange:range];
+    if (![_textView shouldChangeTextInRange:paragraphs replacementString:nil]) return;
     change(_binding, range);
     [_textView didChangeText];
-    _textView.typingAttributes = [_binding typingAttributesAt:NSMaxRange(_textView.selectedRange)];
 }
 
+- (void)paragraphs:(void (^)(SNTextBinding *binding, NSRange range))change {
+    [self format:change at:_textView.selectedRange];
+}
+
+/* On the selection, undoably; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
-    [self format:^(SNTextBinding *b, NSRange r) { [b toggle:key inRange:r]; } typing:key];
+    if (!_binding) return;
+    NSRange range = _textView.selectedRange;
+    if (!range.length) {
+        [_binding toggle:key inRange:range];
+        return;
+    }
+    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
+    [_binding toggle:key inRange:range];
+    [_textView didChangeText];
 }
 
 - (void)style:(NSString *)style {
-    [self format:^(SNTextBinding *b, NSRange r) { [b setStyle:style forParagraphsInRange:r]; } typing:nil];
+    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b setStyle:style forParagraphsInRange:r]; }];
+}
+
+- (void)list:(NSString *)list {
+    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b toggleList:list forParagraphsInRange:r]; }];
 }
 
 - (IBAction)toggleBold:(id)sender { [self toggle:SNBoldKey]; }
@@ -448,6 +489,54 @@ static const NSInteger SNMoveToMenuTag = 7001;
 - (IBAction)toggleStrikethrough:(id)sender { [self toggle:SNStrikeKey]; }
 - (IBAction)styleTitle:(id)sender { [self style:SNStyleTitle]; }
 - (IBAction)styleHeading:(id)sender { [self style:SNStyleHeading]; }
+- (IBAction)styleSubheading:(id)sender { [self style:SNStyleSubheading]; }
 - (IBAction)styleBody:(id)sender { [self style:nil]; }
+- (IBAction)styleMono:(id)sender { [self style:SNStyleMono]; }
+- (IBAction)toggleBulletList:(id)sender { [self list:SNListBullet]; }
+- (IBAction)toggleDashList:(id)sender { [self list:SNListDash]; }
+- (IBAction)toggleNumberList:(id)sender { [self list:SNListNumber]; }
+- (IBAction)toggleChecklist:(id)sender { [self list:SNListCheck]; }
+- (IBAction)toggleChecked:(id)sender {
+    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b toggleCheckedForParagraphsInRange:r]; }];
+}
+- (IBAction)increaseIndentation:(id)sender {
+    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b indentParagraphsInRange:r by:1]; }];
+}
+- (IBAction)decreaseIndentation:(id)sender {
+    [self paragraphs:^(SNTextBinding *b, NSRange r) { [b indentParagraphsInRange:r by:-1]; }];
+}
+
+/* A Format menu item (NO for any other): whether it applies, and ticked when the selection
+   is so already. */
+- (BOOL)validateFormatItem:(NSMenuItem *)item enabled:(BOOL *)enabledOut {
+    SEL a = item.action;
+    static NSDictionary *styles, *lists, *inline_;
+    if (!styles) {
+        styles = @{ NSStringFromSelector(@selector(styleTitle:)): SNStyleTitle, NSStringFromSelector(@selector(styleHeading:)): SNStyleHeading,
+                    NSStringFromSelector(@selector(styleSubheading:)): SNStyleSubheading, NSStringFromSelector(@selector(styleMono:)): SNStyleMono,
+                    NSStringFromSelector(@selector(styleBody:)): @"" };
+        lists = @{ NSStringFromSelector(@selector(toggleBulletList:)): SNListBullet, NSStringFromSelector(@selector(toggleDashList:)): SNListDash,
+                   NSStringFromSelector(@selector(toggleNumberList:)): SNListNumber, NSStringFromSelector(@selector(toggleChecklist:)): SNListCheck };
+        inline_ = @{ NSStringFromSelector(@selector(toggleBold:)): SNBoldKey, NSStringFromSelector(@selector(toggleItalic:)): SNItalicKey,
+                     NSStringFromSelector(@selector(toggleUnderline:)): SNUnderlineKey, NSStringFromSelector(@selector(toggleStrikethrough:)): SNStrikeKey };
+    }
+    NSString *name = NSStringFromSelector(a);
+    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:);
+    if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
+    BOOL enabled = _binding != nil && _textView.isEditable;
+    NSDictionary *p = enabled ? [_binding paragraphAttributesAt:_textView.selectedRange.location] : @{};
+    BOOL on = NO;
+    if (styles[name]) on = [styles[name] length] ? [p[SNStyleKey] isEqual:styles[name]] : (!p[SNStyleKey] && !p[SNListKey]);
+    else if (lists[name]) on = [p[SNListKey] isEqual:lists[name]];
+    else if (inline_[name]) on = enabled && [_binding range:_textView.selectedRange has:inline_[name]];
+    else if (a == @selector(toggleChecked:)) {
+        on = [p[SNCheckedKey] boolValue];
+        enabled = enabled && [p[SNListKey] isEqual:SNListCheck];
+    }
+    else if (a == @selector(decreaseIndentation:)) enabled = enabled && p[SNIndentKey] != nil;
+    item.state = on ? NSControlStateValueOn : NSControlStateValueOff;
+    *enabledOut = enabled;
+    return YES;
+}
 
 @end

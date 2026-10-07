@@ -804,3 +804,55 @@ static void TTEachAttributeRun(NSAttributedString *s, NSRange range, void (^bloc
 }
 
 @end
+
+#pragma mark paragraphs
+
+@implementation TopoText (Paragraphs)
+
+- (NSRange)paragraphRangeForIndex:(NSUInteger)index {
+    NSString *s = _string;
+    NSUInteger n = s.length;
+    index = MIN(index, n);
+    NSUInteger start = index;
+    while (start > 0 && [s characterAtIndex:start - 1] != '\n') start--;
+    NSUInteger end = index;
+    while (end < n && [s characterAtIndex:end] != '\n') end++;
+    if (end < n) end++;   /* its newline */
+    return NSMakeRange(start, end - start);
+}
+
+- (NSArray<NSValue *> *)paragraphRanges {
+    NSMutableArray *ranges = [NSMutableArray array];
+    NSString *s = _string;
+    NSUInteger n = s.length, start = 0;
+    for (NSUInteger i = 0; i < n; i++)
+        if ([s characterAtIndex:i] == '\n') {
+            [ranges addObject:[NSValue valueWithRange:NSMakeRange(start, i + 1 - start)]];
+            start = i + 1;
+        }
+    [ranges addObject:[NSValue valueWithRange:NSMakeRange(start, n - start)]];
+    return ranges;
+}
+
+- (NSDictionary *)paragraphAttributesAtIndex:(NSUInteger)index keys:(NSSet<NSString *> *)keys {
+    NSRange p = [self paragraphRangeForIndex:index];
+    if (!p.length) return @{};
+    NSUInteger end = NSMaxRange(p) - 1;
+    /* Its newline, or the last paragraph's first character. */
+    NSUInteger at = [_string characterAtIndex:end] == '\n' ? end : p.location;
+    NSDictionary *all = [self attributesAtIndex:at effectiveRange:NULL];
+    NSMutableDictionary *mine = [NSMutableDictionary dictionary];
+    for (NSString *k in keys)
+        if (all[k]) mine[k] = all[k];
+    return mine;
+}
+
+- (void)addParagraphAttributes:(NSDictionary *)attrs range:(NSRange)range {
+    [self checkRange:range];
+    NSRange first = [self paragraphRangeForIndex:range.location];
+    NSRange last = [self paragraphRangeForIndex:range.length ? NSMaxRange(range) - 1 : range.location];
+    NSRange whole = NSUnionRange(first, last);
+    if (whole.length) [self addAttributes:attrs range:whole];
+}
+
+@end

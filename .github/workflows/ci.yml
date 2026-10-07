@@ -123,9 +123,9 @@ jobs:
       CXX: clang++
       LIBRARY_COMBO: ng-gnu-gnu
       RUNTIME_VERSION: gnustep-2.0
-      # Foundation for the libraries, gui and back for SimpleNotes,
-      # tools-xctest for the suites.
-      COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back tools-xctest
+      # Foundation for the libraries, gui and back for SimpleNotes and the
+      # Eau theme it looks as with, tools-xctest for the suites.
+      COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back eau tools-xctest
       # libobjc2 and libdispatch land in the prefix's plain lib/, which the
       # gnustep layout does not treat as a library root.
       LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib

@@ -184,32 +184,87 @@
                                     <action selector="styleHeading:" target="-1" id="SNm-ac-402"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Body" keyEquivalent="b" id="SNm-mi-403">
+                            <menuItem title="Subheading" keyEquivalent="j" id="SNm-mi-403">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
-                                    <action selector="styleBody:" target="-1" id="SNm-ac-403"/>
+                                    <action selector="styleSubheading:" target="-1" id="SNm-ac-403"/>
                                 </connections>
                             </menuItem>
-                            <menuItem isSeparatorItem="YES" id="SNm-mi-404"/>
-                            <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-405">
-                                <connections>
-                                    <action selector="toggleBold:" target="-1" id="SNm-ac-405"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Italic" keyEquivalent="i" id="SNm-mi-406">
-                                <connections>
-                                    <action selector="toggleItalic:" target="-1" id="SNm-ac-406"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Underline" keyEquivalent="u" id="SNm-mi-407">
-                                <connections>
-                                    <action selector="toggleUnderline:" target="-1" id="SNm-ac-407"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Strikethrough" keyEquivalent="x" id="SNm-mi-408">
+                            <menuItem title="Body" keyEquivalent="b" id="SNm-mi-404">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
-                                    <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-408"/>
+                                    <action selector="styleBody:" target="-1" id="SNm-ac-404"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Monostyled" keyEquivalent="m" id="SNm-mi-405">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="styleMono:" target="-1" id="SNm-ac-405"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-406"/>
+                            <menuItem title="Bulleted List" keyEquivalent="7" id="SNm-mi-407">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleBulletList:" target="-1" id="SNm-ac-407"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Dashed List" keyEquivalent="8" id="SNm-mi-408">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleDashList:" target="-1" id="SNm-ac-408"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Numbered List" keyEquivalent="9" id="SNm-mi-409">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleNumberList:" target="-1" id="SNm-ac-409"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-410"/>
+                            <menuItem title="Checklist" keyEquivalent="l" id="SNm-mi-411">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleChecklist:" target="-1" id="SNm-ac-411"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Mark as Checked" keyEquivalent="u" id="SNm-mi-412">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleChecked:" target="-1" id="SNm-ac-412"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-413"/>
+                            <menuItem title="Increase Indentation" keyEquivalent="]" id="SNm-mi-414">
+                                <connections>
+                                    <action selector="increaseIndentation:" target="-1" id="SNm-ac-414"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Decrease Indentation" keyEquivalent="[" id="SNm-mi-415">
+                                <connections>
+                                    <action selector="decreaseIndentation:" target="-1" id="SNm-ac-415"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-416"/>
+                            <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-417">
+                                <connections>
+                                    <action selector="toggleBold:" target="-1" id="SNm-ac-417"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Italic" keyEquivalent="i" id="SNm-mi-418">
+                                <connections>
+                                    <action selector="toggleItalic:" target="-1" id="SNm-ac-418"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Underline" keyEquivalent="u" id="SNm-mi-419">
+                                <connections>
+                                    <action selector="toggleUnderline:" target="-1" id="SNm-ac-419"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Strikethrough" keyEquivalent="x" id="SNm-mi-420">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-420"/>
                                 </connections>
                             </menuItem>
                         </items>

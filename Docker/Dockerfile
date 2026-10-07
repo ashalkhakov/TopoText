@@ -23,7 +23,8 @@ FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /
 
 # The sdk has Foundation only: AppKit (gui, back on cairo) built into its
-# prefix by the same script and pin, for SimpleNotes.
+# prefix by the same script and pin, for SimpleNotes, with the Eau theme the
+# app looks as on any of our Linux apps (XFormsKit, RDLKit, ODataKit's).
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GNUSTEP_PATCHES_REF=0b19ede3cd7ddc7e958130a856bea1a49e66c0f8
@@ -36,7 +37,7 @@ RUN set -e; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
     git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
-    PREFIX=/opt/gnustep SOURCES=/tmp/src/gnustep COMPONENTS="libs-gui libs-back" Scripts/build-gnustep.sh; \
+    PREFIX=/opt/gnustep SOURCES=/tmp/src/gnustep COMPONENTS="libs-gui libs-back eau" Scripts/build-gnustep.sh; \
     rm -rf /tmp/src
 COPY --from=freecoredata / /tmp/freecoredata/
 RUN set -e; cd /tmp/freecoredata; make clean >/dev/null 2>&1 || true; \

@@ -34,7 +34,7 @@ SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServer
 	-lOTelKit -lODataKit -lCoreData -ldispatch
 
 APP_NAME = SimpleNotes
-SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNSelfTest.m Shared/SNCheck.m \
+SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNSelfTest.m Shared/SNCheck.m \
 	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNMigration.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)

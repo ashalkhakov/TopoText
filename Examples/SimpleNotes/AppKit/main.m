@@ -19,5 +19,12 @@ int main(int argc, const char *argv[]) {
         }
     for (int i = 1; i + 1 < argc; i++)
         if (!strcmp(argv[i], "--self-test")) SNSelfTestRoot = [NSURL URLWithString:@(argv[i + 1])];
+#ifdef GNUSTEP
+    /* On Linux, the Eau theme, as our other apps have it (where it is
+       installed; a GSTheme of the user's own still wins). */
+    @autoreleasepool {
+        [[NSUserDefaults standardUserDefaults] registerDefaults:@{ @"GSTheme": @"Eau" }];
+    }
+#endif
     return NSApplicationMain(argc, argv);
 }

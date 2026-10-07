@@ -278,7 +278,7 @@ def simplenotes(topotext_ids):
                                            'SNMigration.h', 'SNMigration.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
-                                           'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'Info.plist',
+                                           'SNTextView.h', 'SNTextView.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m',
                                      'SNEditorViewController.xib', 'Info.plist',
@@ -312,7 +312,7 @@ def simplenotes(topotext_ids):
     common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNNotes.m', 'SNResolver.m', 'SNRichText.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
-    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNSelfTest.m'])
+    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
                      sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib']), appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,

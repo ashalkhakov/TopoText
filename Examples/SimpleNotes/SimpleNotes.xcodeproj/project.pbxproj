@@ -85,6 +85,10 @@
 				);
 			};
 		};
+		34F4CD95AC29D3E0EA84037E /* SNTextView.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 94DE5DF5B274EF78A7375493;
+		};
 		37DFBF31EE8E129D11C4F1E0 /* SNFolder.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 278E9CBDE74E90B175B6FD66;
@@ -828,6 +832,13 @@
 			sourceTree = "<group>";
 			name = Debug.xcconfig;
 		};
+		61C49631D69D1072A58600F6 /* SNTextView.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNTextView.h;
+			sourceTree = "<group>";
+			name = SNTextView.h;
+		};
 		629BB2F3571A2907E169A46B /* TopoText.xcodeproj */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = "wrapper.pb-project";
@@ -883,6 +894,13 @@
 			path = AppKit/MainMenu.xib;
 			sourceTree = "<group>";
 			name = MainMenu.xib;
+		};
+		94DE5DF5B274EF78A7375493 /* SNTextView.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNTextView.m;
+			sourceTree = "<group>";
+			name = SNTextView.m;
 		};
 		98D4730F537EE349976C418D /* SimpleNotes-iOS.xcconfig */ = {
 			isa = PBXFileReference;
@@ -1061,6 +1079,8 @@
 				AC94564EB5B357E5DA849A01,
 				2364B7CBF331A1084F0C03F7,
 				1DDFCCB317D232BCC759DB30,
+				61C49631D69D1072A58600F6,
+				94DE5DF5B274EF78A7375493,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
 				93905B50397F393A04D89B2C,
@@ -1430,6 +1450,7 @@
 				662F0441672FA84ECEA8F2FA,
 				3B72C38E82942C960038A006,
 				123BF91B2FF0039DAA8CD216,
+				34F4CD95AC29D3E0EA84037E,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
 				F48063A33E82F7318AC1D2FF,
