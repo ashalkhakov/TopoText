@@ -3,6 +3,9 @@
 // made from the other. AppKit's (macOS, GNUstep) and UIKit's.
 //
 //   Of a character:  bold, italic, underline, strike: YES
+//                    link: a URL's text (simplenotes://note/<id>: a note)
+//                    attachment: an attachment's id, on U+FFFC (an image:
+//                    SNAttachment; the view shows it, NSTextAttachment)
 //   Of a paragraph:  style: title, heading, subheading or mono (else body)
 //                    list: bullet, dash, number or check
 //                    checked: YES (a checklist item ticked)
@@ -23,14 +26,15 @@
 #import <UIKit/UIKit.h>
 typedef UIFont SNFont;
 typedef CGPoint SNPoint;
+typedef CGSize SNSize;
 #else
 #import <AppKit/AppKit.h>
 typedef NSFont SNFont;
 typedef NSPoint SNPoint;
+typedef NSSize SNSize;
 #endif
 #import <TopoText/TopoText.h>
-
-@class SNNoteEditor;
+#import "SNTextSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -38,6 +42,8 @@ FOUNDATION_EXPORT NSString * const SNBoldKey;        // @"bold"
 FOUNDATION_EXPORT NSString * const SNItalicKey;      // @"italic"
 FOUNDATION_EXPORT NSString * const SNUnderlineKey;   // @"underline"
 FOUNDATION_EXPORT NSString * const SNStrikeKey;      // @"strike"
+FOUNDATION_EXPORT NSString * const SNLinkKey;        // @"link"
+FOUNDATION_EXPORT NSString * const SNAttachmentKey;  // @"attachment"
 FOUNDATION_EXPORT NSString * const SNStyleKey;       // @"style"
 FOUNDATION_EXPORT NSString * const SNStyleTitle;     // @"title"
 FOUNDATION_EXPORT NSString * const SNStyleHeading;   // @"heading"
@@ -57,6 +63,22 @@ FOUNDATION_EXPORT NSString * const SNStyleAttributeName;    // @"SNStyle"
 FOUNDATION_EXPORT NSString * const SNListAttributeName;     // @"SNList"
 FOUNDATION_EXPORT NSString * const SNCheckedAttributeName;  // @"SNChecked"
 FOUNDATION_EXPORT NSString * const SNIndentAttributeName;   // @"SNIndent"
+// A link given (SNLinkKey), beside NSLinkAttributeName: one only detected
+// (an address typed, linked as Apple Notes does) has NSLinkAttributeName
+// alone, and is the view's, not the text's.
+FOUNDATION_EXPORT NSString * const SNLinkAttributeName;     // @"SNLink"
+// An attachment's id (SNAttachmentKey), beside the NSTextAttachment that
+// shows it: one pasted or dropped has none, until it is made one of the
+// note's.
+FOUNDATION_EXPORT NSString * const SNAttachmentAttributeName;   // @"SNAttachment"
+
+// Images are kept no larger than this across (pixels), re-encoded (a JPEG,
+// or a PNG for one with transparency) when larger or of another kind.
+FOUNDATION_EXPORT const double SNAttachmentMaxPixels;   // 1600
+// An image's data as an attachment keeps it, its type and size; nil: not an
+// image.
+FOUNDATION_EXPORT NSData *_Nullable SNImageDataForAttachment(NSData *data, NSString *_Nullable *_Nonnull type,
+                                                             double *width, double *height);
 
 // The text view's attributes for TopoText's (a character's and its
 // paragraph's together), and TopoText's for the view's.
@@ -91,13 +113,14 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 #endif
 
 @interface SNTextBinding : NSObject
-// The view's storage set to the editor's text, and kept so. The view's
-// controller is the editor's delegate, and hands its merges to -applyEdits:.
-- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor NS_DESIGNATED_INITIALIZER;
+// The view's storage set to the editor's text, and kept so: a note's
+// (SNNoteEditor), whose delegate hands its merges to -applyEdits:, or a
+// table cell's. A cell has no attachments: none is put in it.
+- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 @property (nonatomic, readonly, weak) id<SNTextViewing> view;
 @property (nonatomic, readonly) NSTextStorage *storage;
-@property (nonatomic, readonly) SNNoteEditor *editor;
+@property (nonatomic, readonly) id<SNTextSource> editor;
 // What a sync merged into the editor's text (SNNoteEditorDelegate's
 // -noteEditor:didMergeEdits:), done to the storage; the selection moved
 // along.
@@ -107,6 +130,27 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // On the range's characters; with none selected, on what is typed next.
 - (BOOL)range:(NSRange)range has:(NSString *)key;
 - (void)toggle:(NSString *)key inRange:(NSRange)range;
+// A link on the range's characters (nil: taken off), and the one at a place.
+- (void)setLink:(nullable NSString *)link inRange:(NSRange)range;
+- (nullable NSString *)linkAt:(NSUInteger)index;
+// An image in place of the range, made one of the note's attachments
+// (re-encoded, saved, synced); NO: not an image.
+- (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range;
+// A table in place of the range (rows x columns, empty), made one of the
+// note's attachments; its id.
+- (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range;
+// The id of the attachment at a place (nil: none).
+- (nullable NSString *)attachmentIDAt:(NSUInteger)index;
+// A table's room in the text: the size its character keeps, empty, for its
+// grid laid over it (SNTableGrid). Until it is said, the table is drawn
+// there as a picture.
+- (void)setRoomSize:(SNSize)size forAttachmentID:(NSString *)attachmentID;
+// Attachments shown again: those a sync has brought since (a text can come
+// before its attachment).
+- (void)refreshAttachments;
+// Images sized to the text's width again, when it changed (AppKit's text
+// view says so itself; UIKit's controller calls this once laid out).
+- (void)textWidthMayHaveChanged;
 // The rest on every paragraph the range touches.
 // A style (nil: body), the paragraphs' list taken off.
 - (void)setStyle:(nullable NSString *)style forParagraphsInRange:(NSRange)range;
@@ -115,6 +159,14 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 - (void)toggleList:(NSString *)list forParagraphsInRange:(NSRange)range;
 // Checklist items ticked, or unticked when the first is ticked.
 - (void)toggleCheckedForParagraphsInRange:(NSRange)range;
+// The checklist a place is in (its items one after another), its ticked
+// items moved after the others, as Apple Notes' Move Checked to Bottom;
+// NO when nothing moved. Only the ticked ones out of place move, each a
+// deletion and an insertion: typing another device does in one at the same
+// time stays where the item was.
+- (BOOL)moveCheckedToBottomOfChecklistAt:(NSUInteger)index;
+// The checklist's range a place is in (NSNotFound: none), for an undo.
+- (NSRange)checklistRangeAt:(NSUInteger)index;
 // Indented one more (by > 0) or one less, from none to 8.
 - (void)indentParagraphsInRange:(NSRange)range by:(NSInteger)by;
 // The paragraph at index's formatting (TopoText's keys), as the view shows it.

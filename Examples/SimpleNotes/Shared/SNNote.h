@@ -6,7 +6,7 @@
 #import <CoreData/CoreData.h>
 #import <TopoText/TopoText.h>
 
-@class SNFolder;
+@class SNFolder, SNAttachment;
 
 NS_ASSUME_NONNULL_BEGIN
 

@@ -2,6 +2,14 @@
 
 NSString * const SNFolderEntity = @"Folder";
 NSString * const SNNoteEntity = @"Note";
+NSString * const SNAttachmentEntity = @"Attachment";
+
+/* What a line says, read: an attachment's character (U+FFFC) is not
+   words. */
+static NSString *SNReadable(NSString *line) {
+    NSString *t = [line stringByReplacingOccurrencesOfString:@"\uFFFC" withString:@""];
+    return [t stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
 
 NSURL *SNModelURLInBundle(NSBundle *bundle) {
     return [bundle URLForResource:@"SimpleNotes" withExtension:@"momd"] ?: [bundle URLForResource:@"SimpleNotes" withExtension:@"mom"];
@@ -19,20 +27,18 @@ NSManagedObjectModel *SNModel(void) {
 }
 
 NSString *SNTitleOfBody(NSString *body) {
-    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     for (NSString *line in [body componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
-        NSString *t = [line stringByTrimmingCharactersInSet:space];
+        NSString *t = SNReadable(line);
         if (t.length) return t.length > 120 ? [t substringToIndex:120] : t;
     }
     return @"New Note";
 }
 
 NSString *SNSnippetOfBody(NSString *body) {
-    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     NSMutableArray *lines = [NSMutableArray array];
     BOOL title = NO;
     for (NSString *line in [body componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
-        NSString *t = [line stringByTrimmingCharactersInSet:space];
+        NSString *t = SNReadable(line);
         if (!t.length) continue;
         if (!title) { title = YES; continue; }
         [lines addObject:t];
@@ -80,4 +86,39 @@ NSDictionary *SNUpgradeBody(NSDictionary *body, NSEntityDescription *entity) {
     b[@"Edited"] = b[@"Updated"];
     [b removeObjectForKey:@"Updated"];
     return b;
+}
+
+NSArray<NSValue *> *SNLinkRangesInText(NSString *text) {
+    static NSRegularExpression *web;
+    if (!web)
+        web = [NSRegularExpression regularExpressionWithPattern:@"(?:https?://|www\\.)[^\\s<>\"]+" options:NSRegularExpressionCaseInsensitive error:NULL];
+    NSMutableArray *ranges = [NSMutableArray array];
+    NSCharacterSet *trailing = [NSCharacterSet characterSetWithCharactersInString:@".,;:!?)]}'"];
+    for (NSTextCheckingResult *m in [web matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
+        NSRange r = m.range;
+        if (r.location && ![[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[text characterAtIndex:r.location - 1]] &&
+            [text characterAtIndex:r.location - 1] != '(')
+            continue;
+        while (r.length && [trailing characterIsMember:[text characterAtIndex:NSMaxRange(r) - 1]]) r.length--;
+        if (r.length > 4) [ranges addObject:[NSValue valueWithRange:r]];
+    }
+    return ranges;
+}
+
+static NSString * const SNNoteLinkPrefix = @"simplenotes://note/";
+
+NSURL *SNLinkToNote(NSString *noteID) {
+    return [NSURL URLWithString:[SNNoteLinkPrefix stringByAppendingString:noteID]];
+}
+
+NSString *SNNoteIDInLink(NSURL *link) {
+    NSString *s = link.absoluteString;
+    return [s hasPrefix:SNNoteLinkPrefix] && s.length > SNNoteLinkPrefix.length ? [s substringFromIndex:SNNoteLinkPrefix.length] : nil;
+}
+
+NSURL *SNURLOfLink(NSString *text) {
+    NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!t.length) return nil;
+    if ([t rangeOfString:@"://"].location == NSNotFound && ![t hasPrefix:@"mailto:"]) t = [@"https://" stringByAppendingString:t];
+    return [NSURL URLWithString:t];
 }

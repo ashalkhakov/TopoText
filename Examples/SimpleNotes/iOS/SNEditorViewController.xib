@@ -15,6 +15,7 @@
                 <outlet property="formatBar" destination="SNe-tb-001" id="SNe-cn-003"/>
                 <outlet property="styleItem" destination="SNe-bi-001" id="SNe-cn-004"/>
                 <outlet property="listItem" destination="SNe-bi-002" id="SNe-cn-005"/>
+                <outlet property="attachItem" destination="SNe-bi-010" id="SNe-cn-006"/>
             </connections>
         </placeholder>
         <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
@@ -43,32 +44,23 @@
             <rect key="frame" x="0.0" y="0.0" width="393" height="44"/>
             <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
             <items>
+                <barButtonItem image="tablecells" catalog="system" id="SNe-bi-011">
+                    <connections>
+                        <action selector="addTable:" destination="-1" id="SNe-ac-011"/>
+                    </connections>
+                </barButtonItem>
                 <barButtonItem title="Aa" id="SNe-bi-001"/>
-                <barButtonItem image="list.bullet" catalog="system" id="SNe-bi-002"/>
                 <barButtonItem image="checklist" catalog="system" id="SNe-bi-003">
                     <connections>
                         <action selector="checklist:" destination="-1" id="SNe-ac-003"/>
                     </connections>
                 </barButtonItem>
+                <barButtonItem image="list.bullet" catalog="system" id="SNe-bi-002"/>
+                <barButtonItem image="paperclip" catalog="system" id="SNe-bi-010"/>
                 <barButtonItem style="plain" systemItem="flexibleSpace" id="SNe-bi-004"/>
-                <barButtonItem image="bold" catalog="system" id="SNe-bi-005">
+                <barButtonItem image="keyboard.chevron.compact.down" catalog="system" id="SNe-bi-012">
                     <connections>
-                        <action selector="bold:" destination="-1" id="SNe-ac-005"/>
-                    </connections>
-                </barButtonItem>
-                <barButtonItem image="italic" catalog="system" id="SNe-bi-006">
-                    <connections>
-                        <action selector="italic:" destination="-1" id="SNe-ac-006"/>
-                    </connections>
-                </barButtonItem>
-                <barButtonItem image="underline" catalog="system" id="SNe-bi-007">
-                    <connections>
-                        <action selector="underline:" destination="-1" id="SNe-ac-007"/>
-                    </connections>
-                </barButtonItem>
-                <barButtonItem image="strikethrough" catalog="system" id="SNe-bi-008">
-                    <connections>
-                        <action selector="strikethrough:" destination="-1" id="SNe-ac-008"/>
+                        <action selector="hideKeyboard:" destination="-1" id="SNe-ac-012"/>
                     </connections>
                 </barButtonItem>
             </items>
@@ -76,12 +68,11 @@
         </toolbar>
     </objects>
     <resources>
-        <image name="bold" catalog="system" width="12" height="16"/>
+        <image name="keyboard.chevron.compact.down" catalog="system" width="16" height="16"/>
+        <image name="paperclip" catalog="system" width="16" height="16"/>
         <image name="checklist" catalog="system" width="16" height="16"/>
         <image name="list.bullet" catalog="system" width="16" height="16"/>
-        <image name="italic" catalog="system" width="10" height="16"/>
-        <image name="strikethrough" catalog="system" width="16" height="16"/>
-        <image name="underline" catalog="system" width="12" height="16"/>
+        <image name="tablecells" catalog="system" width="16" height="16"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

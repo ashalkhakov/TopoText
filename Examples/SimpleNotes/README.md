@@ -1,8 +1,9 @@
 # SimpleNotes
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
-with headings, lists and checklists, tags, search, pinning, sorting and
-grouping by date, Recently Deleted, and moving notes between folders. It runs
+with headings, lists and checklists, links, images and tables, tags,
+search, pinning, sorting and grouping by date, Recently Deleted, and moving
+notes between folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
@@ -20,9 +21,9 @@ merges it through `TTSyncResolver`. The note is not settled for one side.
 
 | Part | Where | What |
 |---|---|---|
-| The device | `Shared/` | Foundation and Core Data only, shared by every app |
-| The AppKit app | `AppKit/` | macOS and GNUstep: `MainMenu.xib`, `NotesWindow.xib` (folders, notes, the note), `TextPanel.xib` |
-| The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard) |
+| The device | `Shared/` | Foundation and Core Data, shared by every app; the rich text and tables too, with no `#if`: what they need of AppKit or UIKit is `SNTextSystem.h` and `SNTableGrid+System.h`, each system's in its own folder |
+| The AppKit app | `AppKit/` | macOS and GNUstep: `MainMenu.xib`, `NotesWindow.xib` (folders, notes, the note), `TextPanel.xib`; `SNTextSystem.m` and `SNTableGrid+System.m`, AppKit's part of the shared code (GNUstep's differences inside, `#ifdef GNUSTEP`) |
+| The iOS app | `iOS/` | Folders, then a folder's notes, then the editor (`SNEditorViewController.xib`, with a format bar over the keyboard); UIKit's `SNTextSystem.m` and `SNTableGrid+System.m` |
 | The server | `Server/SNServer.m` | ODataKit's server (HTTPServerKit, ODataService) with ODataSync's part of it |
 | The model | `SimpleNotes.xcdatamodeld` | `Folder` and `Note`; the classes' properties are generated as each target builds (Codegen: Category/Extension), by Xcode or by FreeCoreData's momc |
 | Tests | `Tests/` | The device against the service in one process; the text view's binding; migration from an older model; two devices through the running server; each app driven from within |
@@ -90,6 +91,68 @@ sync, the folders would be inside each other. Each device then breaks the
 loop at the folder whose ID sorts first, which shows at the top level. Every
 device does the same, so nothing is lost and all show the same tree.
 
+## Links
+
+A web address you type becomes a link, as in Apple Notes. That link is
+only shown, not kept: it's worked out from the text each time.
+**Format > Add Link…** (⌘K; on iOS, **Add Link** in the menu over the
+selected text, or under the format bar's paperclip) puts a link on the
+selected text, and that one is part of the note and syncs with it.
+
+A link can also point to another note: **File > Copy Link to Note** (on iOS,
+press and hold a note in the list) copies a `simplenotes://note/<id>` link.
+Paste it with Add Link, and clicking it opens that note.
+
+## Images
+
+**File > Attach File…** (⇧⌘A), or paste or drop an image; on iOS, **Choose
+Photo** under the format bar's paperclip. An image is as wide as it is, or
+as the text when the text is narrower; it follows the text's width when the
+window or the screen turns. It's one of the note's attachments, with its own
+record that syncs like a note does. The note's text holds one character for
+it. Images larger than 1600 pixels across are scaled down.
+
+A note's text can reach a device before its attachment does. Until the
+attachment arrives, a grey box takes its place. Deleting a note for good
+deletes its attachments.
+
+## Tables
+
+**Format > Table > Insert Table** (⌥⌘T; on iOS, the format bar's table
+button) puts a two-by-two table in the note, and you type into its first
+cell. Tables are edited where they are in the note, as in Apple Notes:
+
+- **Tab** goes to the next cell (Shift-Tab, the one before; on iOS, with a
+  hardware keyboard, or the bar's Next Cell button). Tab in the last cell
+  adds a row. Return starts a new line in the cell.
+- **Add Row Above/Below, Add Column Before/After, Delete Row, Delete
+  Column** are in Format > Table and in a cell's context menu. On iOS
+  they're on the table button in the bar over the keyboard, and in a cell's
+  edit menu.
+- **Bold, italic, underline, strikethrough and links** work in a cell as in
+  the note: from the Format menu and its shortcuts, or on iOS from the
+  format button in the bar over the keyboard. A link in a cell opens as one
+  in the note does, by a click or a tap. Styles and lists don't, as in
+  Apple Notes. Each cell has a text binding of its own (`SNTextBinding`,
+  over the cell's TopoText).
+
+Each table is a grid of text views (`SNTableGrid`) laid over its place in
+the note. That place is the table's character, which keeps the grid's room.
+
+A table merges as Apple Notes' do, with no cell, row or column lost when
+two devices edit apart. It's a `TTTable`, from TopoText. Its rows and
+columns are each kept in an order every device agrees on, and each cell is
+a TopoText of its own. So:
+
+- Rows (or columns) added on two devices are both kept.
+- Edits to different cells both stand; edits to one cell merge character
+  by character.
+- A column (or row) removed takes its cells with it, including anything
+  typed into them meanwhile.
+
+When the same table changed on two devices, the sync merges the two whole
+tables (`SNResolver`).
+
 ## Tags
 
 Type `#` and a word in a note, and that word becomes a tag, as in Apple
@@ -116,6 +179,7 @@ Notes. The choice is the device's own (user defaults), as in Apple Notes.
 `SimpleNotes.xcdatamodeld` holds every version of the model:
 
 - **Version 2** added `Note.deletedAt` (Recently Deleted).
+- **Version 4** added `Attachment` (images and tables in notes).
 - **Version 3** added `Folder.parent` (folders in folders). It also renamed
   `Note.updated` to `edited`, with Renaming ID `updated` so migration keeps
   the dates. On Apple's Core Data, `updated` is `NSManagedObject`'s own
@@ -242,7 +306,7 @@ never starts on its own: opening the image starts the app, and the server
 runs only when asked:
 
 ```sh
-./SimpleNotes-Linux-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+./SimpleNotes-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
 ```
 
 The apps:
@@ -278,7 +342,7 @@ and attach:
   `MACOS_CERTIFICATE_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and
   `NOTARY_PASSWORD`; otherwise it's unsigned, and named so. Either way it
   must pass its self-test first.
-- **Linux** (`release.yml`): `SimpleNotes-Linux-<version>-x86_64.AppImage`,
+- **Linux** (`release.yml`): `SimpleNotes-<version>-x86_64.AppImage`,
   built on Ubuntu 22.04 so it runs there and on anything newer. It is
   checked on a clean Ubuntu: its own server is started and seeded, and the
   app's self-test runs against it.
@@ -369,13 +433,20 @@ Typing works as in Apple Notes:
 Clicking (or tapping) a checkbox ticks it. Numbered items count up within
 their indent level; items indented further don't interrupt the count.
 
+**Format > Move Checked to Bottom** (on iOS, in the list menu) moves the
+ticked items of the checklist at the insertion point below the unticked
+ones. **Keep Checked at Bottom** does that every time an item is ticked,
+which is Apple Notes' "Automatically" setting. Only the ticked items that
+are out of place move, and each move is a deletion plus an insertion. So if
+another device was typing into an item at the moment it moved, that text
+stays where the item was.
+
 ## Not yet
 
 - **One shared notebook.** A notebook per user means a handler on the
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Attachments, tables, smart folders, a sort order per folder, moving
-  checked items to the bottom,
-  and undo across a merge (the undo stack is cleared when a sync changes the
-  open note).
+- Files other than images, smart
+  folders, a sort order per folder, and undo across a merge (the undo stack
+  is cleared when a sync changes the open note).

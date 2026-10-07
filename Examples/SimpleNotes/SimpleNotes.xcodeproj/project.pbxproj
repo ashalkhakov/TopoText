@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		025651F2BB52DB27CF566C7C /* SNAttachment.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4A9856BDDEBD09A136FC953C;
+		};
 		029C0375BBB48CBAAD4B77F8 /* SNMigration.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
@@ -49,6 +53,10 @@
 			isa = PBXBuildFile;
 			fileRef = 7EE0BBC99032BF20C4EA757C;
 		};
+		1AEA465EF57405F1763F16F7 /* SNTableGrid.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 117AF9FFC9CA6E63B5C2C73A;
+		};
 		20327598F541A2BE0FF21B15 /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
@@ -75,6 +83,10 @@
 				);
 			};
 		};
+		31315B895C7B07BAF6DA0F94 /* SNTableGrid.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 117AF9FFC9CA6E63B5C2C73A;
+		};
 		34D439D972927301D70C87E5 /* ODataSync.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
@@ -92,6 +104,10 @@
 		37DFBF31EE8E129D11C4F1E0 /* SNFolder.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 278E9CBDE74E90B175B6FD66;
+		};
+		3831F7787A1EC21E9B6A9344 /* SNAttachment.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4A9856BDDEBD09A136FC953C;
 		};
 		38CC23531B27ECEF96DAF8AF /* SimpleNotes.xcdatamodeld in Sources */ = {
 			isa = PBXBuildFile;
@@ -137,6 +153,10 @@
 			isa = PBXBuildFile;
 			fileRef = F6D896F11584BB5C77EEEA7A;
 		};
+		5B455969B2358702B11C8D4F /* SNTextSystem.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = DB05A5F09546462524E26DCA;
+		};
 		5C0532B74F67EA76B21EA1B7 /* SimpleNotes.xcdatamodeld in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 571D7F2A670DB7D88A910D92;
@@ -179,9 +199,17 @@
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
 		};
+		72A18D153A49CB051B239C79 /* SNTableGrid+System.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 6E9D5B559DEB6B7E294A4AB3;
+		};
 		76292A09FD10E76A4A52224B /* ODataKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = B74881DD4B1A684D8FBFF1A2;
+		};
+		7A872943A4DF7167C961B66A /* SNTextSystem.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 9830E7D38501D4B632E0C8F2;
 		};
 		7D57F0905FE829A58A1E304E /* ODataIncrementalStore.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -238,6 +266,10 @@
 					RemoveHeadersOnCopy,
 				);
 			};
+		};
+		A750D10E73248D897F89EF77 /* SNAttachment.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4A9856BDDEBD09A136FC953C;
 		};
 		A765D5919F6D1153C97CABC4 /* ODataSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -406,6 +438,10 @@
 		FD65BE028659EA90A14F2E10 /* HTTPServerKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = C8761B02854FD9DE60555345;
+		};
+		FD8857A760C31A14282BD27A /* SNTableGrid+System.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 7B4D0C1B7C0CC0E7BCA52B3B;
 		};
 /* End PBXBuildFile section */
 
@@ -697,6 +733,20 @@
 			path = SimpleNotes.app;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		117AF9FFC9CA6E63B5C2C73A /* SNTableGrid.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNTableGrid.m;
+			sourceTree = "<group>";
+			name = SNTableGrid.m;
+		};
+		1369F4A6AED8899F5B91DC93 /* SNTextSystem.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNTextSystem.h;
+			sourceTree = "<group>";
+			name = SNTextSystem.h;
+		};
 		1512BC10FA77B286C0749560 /* SNRichText.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -807,12 +857,39 @@
 			sourceTree = "<group>";
 			name = SNMigration.h;
 		};
+		4A9856BDDEBD09A136FC953C /* SNAttachment.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNAttachment.m;
+			sourceTree = "<group>";
+			name = SNAttachment.m;
+		};
+		4B17F92C591BD198105AEF35 /* SimpleNotes 4.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = "SimpleNotes 4.xcdatamodel";
+			sourceTree = "<group>";
+		};
 		4BE397C044903B570E6795E6 /* SNRichText.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
 			path = Shared/SNRichText.m;
 			sourceTree = "<group>";
 			name = SNRichText.m;
+		};
+		4BF9FDEC707B7DC37EFF6199 /* SNTableGrid+System.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = "Shared/SNTableGrid+System.h";
+			sourceTree = "<group>";
+			name = "SNTableGrid+System.h";
+		};
+		4D92007E5ECB86344FC8BEA5 /* SNAttachment.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNAttachment.h;
+			sourceTree = "<group>";
+			name = SNAttachment.h;
 		};
 		575D635025FF7766A4A183D2 /* Info.plist */ = {
 			isa = PBXFileReference;
@@ -856,6 +933,13 @@
 			path = ../../TopoText.xcodeproj;
 			sourceTree = "<group>";
 		};
+		6E9D5B559DEB6B7E294A4AB3 /* SNTableGrid+System.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "iOS/SNTableGrid+System.m";
+			sourceTree = "<group>";
+			name = "SNTableGrid+System.m";
+		};
 		719BCFED3ECD01936BB14F74 /* SNCheck.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -876,6 +960,13 @@
 			path = AppKit/SNSelfTest.m;
 			sourceTree = "<group>";
 			name = SNSelfTest.m;
+		};
+		7B4D0C1B7C0CC0E7BCA52B3B /* SNTableGrid+System.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNTableGrid+System.m";
+			sourceTree = "<group>";
+			name = "SNTableGrid+System.m";
 		};
 		7B8DAB577573AB79C6D5730A /* SNAppController.h */ = {
 			isa = PBXFileReference;
@@ -919,6 +1010,13 @@
 			sourceTree = "<group>";
 			name = SNTextView.m;
 		};
+		9830E7D38501D4B632E0C8F2 /* SNTextSystem.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNTextSystem.m;
+			sourceTree = "<group>";
+			name = SNTextSystem.m;
+		};
 		98D4730F537EE349976C418D /* SimpleNotes-iOS.xcconfig */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.xcconfig;
@@ -939,6 +1037,13 @@
 			path = iOS/SNiOSSelfTest.h;
 			sourceTree = "<group>";
 			name = SNiOSSelfTest.h;
+		};
+		A42FDCBD28CC874D78BF7443 /* SNTableGrid.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNTableGrid.h;
+			sourceTree = "<group>";
+			name = SNTableGrid.h;
 		};
 		A453D29A1E57E3F3B4AD13AD /* SimpleNotes-macOS.xcconfig */ = {
 			isa = PBXFileReference;
@@ -1001,6 +1106,13 @@
 			name = ODataKit.xcodeproj;
 			path = ../../../ODataKit/ODataKit.xcodeproj;
 			sourceTree = "<group>";
+		};
+		DB05A5F09546462524E26DCA /* SNTextSystem.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNTextSystem.m;
+			sourceTree = "<group>";
+			name = SNTextSystem.m;
 		};
 		E203A76E7D15AD19DD76A352 /* seed.py */ = {
 			isa = PBXFileReference;
@@ -1098,6 +1210,8 @@
 				1DDFCCB317D232BCC759DB30,
 				61C49631D69D1072A58600F6,
 				94DE5DF5B274EF78A7375493,
+				DB05A5F09546462524E26DCA,
+				7B4D0C1B7C0CC0E7BCA52B3B,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
 				93905B50397F393A04D89B2C,
@@ -1150,12 +1264,18 @@
 				E92F4F34642FF032BAA53F88,
 				2725B1B9F5ED2F0BA4FFB0F3,
 				278E9CBDE74E90B175B6FD66,
+				4D92007E5ECB86344FC8BEA5,
+				4A9856BDDEBD09A136FC953C,
 				A6AD243562BFE2DA0E510338,
 				FC73A466CE6A4BC79D15A841,
 				7E6474CC5566165BCB367580,
 				C5BF2DACC29D3CD90AB653ED,
 				1512BC10FA77B286C0749560,
 				4BE397C044903B570E6795E6,
+				1369F4A6AED8899F5B91DC93,
+				A42FDCBD28CC874D78BF7443,
+				4BF9FDEC707B7DC37EFF6199,
+				117AF9FFC9CA6E63B5C2C73A,
 				719BCFED3ECD01936BB14F74,
 				848C622D1A0C34A6F10D548E,
 				47029EC1BB7F394FB43D846A,
@@ -1188,6 +1308,8 @@
 				3A7E5691DCCCF8CDDA62B26F,
 				9C1931B78EF55F850C71A649,
 				FE6690DC46D2B8C234FD7525,
+				9830E7D38501D4B632E0C8F2,
+				6E9D5B559DEB6B7E294A4AB3,
 				CCF418C8E3E8B505943CEE74,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
@@ -1437,12 +1559,16 @@
 				C7D5851704839B875F6BE620,
 				5D1543EFBFF007BFB6CAA6A7,
 				D5C2667A85764D80A464DAFB,
+				7A872943A4DF7167C961B66A,
+				72A18D153A49CB051B239C79,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,
 				37DFBF31EE8E129D11C4F1E0,
+				025651F2BB52DB27CF566C7C,
 				6333306B7D1ED627E640309C,
 				099EC221977E4E9C431EA752,
 				86BC567CCDCCAB940C7793DF,
+				1AEA465EF57405F1763F16F7,
 				AC28625FEB238C24115CFE5A,
 				5C0532B74F67EA76B21EA1B7,
 			);
@@ -1456,6 +1582,7 @@
 				144C28E98CC0E78EF5C3A32C,
 				20327598F541A2BE0FF21B15,
 				3B84FACBA94F3E3FB501528F,
+				A750D10E73248D897F89EF77,
 				D90D2FE1CB02EF0327E26267,
 				38CC23531B27ECEF96DAF8AF,
 			);
@@ -1469,14 +1596,18 @@
 				3B72C38E82942C960038A006,
 				123BF91B2FF0039DAA8CD216,
 				34F4CD95AC29D3E0EA84037E,
+				5B455969B2358702B11C8D4F,
+				FD8857A760C31A14282BD27A,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
 				F48063A33E82F7318AC1D2FF,
 				878158D5F3C0953E9F6C553A,
 				D2A1E2BABE67FC85240D71EB,
+				3831F7787A1EC21E9B6A9344,
 				9A875137FA1C56A505E3F568,
 				8325B3AFD178A1008D2AB02F,
 				D0EFBF4E8A299CC4F4ED3DBD,
+				31315B895C7B07BAF6DA0F94,
 				029C0375BBB48CBAAD4B77F8,
 				ED73A187727B64A1E926DC28,
 			);
@@ -1733,9 +1864,10 @@
 			children = (
 				BCCB2602B0C5007DD193EFB5,
 				3ED189E6AF571756E33600AA,
+				4B17F92C591BD198105AEF35,
 				3BBC93E5156C8D3EC4A97323,
 			);
-			currentVersion = 3ED189E6AF571756E33600AA;
+			currentVersion = 4B17F92C591BD198105AEF35;
 			path = SimpleNotes.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

@@ -1,11 +1,13 @@
 #import "SNRichText.h"
 #import "SNNotes.h"
 #import "SNModel.h"
+#import "SNTextSystem.h"
 
 NSString * const SNBoldKey = @"bold";
 NSString * const SNItalicKey = @"italic";
 NSString * const SNUnderlineKey = @"underline";
 NSString * const SNStrikeKey = @"strike";
+NSString * const SNLinkKey = @"link";
 NSString * const SNStyleKey = @"style";
 NSString * const SNStyleTitle = @"title";
 NSString * const SNStyleHeading = @"heading";
@@ -22,24 +24,17 @@ NSString * const SNStyleAttributeName = @"SNStyle";
 NSString * const SNListAttributeName = @"SNList";
 NSString * const SNCheckedAttributeName = @"SNChecked";
 NSString * const SNIndentAttributeName = @"SNIndent";
+NSString * const SNLinkAttributeName = @"SNLink";
+NSString * const SNAttachmentKey = @"attachment";
+NSString * const SNAttachmentAttributeName = @"SNAttachment";
+const double SNAttachmentMaxPixels = 1600;
+static const unichar SNAttachmentCharacter = 0xFFFC;
 /* Bold and italic said beside the font too: a font with no italic face
    (or bold) still says what was meant. */
 static NSString * const SNBoldAttributeName = @"SNBold";
 static NSString * const SNItalicAttributeName = @"SNItalic";
 
 static const NSInteger SNMaxIndent = 8;
-/* An indent's width, and a list marker's column. */
-#if TARGET_OS_IPHONE
-static const CGFloat SNIndentStep = 28;
-typedef UIColor SNColor;
-typedef UIBezierPath SNPath;
-typedef CGRect SNRect;
-#else
-static const CGFloat SNIndentStep = 24;
-typedef NSColor SNColor;
-typedef NSBezierPath SNPath;
-typedef NSRect SNRect;
-#endif
 
 NSSet<NSString *> *SNParagraphKeys(void) {
     static NSSet *keys;
@@ -128,29 +123,6 @@ static BOOL SNEndsEmpty(NSString *s) {
 
 #pragma mark fonts
 
-static CGFloat SNSize(NSString *style) {
-#if TARGET_OS_IPHONE
-    return [style isEqual:SNStyleTitle] ? 28 : [style isEqual:SNStyleHeading] ? 22 : [style isEqual:SNStyleSubheading] ? 18 : 17;
-#else
-    return [style isEqual:SNStyleTitle] ? 24 : [style isEqual:SNStyleHeading] ? 18 : [style isEqual:SNStyleSubheading] ? 15 : 14;
-#endif
-}
-
-static SNFont *SNWithTraits(SNFont *font, BOOL bold, BOOL italic) {
-#if TARGET_OS_IPHONE
-    UIFontDescriptorSymbolicTraits t = font.fontDescriptor.symbolicTraits;
-    if (bold) t |= UIFontDescriptorTraitBold;
-    if (italic) t |= UIFontDescriptorTraitItalic;
-    UIFontDescriptor *d = [font.fontDescriptor fontDescriptorWithSymbolicTraits:t];
-    return d ? [UIFont fontWithDescriptor:d size:font.pointSize] : font;
-#else
-    NSFontManager *fm = [NSFontManager sharedFontManager];
-    if (bold) font = [fm convertFont:font toHaveTrait:NSBoldFontMask] ?: font;
-    if (italic) font = [fm convertFont:font toHaveTrait:NSItalicFontMask] ?: font;
-    return font;
-#endif
-}
-
 SNFont *SNFontFor(NSString *style, BOOL bold, BOOL italic) {
     static NSMutableDictionary *cache;
     if (!cache) cache = [NSMutableDictionary dictionary];
@@ -159,57 +131,11 @@ SNFont *SNFontFor(NSString *style, BOOL bold, BOOL italic) {
     NSString *key = [NSString stringWithFormat:@"%@/%d/%d", style ?: @"", bold, italic];
     SNFont *font = cache[key];
     if (font) return font;
-    CGFloat size = SNSize(style);
-    if ([style isEqual:SNStyleMono]) {
-#if TARGET_OS_IPHONE
-        font = [UIFont monospacedSystemFontOfSize:size weight:bold ? UIFontWeightBold : UIFontWeightRegular];
-        if (italic) font = SNWithTraits(font, NO, YES);
-#else
-        font = SNWithTraits([NSFont userFixedPitchFontOfSize:size] ?: [NSFont systemFontOfSize:size], bold, italic);
-#endif
-    } else {
-        font = bold ? [SNFont boldSystemFontOfSize:size] : [SNFont systemFontOfSize:size];
-        if (italic) font = SNWithTraits(font, NO, YES);
-    }
+    CGFloat size = SNSystemFontSize(style);
+    font = [style isEqual:SNStyleMono] ? SNSystemMonoFont(size, bold) : SNSystemFont(size, bold);
+    if (italic) font = SNSystemFontWithTraits(font, NO, YES);
     cache[key] = font;
     return font;
-}
-
-static void SNTraitsOf(SNFont *font, BOOL *bold, BOOL *italic) {
-#if TARGET_OS_IPHONE
-    UIFontDescriptorSymbolicTraits t = font.fontDescriptor.symbolicTraits;
-    *bold = (t & UIFontDescriptorTraitBold) != 0;
-    *italic = (t & UIFontDescriptorTraitItalic) != 0;
-#else
-    NSFontTraitMask t = [[NSFontManager sharedFontManager] traitsOfFont:font];
-    *bold = (t & NSBoldFontMask) != 0;
-    *italic = (t & NSItalicFontMask) != 0;
-#endif
-}
-
-static SNColor *SNTextColor(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor labelColor];
-#else
-    return [NSColor textColor];
-#endif
-}
-
-static SNColor *SNMarkerGray(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor tertiaryLabelColor];
-#else
-    return [NSColor grayColor];
-#endif
-}
-
-/* Apple Notes' checkbox, ticked. */
-static SNColor *SNAccent(void) {
-#if TARGET_OS_IPHONE
-    return [UIColor systemOrangeColor];
-#else
-    return [NSColor colorWithCalibratedRed:0.96 green:0.66 blue:0.0 alpha:1];
-#endif
 }
 
 /* The text in from the margin: an indent's, and a list marker's column. */
@@ -220,7 +146,7 @@ static NSParagraphStyle *SNParagraphStyle(NSInteger indent, BOOL list) {
     NSParagraphStyle *style = cache[key];
     if (style) return style;
     NSMutableParagraphStyle *m = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
-    CGFloat x = (indent + (list ? 1 : 0)) * SNIndentStep;
+    CGFloat x = (indent + (list ? 1 : 0)) * SNSystemIndentStep();
     m.firstLineHeadIndent = x;
     m.headIndent = x;
     cache[key] = style = [m copy];
@@ -237,9 +163,16 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     v[NSFontAttributeName] = SNFontFor(style, bold, italic);
     if (bold) v[SNBoldAttributeName] = @YES;
     if (italic) v[SNItalicAttributeName] = @YES;
-    v[NSForegroundColorAttributeName] = SNTextColor();
+    v[NSForegroundColorAttributeName] = SNSystemTextColor();
     if ([attrs[SNUnderlineKey] boolValue]) v[NSUnderlineStyleAttributeName] = @(NSUnderlineStyleSingle);
     if ([attrs[SNStrikeKey] boolValue]) v[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
+    NSString *link = [attrs[SNLinkKey] isKindOfClass:[NSString class]] ? attrs[SNLinkKey] : nil;
+    NSURL *url = link ? SNURLOfLink(link) : nil;
+    if (url) {
+        v[SNLinkAttributeName] = link;
+        v[NSLinkAttributeName] = url;
+    }
+    if ([attrs[SNAttachmentKey] isKindOfClass:[NSString class]]) v[SNAttachmentAttributeName] = attrs[SNAttachmentKey];
     if (style) v[SNStyleAttributeName] = style;
     if (list) v[SNListAttributeName] = list;
     if (p[SNCheckedKey]) v[SNCheckedAttributeName] = @YES;
@@ -259,7 +192,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     SNFont *font = view[NSFontAttributeName];
     if (font) {
         BOOL bold = NO, italic = NO;
-        SNTraitsOf(font, &bold, &italic);
+        SNSystemTraitsOf(font, &bold, &italic);
         if (bold && !SNIsBoldStyle(style)) t[SNBoldKey] = @YES;
         if (italic) t[SNItalicKey] = @YES;
     }
@@ -267,6 +200,8 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if ([view[SNItalicAttributeName] boolValue]) t[SNItalicKey] = @YES;
     if ([view[NSUnderlineStyleAttributeName] integerValue]) t[SNUnderlineKey] = @YES;
     if ([view[NSStrikethroughStyleAttributeName] integerValue]) t[SNStrikeKey] = @YES;
+    if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
+    if ([view[SNAttachmentAttributeName] isKindOfClass:[NSString class]]) t[SNAttachmentKey] = view[SNAttachmentAttributeName];
     return t;
 }
 
@@ -277,7 +212,8 @@ static NSArray *SNOwnViewKeys(void) {
     if (!keys)
         keys = @[ NSFontAttributeName, NSForegroundColorAttributeName, NSUnderlineStyleAttributeName, NSStrikethroughStyleAttributeName,
                   NSParagraphStyleAttributeName, SNStyleAttributeName, SNListAttributeName, SNCheckedAttributeName,
-                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName ];
+                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName,
+                  SNAttachmentAttributeName ];
     return keys;
 }
 
@@ -330,6 +266,61 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     return p;
 }
 
+#pragma mark attachments
+
+static BOOL SNHasPrefix(NSData *data, const char *bytes, NSUInteger n) {
+    return data.length >= n && memcmp(data.bytes, bytes, n) == 0;
+}
+
+NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, double *height) {
+    double w = 0, h = 0;
+    if (!data.length || !SNSystemImagePixels(data, &w, &h) || w < 1 || h < 1) return nil;
+    BOOL png = SNHasPrefix(data, "\x89PNG", 4), jpeg = SNHasPrefix(data, "\xFF\xD8\xFF", 3);
+    double scale = MIN(1.0, SNAttachmentMaxPixels / MAX(w, h));
+    if (scale >= 1.0 && (png || jpeg)) {
+        *type = png ? @"image/png" : @"image/jpeg";
+        *width = w;
+        *height = h;
+        return data;
+    }
+    NSUInteger tw = (NSUInteger)MAX(1.0, round(w * scale)), th = (NSUInteger)MAX(1.0, round(h * scale));
+    NSData *out = SNSystemScaledImage(data, tw, th, png);
+    if (!out) return nil;
+    *type = png ? @"image/png" : @"image/jpeg";
+    *width = tw;
+    *height = th;
+    return out;
+}
+
+static BOOL SNSameSize(SNSize a, SNSize b) {
+    return a.width == b.width && a.height == b.height;
+}
+
+/* The attachment's view: an image as wide as it is, or as the text is; a
+   table's room, its grid over it (a box until its size is known). */
+static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *attachment, CGFloat maxWidth, NSValue *room) {
+    NSData *data = attachment.data;
+    SNTextAttachment *a;
+    if ([attachment.kind isEqual:SNAttachmentKindTable]) {
+        SNSize size = { 240, 40 };
+        if (room) [room getValue:&size];
+        a = room ? SNSystemRoomAttachment(size) : SNSystemImageAttachment(nil, nil, size);
+        a.loaded = room != nil;
+    } else {
+        double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
+        if (data && (w < 1 || h < 1)) SNSystemImagePixels(data, &w, &h);
+        if (w < 1 || h < 1) { w = 160; h = 120; }
+        double scale = MIN(MIN(1.0, maxWidth / w), SNSystemPointsPerPixel());
+        SNSize size = { MAX(1, w * scale), MAX(1, h * scale) };
+        a = SNSystemImageAttachment(data, attachment.type, size);
+        a.loaded = data != nil;
+        a.textWidth = maxWidth;
+    }
+    a.attachmentID = attachmentID;
+    a.dataHash = data.hash;
+    return a;
+}
+
 #pragma mark the binding
 
 @implementation SNTextBinding {
@@ -340,21 +331,37 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     NSMutableIndexSet *_afterNewline;
     /* The empty last paragraph's formatting, when it was given one. */
     NSDictionary *_endParagraph;
+    /* Images pasted or dropped, made attachments of the note: each view
+       attachment, to have its id once the view's edit is done. */
+    NSMapTable<NSTextAttachment *, NSString *> *_pendingAttachments;
+    /* Tables' rooms, by attachment id (SNSize values). */
+    NSMutableDictionary<NSString *, NSValue *> *_rooms;
+    /* The text's width images were last sized to. */
+    CGFloat _shownWidth;
 }
 
-- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor {
+- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor {
     if (!(self = [super init])) return nil;
     _view = view;
     _storage = view.textStorage;
     _editor = editor;
     _dirty = NSMakeRange(NSNotFound, 0);
     _afterNewline = [NSMutableIndexSet indexSet];
+    _pendingAttachments = [NSMapTable strongToStrongObjectsMapTable];
+    _rooms = [NSMutableDictionary dictionary];
     _applying = YES;
-    [_storage setAttributedString:SNViewString(editor.text)];
+    /* Each attachment's character with its view from the first: a U+FFFC
+       without one is taken out of the text by gnustep-gui's attribute
+       fixing. */
+    NSMutableAttributedString *shown = [SNViewString(editor.text) mutableCopy];
+    [self showAttachmentsIn:shown range:NSMakeRange(0, shown.length)];
+    [_storage setAttributedString:shown];
     _applying = NO;
     [self showTagsInRange:NSMakeRange(0, _storage.length)];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storageEdited:)
                                                  name:NSTextStorageDidProcessEditingNotification object:_storage];
+    _shownWidth = [self attachmentWidth];
+    SNSystemObserveResizing(view, self, @selector(resized:));
     return self;
 }
 
@@ -396,8 +403,15 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
         NSString *string = _storage.string;
         for (NSValue *v in SNAttributeRuns(_storage, r)) {
             NSRange run = v.rangeValue;
-            [t insertString:[string substringWithRange:run] atIndex:at
-                 attributes:SNTextAttributes([_storage attributesAtIndex:run.location effectiveRange:NULL])];
+            NSDictionary *view = [_storage attributesAtIndex:run.location effectiveRange:NULL];
+            NSMutableDictionary *attrs = [SNTextAttributes(view) mutableCopy];
+            NSTextAttachment *pasted = view[NSAttachmentAttributeName];
+            /* An image pasted or dropped: one of the note's attachments now. */
+            if (pasted && !attrs[SNAttachmentKey]) {
+                NSString *made = [self attachmentForPasted:pasted];
+                if (made) attrs[SNAttachmentKey] = made;
+            }
+            [t insertString:[string substringWithRange:run] atIndex:at attributes:attrs];
             at += run.length;
         }
         [self noteTyped:r replacing:old in:string];
@@ -462,15 +476,18 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [_storage beginEditing];
     for (TTEdit *e in edits) {
         switch (e.kind) {
-        case TTEditInsert:
-            [_storage replaceCharactersInRange:NSMakeRange(e.range.location, 0)
-                          withAttributedString:[[NSAttributedString alloc] initWithString:e.string attributes:SNViewAttributes(e.attributes)]];
+        case TTEditInsert: {
+            NSMutableAttributedString *view = [[NSMutableAttributedString alloc] initWithString:e.string attributes:SNViewAttributes(e.attributes)];
+            [self showAttachmentsIn:view range:NSMakeRange(0, view.length)];
+            [_storage replaceCharactersInRange:NSMakeRange(e.range.location, 0) withAttributedString:view];
             break;
+        }
         case TTEditDelete:
             [_storage deleteCharactersInRange:e.range];
             break;
         case TTEditAttributes:
             [_storage setAttributes:SNViewAttributes(e.attributes) range:e.range];
+            [self showAttachmentsIn:_storage range:e.range];
             break;
         }
         if (e.kind != TTEditAttributes) _endParagraph = nil;
@@ -484,6 +501,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [_storage endEditing];
     _applying = NO;
     [self showTagsInRange:NSMakeRange(0, _storage.length)];
+    [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
     _dirty = NSMakeRange(NSNotFound, 0);
     [_afterNewline removeAllIndexes];
     if (start != NSNotFound) {
@@ -505,23 +523,198 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     }
 }
 
-/* Tags (#word) in the paragraphs a range touches shown in the accent
-   colour, as Apple Notes does: the view's only, nothing of the text's. */
+/* What is found in the paragraphs a range touches, shown as Apple Notes
+   shows it: tags (#word) in the accent colour, web addresses typed as
+   links. The view's only, nothing of the text's: a link given (SNLink)
+   stays as it is. */
 - (void)showTagsInRange:(NSRange)range {
     NSString *s = _storage.string;
     NSRange para = SNParagraphsRange(s, range);
     if (!para.length) return;
+    NSString *text = [s substringWithRange:para];
     BOOL was = _applying;
     _applying = YES;
     [_storage beginEditing];
-    [_storage addAttribute:NSForegroundColorAttributeName value:SNTextColor() range:para];
-    for (NSValue *v in SNTagRangesInText([s substringWithRange:para])) {
+    [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemTextColor() range:para];
+    for (NSValue *v in SNTagRangesInText(text)) {
         NSRange tag = v.rangeValue;
         tag.location += para.location;
-        [_storage addAttribute:NSForegroundColorAttributeName value:SNAccent() range:tag];
+        [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemAccentColor() range:tag];
+    }
+    /* Detected links: off where none is now, on where one is. */
+    for (NSValue *v in SNAttributeRuns(_storage, para)) {
+        NSRange run = v.rangeValue;
+        if (![_storage attribute:SNLinkAttributeName atIndex:run.location effectiveRange:NULL])
+            [_storage removeAttribute:NSLinkAttributeName range:run];
+    }
+    for (NSValue *v in SNLinkRangesInText(text)) {
+        NSRange found = v.rangeValue;
+        found.location += para.location;
+        NSURL *url = SNURLOfLink([s substringWithRange:found]);
+        if (!url) continue;
+        for (NSValue *r in SNAttributeRuns(_storage, found)) {
+            NSRange run = r.rangeValue;
+            if (![_storage attribute:SNLinkAttributeName atIndex:run.location effectiveRange:NULL])
+                [_storage addAttribute:NSLinkAttributeName value:url range:run];
+        }
     }
     [_storage endEditing];
     _applying = was;
+}
+
+#pragma mark attachments
+
+/* What the editor has of attachments: a note's; a cell's none. */
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    return [_editor respondsToSelector:@selector(attachmentWithID:)] ? [_editor attachmentWithID:attachmentID] : nil;
+}
+
+- (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)w height:(double)h {
+    return [_editor respondsToSelector:@selector(addImageData:type:width:height:)] ? [_editor addImageData:data type:type width:w height:h] : nil;
+}
+
+- (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    return [_editor respondsToSelector:@selector(addTableWithRows:columns:)] ? [_editor addTableWithRows:rows columns:columns] : nil;
+}
+
+/* How wide an image may be shown: the text's width. */
+- (CGFloat)attachmentWidth {
+    NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
+    NSTextContainer *c = lm.textContainers.firstObject;
+    /* TextKit 2's text view has no layout manager: its own container. */
+    id view = _view;
+    if (!c && [view respondsToSelector:@selector(textContainer)]) c = [view textContainer];
+    CGFloat w = c ? SNSystemContainerWidth(c) - 2 * c.lineFragmentPadding - 4 : 0;
+    return w > 40 && w < 4000 ? w : 480;
+}
+
+/* The note's attachments in a range of a view's string shown: each U+FFFC
+   with an id has its image (a box while it has not come). */
+- (void)showAttachmentsIn:(NSMutableAttributedString *)target range:(NSRange)range {
+    NSString *s = target.string;
+    /* An image is made again when the text is no longer as wide as it was
+       sized to: smaller to fit, or as large as it is again. */
+    CGFloat width = [self attachmentWidth];
+    range = NSIntersectionRange(range, NSMakeRange(0, s.length));
+    for (NSUInteger i = range.location; i < NSMaxRange(range); i++) {
+        if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
+        NSString *attachmentID = [target attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        if (!attachmentID) continue;
+        SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        SNAttachment *attachment = [self attachmentWithID:attachmentID];
+        NSValue *room = [attachment.kind isEqual:SNAttachmentKindTable] ? _rooms[attachmentID] : nil;
+        if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID]) {
+            SNSize size = { 0, 0 };
+            if (room) [room getValue:&size];
+            if (room ? SNSameSize(shown.room, size) : (shown.loaded && shown.dataHash == attachment.data.hash && shown.room.width == 0 &&
+                                                       (shown.textWidth == 0 || shown.textWidth == width)))
+                continue;
+            if (!room && !attachment.data) continue;
+        }
+        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, width, room)
+                       range:NSMakeRange(i, 1)];
+    }
+}
+
+- (void)showAttachmentsInRange:(NSRange)range {
+    BOOL was = _applying;
+    _applying = YES;
+    [_storage beginEditing];
+    [self showAttachmentsIn:_storage range:range];
+    [_storage endEditing];
+    _applying = was;
+}
+
+- (void)refreshAttachments {
+    [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
+}
+
+- (void)textWidthMayHaveChanged {
+    CGFloat width = [self attachmentWidth];
+    if (width == _shownWidth) return;
+    _shownWidth = width;
+    [self refreshAttachments];
+}
+
+- (void)resized:(NSNotification *)n {
+    [self textWidthMayHaveChanged];
+}
+
+- (void)setRoomSize:(SNSize)size forAttachmentID:(NSString *)attachmentID {
+    NSValue *room = [NSValue valueWithBytes:&size objCType:@encode(SNSize)];
+    if ([_rooms[attachmentID] isEqual:room]) return;
+    _rooms[attachmentID] = room;
+    [self refreshAttachments];
+}
+
+/* A pasted image saved as one of the note's attachments, its id; its view
+   attachment is given the id once the view's edit is done (not while the
+   storage is still processing it). */
+- (NSString *)attachmentForPasted:(NSTextAttachment *)pasted {
+    NSString *made = [_pendingAttachments objectForKey:pasted];
+    if (made) return made;
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *data = SNImageDataForAttachment(SNSystemDataOfAttachment(pasted), &type, &w, &h);
+    if (!data) return nil;
+    made = [self addImageData:data type:type width:w height:h];
+    if (!made) return nil;
+    [_pendingAttachments setObject:made forKey:pasted];
+    [self performSelector:@selector(idsForPastedAttachments) withObject:nil afterDelay:0];
+    return made;
+}
+
+- (void)idsForPastedAttachments {
+    if (!_pendingAttachments.count) return;
+    NSString *s = _storage.string;
+    BOOL was = _applying;
+    _applying = YES;
+    [_storage beginEditing];
+    for (NSUInteger i = 0; i < s.length; i++) {
+        if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
+        NSTextAttachment *a = [_storage attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        NSString *made = a ? [_pendingAttachments objectForKey:a] : nil;
+        if (!made) continue;
+        [_storage addAttribute:SNAttachmentAttributeName value:made range:NSMakeRange(i, 1)];
+        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [self attachmentWithID:made], [self attachmentWidth], _rooms[made])
+                         range:NSMakeRange(i, 1)];
+    }
+    [_storage endEditing];
+    [_pendingAttachments removeAllObjects];
+    _applying = was;
+}
+
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range {
+    NSString *made = [self addTableWithRows:rows columns:columns];
+    if (!made) return nil;
+    [self insertAttachment:made inRange:range];
+    return made;
+}
+
+- (NSString *)attachmentIDAt:(NSUInteger)index {
+    return index < _storage.length ? [_storage attribute:SNAttachmentAttributeName atIndex:index effectiveRange:NULL] : nil;
+}
+
+/* The attachment's character in place of the range, shown. */
+- (void)insertAttachment:(NSString *)attachmentID inRange:(NSRange)range {
+    NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
+    t[SNAttachmentKey] = attachmentID;
+    NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
+    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [self attachmentWithID:attachmentID], [self attachmentWidth], _rooms[attachmentID]);
+    unichar c = SNAttachmentCharacter;
+    [_storage replaceCharactersInRange:range
+                  withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+}
+
+- (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range {
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *image = SNImageDataForAttachment(data, &type, &w, &h);
+    if (!image) return NO;
+    NSString *made = [self addImageData:image type:type width:w height:h];
+    if (!made) return NO;
+    [self insertAttachment:made inRange:range];
+    return YES;
 }
 
 #pragma mark formatting
@@ -592,6 +785,17 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [self setTextAttributes:@{ key: on ? @YES : [NSNull null] } inRange:range];
 }
 
+- (void)setLink:(NSString *)link inRange:(NSRange)range {
+    if (!range.length) return;
+    NSString *trimmed = [link stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    [self setTextAttributes:@{ SNLinkKey: trimmed.length ? trimmed : [NSNull null] } inRange:range];
+}
+
+- (NSString *)linkAt:(NSUInteger)index {
+    if (index >= _storage.length) return nil;
+    return [_storage attribute:SNLinkAttributeName atIndex:index effectiveRange:NULL];
+}
+
 - (NSRange)paragraphsRangeForRange:(NSRange)range {
     return SNParagraphsRange(_storage.string, range);
 }
@@ -657,6 +861,59 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [self paragraphsChanged];
 }
 
+- (BOOL)isCheckItemAt:(NSUInteger)start {
+    return [[self paragraphAttributesAt:start][SNListKey] isEqual:SNListCheck] && start < _storage.length;
+}
+
+- (NSRange)checklistRangeAt:(NSUInteger)index {
+    NSString *s = _storage.string;
+    NSUInteger start = SNParagraphStart(s, MIN(index, s.length));
+    if (![self isCheckItemAt:start]) return NSMakeRange(NSNotFound, 0);
+    while (start > 0 && [self isCheckItemAt:SNParagraphStart(s, start - 1)]) start = SNParagraphStart(s, start - 1);
+    NSUInteger end = SNParagraphEnd(s, start);
+    while (end < s.length && [self isCheckItemAt:end]) end = SNParagraphEnd(s, end);
+    return NSMakeRange(start, end - start);
+}
+
+- (BOOL)moveCheckedToBottomOfChecklistAt:(NSUInteger)index {
+    NSRange list = [self checklistRangeAt:index];
+    if (list.location == NSNotFound) return NO;
+    NSString *s = _storage.string;
+    NSMutableArray<NSValue *> *items = [NSMutableArray array];
+    for (NSUInteger i = list.location; i < NSMaxRange(list); i = SNParagraphEnd(s, i))
+        [items addObject:[NSValue valueWithRange:NSMakeRange(i, SNParagraphEnd(s, i) - i)]];
+    /* The ticked ones at the bottom already stay; those above an unticked
+       one move. */
+    NSUInteger tail = items.count;
+    while (tail > 0 && [[self paragraphAttributesAt:items[tail - 1].rangeValue.location][SNCheckedKey] boolValue]) tail--;
+    NSMutableArray<NSValue *> *moving = [NSMutableArray array];
+    for (NSUInteger i = 0; i < tail; i++)
+        if ([[self paragraphAttributesAt:items[i].rangeValue.location][SNCheckedKey] boolValue]) [moving addObject:items[i]];
+    if (!moving.count) return NO;
+    /* Each above the last item ends with its newline. They go above the
+       ticked ones at the bottom already, keeping the ticked ones' order; or
+       at the end when there are none. */
+    NSMutableAttributedString *moved = [[NSMutableAttributedString alloc] init];
+    for (NSValue *v in moving) [moved appendAttributedString:[_storage attributedSubstringFromRange:v.rangeValue]];
+    NSUInteger at = tail < items.count ? items[tail].rangeValue.location : NSMaxRange(list);
+    BOOL endsText = tail == items.count && NSMaxRange(list) == s.length && [s characterAtIndex:s.length - 1] != '\n';
+    NSDictionary *lastItem = endsText ? [_storage attributesAtIndex:s.length - 1 effectiveRange:NULL] : nil;
+    for (NSValue *v in moving.reverseObjectEnumerator) [_storage deleteCharactersInRange:v.rangeValue];
+    for (NSValue *v in moving) at -= v.rangeValue.length;
+    if (endsText) {
+        /* After a last item with no newline: one before them (the item's
+           own: a paragraph is its newline's), none after. */
+        [moved deleteCharactersInRange:NSMakeRange(moved.length - 1, 1)];
+        [moved insertAttributedString:[[NSAttributedString alloc] initWithString:@"\n" attributes:lastItem] atIndex:0];
+    }
+    [_storage insertAttributedString:moved atIndex:at];
+    /* Moved, not typed: no new items to untick (textDidChange). */
+    _dirty = NSMakeRange(NSNotFound, 0);
+    [_afterNewline removeAllIndexes];
+    [self showTagsInRange:NSMakeRange(list.location, NSMaxRange(list) - list.location)];
+    return YES;
+}
+
 - (void)toggleCheckedForParagraphsInRange:(NSRange)range {
     NSArray<NSValue *> *paragraphs = [self paragraphRangesIn:range];
     NSNumber *first = nil;
@@ -698,6 +955,8 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     else if (index < len) from = index;
     else if (index > 0) from = index - 1;
     NSMutableDictionary *t = from == NSNotFound ? [NSMutableDictionary dictionary] : SNInlineOf([self textAttributesAt:from]);
+    /* A link ends where it ends: what is typed after it is not in it. */
+    [t removeObjectForKey:SNLinkKey];
     [t addEntriesFromDictionary:[self paragraphAttributesAt:index]];
     return SNViewAttributes(t);
 }
@@ -709,6 +968,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     if (keep) {
         [t removeObjectsForKeys:SNInlineOf(t).allKeys];
         [t addEntriesFromDictionary:SNInlineOf([self typing])];
+        [t removeObjectForKey:SNLinkKey];
     }
     [self setTyping:SNViewAttributes(t)];
 }
@@ -759,6 +1019,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
 }
 
 - (void)textDidChange {
+    [self idsForPastedAttachments];
     NSString *s = _storage.string;
     if (_dirty.location != NSNotFound && _dirty.location <= s.length) {
         /* The line after too: a newline typed began it. */
@@ -790,15 +1051,6 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
 
 #pragma mark list markers
 
-static void SNStrokeLine(SNPath *path, SNPoint a, SNPoint b) {
-    [path moveToPoint:a];
-#if TARGET_OS_IPHONE
-    [path addLineToPoint:b];
-#else
-    [path lineToPoint:b];
-#endif
-}
-
 /* A character's first glyph (gnustep-gui's layout manager has no
    -glyphIndexForCharacterAtIndex:). */
 static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
@@ -810,13 +1062,8 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
 - (void)setExtraLineAttributes:(NSDictionary *)attrs {
     if ([attrs isEqual:_extraLineAttributes]) return;
     _extraLineAttributes = [attrs copy];
-#if !TARGET_OS_IPHONE
-    NSTextView *tv = self.firstTextView;
-    if (tv) [tv setNeedsDisplay:YES];
-#else
     NSUInteger len = self.textStorage.length;
-    if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(len - 1, 1)];
-#endif
+    if (len) SNSystemRedisplay(self, NSMakeRange(len - 1, 1));
 }
 
 /* After an edit, the whole text drawn again, not only what changed: a
@@ -824,12 +1071,7 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
    checkbox moves with them). Once the edit is done: not while the storage
    is still processing it. */
 - (void)markersMayHaveMoved {
-#if TARGET_OS_IPHONE
-    NSUInteger len = self.textStorage.length;
-    if (len) [self invalidateDisplayForCharacterRange:NSMakeRange(0, len)];
-#else
-    [self.firstTextView setNeedsDisplay:YES];
-#endif
+    SNSystemRedisplay(self, NSMakeRange(0, self.textStorage.length));
 }
 
 - (void)textEdited {
@@ -837,19 +1079,7 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
     [self performSelector:@selector(markersMayHaveMoved) withObject:nil afterDelay:0];
 }
 
-#ifdef GNUSTEP
-- (void)textStorage:(NSTextStorage *)storage edited:(unsigned int)mask range:(NSRange)range
-     changeInLength:(int)delta invalidatedRange:(NSRange)invalidated {
-    [super textStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
-    [self textEdited];
-}
-#else
-- (void)processEditingForTextStorage:(NSTextStorage *)storage edited:(NSTextStorageEditActions)mask range:(NSRange)range
-                      changeInLength:(NSInteger)delta invalidatedRange:(NSRange)invalidated {
-    [super processEditingForTextStorage:storage edited:mask range:range changeInLength:delta invalidatedRange:invalidated];
-    [self textEdited];
-}
-#endif
+/* Each edit: SNTextSystem's -textEdited, each system's own way. */
 
 /* An item's number: one more than the item before at its indent, items
    indented further between them not counted. */
@@ -874,8 +1104,8 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
    indent on GNUstep, at the edge on Apple's). */
 static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     SNRect r = line;
-    r.origin.x = left + indent * SNIndentStep;
-    r.size.width = SNIndentStep;
+    r.origin.x = left + indent * SNSystemIndentStep();
+    r.size.width = SNSystemIndentStep();
     return r;
 }
 
@@ -885,24 +1115,20 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     SNRect col = SNMarkerColumn(line, indent, left);
     SNFont *font = SNFontFor(nil, NO, NO);
     if ([list isEqual:SNListCheck]) {
-#if TARGET_OS_IPHONE
-        CGFloat d = round(font.pointSize * 1.25);
-#else
-        CGFloat d = round(font.pointSize * 1.15);
-#endif
+        CGFloat d = SNSystemCheckboxSize(font);
         CGFloat cx = col.origin.x + col.size.width / 2 - 2, cy = baseline - font.capHeight / 2;
         SNRect box = col;
         box.origin.x = cx - d / 2;
         box.origin.y = cy - d / 2;
         box.size.width = box.size.height = d;
         if ([a[SNCheckedAttributeName] boolValue]) {
-            [SNAccent() setFill];
+            [SNSystemAccentColor() setFill];
             [[SNPath bezierPathWithOvalInRect:box] fill];
             SNPath *tick = [SNPath bezierPath];
             CGFloat x = box.origin.x, y = box.origin.y;
             SNPoint p1 = { x + d * 0.27, y + d * 0.52 }, p2 = { x + d * 0.43, y + d * 0.68 }, p3 = { x + d * 0.74, y + d * 0.34 };
-            SNStrokeLine(tick, p1, p2);
-            SNStrokeLine(tick, p2, p3);
+            SNSystemAddLine(tick, p1, p2);
+            SNSystemAddLine(tick, p2, p3);
             tick.lineWidth = MAX(1.5, d / 10);
             [[SNColor whiteColor] setStroke];
             [tick stroke];
@@ -913,14 +1139,14 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
             box.size.height -= 1.2;
             SNPath *ring = [SNPath bezierPathWithOvalInRect:box];
             ring.lineWidth = 1.2;
-            [SNMarkerGray() setStroke];
+            [SNSystemMarkerColor() setStroke];
             [ring stroke];
         }
         return;
     }
     NSString *marker = [list isEqual:SNListNumber] ? [NSString stringWithFormat:@"%lu.", (unsigned long)[self numberAt:start indent:indent]]
                      : [list isEqual:SNListDash] ? @"–" : @"•";
-    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNTextColor() };
+    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: SNSystemTextColor() };
     CGFloat w = [marker sizeWithAttributes:attrs].width;
     SNPoint at = { [list isEqual:SNListNumber] ? col.origin.x + col.size.width - 5 - w : col.origin.x + (col.size.width - w) / 2 - 2,
                    baseline - font.ascender };

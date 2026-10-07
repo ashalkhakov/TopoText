@@ -1,5 +1,8 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
+#import "SNTableGrid.h"
+#import "SNModel.h"
+#import <PhotosUI/PhotosUI.h>
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 
@@ -456,6 +459,20 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [UISwipeActionsConfiguration configurationWithActions:@[ delete, move ]];
 }
 
+/* A note pressed and held: its link (simplenotes://note/<id>), to paste
+   into another note as a link that opens it. */
+- (UIContextMenuConfiguration *)tableView:(UITableView *)t contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)ip point:(CGPoint)point {
+    SNNote *note = [self noteAt:ip];
+    if (!note.id || note.deletedAt) return nil;
+    NSString *link = SNLinkToNote(note.id).absoluteString;
+    return [UIContextMenuConfiguration configurationWithIdentifier:nil previewProvider:nil actionProvider:^UIMenu *(NSArray *suggested) {
+        return [UIMenu menuWithTitle:@"" children:@[ [UIAction actionWithTitle:@"Copy Link" image:[UIImage systemImageNamed:@"link"]
+                                                                  identifier:nil handler:^(UIAction *a) {
+            [UIPasteboard generalPasteboard].string = link;
+        }] ]];
+    }];
+}
+
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
     SNNote *note = [self noteAt:ip];
     if (_deleted) {
@@ -486,6 +503,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     SNNote *_note;
     SNNoteEditor *_editor;
     SNTextBinding *_binding;
+    /* The note's tables, each over its place in the text. */
+    SNTableGrids *_grids;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note {
@@ -540,6 +559,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     _textView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
     [_formatBar sizeToFit];
     _textView.inputAccessoryView = _formatBar;
+    _grids = [[SNTableGrids alloc] initWithBinding:_binding notes:_notes];
     [self followDeletion];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(followDeletion)
                                                  name:SNNotesDidChangeNotification object:_notes];
@@ -552,8 +572,12 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 /* In Recently Deleted (here, or by a sync), a note is read, not written:
    Recover first. */
 - (void)followDeletion {
+    /* An attachment can come after the text that has it. */
+    [_binding refreshAttachments];
     BOOL deleted = _note.deletedAt != nil;
     _textView.editable = !deleted;
+    /* A table's cells can have been typed into elsewhere. */
+    [_grids reload];
     self.navigationItem.rightBarButtonItem = deleted
         ? [[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]
         : nil;
@@ -570,9 +594,18 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     if (!_textView.text.length && !_note.deletedAt) [_textView becomeFirstResponder];
 }
 
+/* Wider or narrower (turned, a split view, first laid out): images sized
+   to it again, the tables laid out again. */
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [_binding textWidthMayHaveChanged];
+    [_grids update];
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     if (self.isMovingFromParentViewController) {
+        [_grids removeAll];
         [_binding unbind];
         [_editor close];
     }
@@ -582,6 +615,33 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [_binding selectionDidChange];
 }
 
+/* From a table's cell into the note: the keyboard keeps the cell's bar
+   unless told, once the change of first responder is done with, that the
+   note's text view has one of its own. */
+- (void)textViewDidBeginEditing:(UITextView *)tv {
+    [self performSelector:@selector(showFormatBar) withObject:nil afterDelay:0];
+}
+
+- (void)showFormatBar {
+    if (!_textView.isFirstResponder) return;
+    _textView.inputAccessoryView = nil;
+    [_textView reloadInputViews];
+    _textView.inputAccessoryView = _formatBar;
+    [_textView reloadInputViews];
+}
+
+/* What is selected linked, from the menu over it, as in Apple Notes. */
+- (UIMenu *)textView:(UITextView *)tv editMenuForTextInRange:(NSRange)range suggestedActions:(NSArray<UIMenuElement *> *)suggested
+    API_AVAILABLE(ios(16.0)) {
+    if (!range.length || !tv.editable) return [UIMenu menuWithChildren:suggested];
+    UICommand *link = [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil];
+    return [UIMenu menuWithChildren:[suggested arrayByAddingObject:link]];
+}
+
+- (IBAction)hideKeyboard:(id)sender {
+    [self.view endEditing:YES];
+}
+
 /* Typing in lists, as Apple Notes has it (SNTextBinding). */
 - (BOOL)textView:(UITextView *)tv shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text {
     return [_binding shouldChangeTextInRange:range replacementString:text];
@@ -589,6 +649,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 - (void)textViewDidChange:(UITextView *)tv {
     [_binding textDidChange];
+    /* The tables after what changed moved with it. */
+    [_grids update];
 }
 
 #pragma mark the editor's delegate
@@ -596,6 +658,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 /* What a sync brought into the note, into the text view. */
 - (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
     [_binding applyEdits:edits];
+    [_grids update];
 }
 
 - (void)noteEditorDidVanish:(SNNoteEditor *)editor {
@@ -614,8 +677,36 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 /* Only a tap on a checkbox: the text view has the others. */
+/* The link under a tap: a given one or one detected; nil for none. */
+- (NSURL *)linkAt:(UIGestureRecognizer *)g {
+    NSTextStorage *ts = _textView.textStorage;
+    if (!ts.length) return nil;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    p = CGPointMake(p.x - inset.left, p.y - inset.top);
+    NSLayoutManager *lm = _textView.layoutManager;
+    NSUInteger glyph = [lm glyphIndexForPoint:p inTextContainer:_textView.textContainer];
+    CGRect box = [lm boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
+    if (!CGRectContainsPoint(box, p)) return nil;
+    NSUInteger at = [lm characterIndexForGlyphAtIndex:glyph];
+    id link = at < ts.length ? [ts attribute:NSLinkAttributeName atIndex:at effectiveRange:NULL] : nil;
+    return [link isKindOfClass:[NSURL class]] ? link : nil;
+}
+
+/* Only a tap on a checkbox or a link: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound;
+    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil;
+}
+
+/* A link to a note opens its editor; any other, in its own application. */
+- (void)openLink:(NSURL *)url {
+    NSString *noteID = SNNoteIDInLink(url);
+    if (!noteID) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        return;
+    }
+    SNNote *note = [_notes noteWithID:noteID];
+    if (note) [self.navigationController pushViewController:[[SNEditorViewController alloc] initWithNotes:_notes note:note] animated:YES];
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
@@ -623,10 +714,16 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSURL *link = [self checkboxAt:g] == NSNotFound ? [self linkAt:g] : nil;
+    if (link) {
+        [self openLink:link];
+        return;
+    }
     NSUInteger at = [self checkboxAt:g];
     if (at == NSNotFound || !_textView.editable) return;
     NSRange sel = _textView.selectedRange;
     [_binding toggleCheckedForParagraphsInRange:NSMakeRange(at, 0)];
+    if (_notes.movesCheckedToBottom) [_binding moveCheckedToBottomOfChecklistAt:at];
     [self formatted:sel];
 }
 
@@ -635,19 +732,41 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 /* The format bar's menus: commands sent up the responder chain, to this
    controller (the text view is first responder). */
 - (void)makeFormatMenus {
+    /* A row of four, as Apple Notes' Aa has them. */
+    UIMenu *traits = [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
+        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
+        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
+        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil] ]];
+    if (@available(iOS 16.0, *)) traits.preferredElementSize = UIMenuElementSizeSmall;
     _styleItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
-        [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
-        [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
-        [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
-        [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]];
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
+            [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
+            [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
+            [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
+            [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]],
+        traits ]];
+    _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
+        [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
+        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
         [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],
         [UICommand commandWithTitle:@"Numbered List" image:[UIImage systemImageNamed:@"list.number"] action:@selector(numberList:) propertyList:nil],
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UICommand commandWithTitle:@"Move Checked to Bottom" image:[UIImage systemImageNamed:@"arrow.down.to.line"]
+                                 action:@selector(moveCheckedToBottom:) propertyList:nil],
+            [self keepCheckedCommand] ]],
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
             [UICommand commandWithTitle:@"Increase Indentation" image:[UIImage systemImageNamed:@"increase.indent"] action:@selector(indent:) propertyList:nil],
             [UICommand commandWithTitle:@"Decrease Indentation" image:[UIImage systemImageNamed:@"decrease.indent"] action:@selector(outdent:) propertyList:nil] ]] ]];
+}
+
+- (UICommand *)keepCheckedCommand {
+    UICommand *c = [UICommand commandWithTitle:@"Keep Checked at Bottom" image:nil action:@selector(toggleKeepCheckedAtBottom:) propertyList:nil];
+    c.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return c;
 }
 
 /* After the binding changed paragraphs: the selection as it was, typing
@@ -656,13 +775,26 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     _textView.selectedRange = selection;
     [_binding selectionDidChange];
     [_textView.layoutManager invalidateDisplayForCharacterRange:NSMakeRange(0, _textView.textStorage.length)];
+    [_grids update];
+}
+
+/* What character formatting and links go on: a table's cell typed in, or
+   else the note's text; and its binding. */
+- (UITextView *)formattedTextView:(SNTextBinding **)binding {
+    UITextView *cell = [_grids cellTypedIn];
+    SNTextBinding *b = cell ? [_grids bindingOfCell:cell] : nil;
+    *binding = b ?: _binding;
+    return b ? cell : _textView;
 }
 
 /* On the selection; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
-    NSRange r = _textView.selectedRange;
-    [_binding toggle:key inRange:r];
-    if (r.length) _textView.selectedRange = r;
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSRange r = tv.selectedRange;
+    [binding toggle:key inRange:r];
+    if (r.length) tv.selectedRange = r;
 }
 
 - (void)style:(NSString *)style {
@@ -699,11 +831,94 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)dashList:(id)sender { [self list:SNListDash]; }
 - (IBAction)numberList:(id)sender { [self list:SNListNumber]; }
 - (IBAction)checklist:(id)sender { [self list:SNListCheck]; }
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    if (!_textView.editable) return nil;
+    NSRange r = _textView.selectedRange;
+    NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+    [_grids update];
+    return made;
+}
+
+/* Two rows, two columns, as Apple Notes' are, its first cell typed in. */
+- (IBAction)addTable:(id)sender {
+    NSString *made = [self insertTableWithRows:2 columns:2];
+    [[_grids gridForAttachmentID:made] beginEditing];
+}
+
+- (SNTableGrid *)gridForAttachmentID:(NSString *)attachmentID {
+    return [_grids gridForAttachmentID:attachmentID];
+}
+
+/* Photos into the note, at the insertion point (one pasted is one too). */
+- (IBAction)attachPhoto:(id)sender {
+    if (!_textView.editable) return;
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
+    config.filter = [PHPickerFilter imagesFilter];
+    config.selectionLimit = 0;
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    for (PHPickerResult *result in results)
+        [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image" completionHandler:^(NSData *data, NSError *error) {
+            if (!data) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self insertImageData:data];
+            });
+        }];
+}
+
+- (void)insertImageData:(NSData *)data {
+    NSRange r = _textView.selectedRange;
+    if (![_binding insertImageData:data inRange:r]) return;
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+    [_grids update];
+}
+
+/* On the selection; with none, on the link the insertion point is in. */
+- (IBAction)addLink:(id)sender {
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSRange range = tv.selectedRange;
+    NSString *current = [binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    if (!range.length && current && range.location)
+        [tv.textStorage attribute:SNLinkAttributeName atIndex:range.location - 1 longestEffectiveRange:&range
+                          inRange:NSMakeRange(0, tv.textStorage.length)];
+    if (!range.length) return;
+    NSRange chosen = range;
+    SNAsk(self, @"Add Link", @"A web address, or a link to a note; empty: none.", current ?: @"https://", ^(NSString *link) {
+        [binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:chosen];
+        if (tv == self->_textView) [self formatted:chosen];
+        else tv.selectedRange = chosen;
+    });
+}
+
 - (IBAction)toggleChecked:(id)sender {
     if (!_textView.editable) return;
     NSRange r = _textView.selectedRange;
     [_binding toggleCheckedForParagraphsInRange:r];
+    if (_notes.movesCheckedToBottom) [_binding moveCheckedToBottomOfChecklistAt:r.location];
     [self formatted:r];
+}
+
+- (IBAction)moveCheckedToBottom:(id)sender {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding moveCheckedToBottomOfChecklistAt:r.location];
+    [self formatted:r];
+}
+
+- (IBAction)toggleKeepCheckedAtBottom:(id)sender {
+    _notes.movesCheckedToBottom = !_notes.movesCheckedToBottom;
+    [self makeFormatMenus];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottom:nil];
 }
 - (IBAction)indent:(id)sender { [self indentBy:1]; }
 - (IBAction)outdent:(id)sender { [self indentBy:-1]; }

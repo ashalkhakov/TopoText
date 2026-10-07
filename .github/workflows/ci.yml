@@ -74,7 +74,7 @@ jobs:
         run: make test
 
       - name: Convergence, long
-        run: TOPOTEXT_SEEDS=2000 xcrun xctest -XCTest TopoTextFuzzTests build/TopoTextTests.xctest
+        run: TOPOTEXT_SEEDS=2000 xcrun xctest -XCTest TopoTextFuzzTests,TTTableTests/testCopiesEditedAtRandomConverge build/TopoTextTests.xctest
 
       - name: Build for iOS
         run: make ios

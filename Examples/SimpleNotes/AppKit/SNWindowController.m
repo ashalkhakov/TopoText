@@ -1,5 +1,7 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
+#import "SNModel.h"
+#import "SNTableGrid.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -32,6 +34,8 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     NSArray *_rows;
     SNNoteEditor *_editor;
     SNTextBinding *_binding;
+    /* The open note's tables, each over its place in the text. */
+    SNTableGrids *_grids;
     BOOL _reloading;
     /* What the window shows: All Notes, a folder, or Recently Deleted. The
        folder table's selection follows it, not the other way round: rows
@@ -217,12 +221,19 @@ static const NSInteger SNMoveToMenuTag = 7001;
     /* The open note left this list (deleted, recovered, moved, here or
        elsewhere): closed. One still here follows whether it is deleted. */
     if (_editor && row == NSNotFound) [self openNote:nil];
-    else if (_editor) _textView.editable = ![_rows[row] deletedAt];
+    else if (_editor) {
+        _textView.editable = ![_rows[row] deletedAt];
+        [_grids update];
+    }
 }
 
 - (void)notesChanged:(NSNotification *)n {
     [self reloadFolders];
     [self reloadNotes];
+    /* An attachment can come after the text that has it; a table's cells
+       can have been typed into elsewhere. */
+    [_binding refreshAttachments];
+    [_grids reload];
     [self showStatus:n.userInfo[@"status"] ?: @""];
 }
 
@@ -458,6 +469,23 @@ static const NSInteger SNMoveToMenuTag = 7001;
     return YES;
 }
 
+- (BOOL)showNote:(SNNote *)note {
+    if (note.deletedAt) [self showRecentlyDeleted];
+    else if (_shownTag || [self showsDeleted] || (note.folder != [self selectedFolder] && [self selectedFolder])) [self showAllNotes];
+    for (NSUInteger pass = 0; pass < 2; pass++) {
+        for (NSUInteger i = 0; i < _rows.count; i++)
+            if (_rows[i] == note) {
+                [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:i] byExtendingSelection:NO];
+                [_noteTable scrollRowToVisible:(NSInteger)i];
+                return YES;
+            }
+        /* Not listed: a search hides it. */
+        _searchField.stringValue = @"";
+        [self reloadNotes];
+    }
+    return NO;
+}
+
 - (BOOL)selectNoteTitled:(NSString *)title {
     for (NSUInteger i = 0; i < _rows.count; i++)
         if ([_rows[i] isKindOfClass:[SNNote class]] && [[_rows[i] title] isEqual:title]) {
@@ -474,6 +502,8 @@ static const NSInteger SNMoveToMenuTag = 7001;
 #pragma mark the note
 
 - (void)closeEditor {
+    [_grids removeAll];
+    _grids = nil;
     [_binding unbind];
     _binding = nil;
     [_editor close];
@@ -495,13 +525,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
     _textView.editable = !note.deletedAt;
     _textView.selectedRange = NSMakeRange(_textView.textStorage.length, 0);
     [_binding selectionDidChange];
+    _grids = [[SNTableGrids alloc] initWithBinding:_binding notes:_notes];
 }
 
 #pragma mark the editor's delegate
 
 /* What a sync brought into the open note, into the text view. */
 - (void)noteEditor:(SNNoteEditor *)editor didMergeEdits:(NSArray<TTEdit *> *)edits {
-    if (editor == _editor) [_binding applyEdits:edits];
+    if (editor != _editor) return;
+    [_binding applyEdits:edits];
+    [_grids update];
 }
 
 - (void)noteEditorDidVanish:(SNNoteEditor *)editor {
@@ -510,11 +543,36 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark the text view's delegate
 
+/* A link to a note opens it here; any other, in its own application. */
+- (BOOL)textView:(NSTextView *)tv clickedOnLink:(id)link atIndex:(NSUInteger)index {
+    NSURL *url = [link isKindOfClass:[NSURL class]] ? link : [link isKindOfClass:[NSString class]] ? SNURLOfLink(link) : nil;
+    if (!url) return NO;
+    NSString *noteID = SNNoteIDInLink(url);
+    if (noteID) {
+        SNNote *note = [_notes noteWithID:noteID];
+        if (!note || ![self showNote:note]) NSBeep();
+        return YES;
+    }
+    return [[NSWorkspace sharedWorkspace] openURL:url];
+}
+
 - (void)textView:(SNTextView *)tv clickedCheckboxAtIndex:(NSUInteger)index {
     NSRange r = NSMakeRange(index, 0);
     if (![self beginFormattingAt:r]) return;
     [_binding toggleCheckedForParagraphsInRange:r];
     [self endFormatting];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:index];
+}
+
+/* Undoably: a move keeps the list's length, so the text view's undo of
+   "this range, replaced" puts the old order back. */
+- (void)moveCheckedToBottomAt:(NSUInteger)index {
+    NSRange list = [_binding checklistRangeAt:index];
+    if (list.location == NSNotFound || !_textView.isEditable) return;
+    NSRange sel = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:list replacementString:[_textView.string substringWithRange:list]]) return;
+    if ([_binding moveCheckedToBottomOfChecklistAt:index]) [_textView didChangeText];
+    _textView.selectedRange = sel;
 }
 
 /* Typing in lists, as Apple Notes has it (SNTextBinding). */
@@ -524,7 +582,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (void)textDidChange:(NSNotification *)n {
-    if (n.object == _textView) [_binding textDidChange];
+    if (n.object != _textView) return;
+    [_binding textDidChange];
+    /* The tables after what changed moved with it. */
+    [_grids update];
 }
 
 - (void)textViewDidChangeSelection:(NSNotification *)n {
@@ -632,6 +693,86 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [self.window makeFirstResponder:_searchField];
 }
 
+#pragma mark links
+
+/* On the selection; with none, on the link the insertion point is in. */
+- (IBAction)addLink:(id)sender {
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSRange range = tv.selectedRange;
+    NSString *current = [binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    if (!range.length && current) {
+        NSRange whole;
+        [tv.textStorage attribute:SNLinkAttributeName atIndex:range.location ? range.location - 1 : 0
+            longestEffectiveRange:&whole inRange:NSMakeRange(0, tv.textStorage.length)];
+        range = whole;
+    }
+    if (!range.length) {
+        NSBeep();
+        return;
+    }
+    NSString *link = SNAskForText(@"Add Link", @"Link (a web address, or a link to a note; empty: none):", current ?: @"https://");
+    if (!link) return;
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:range];
+    [tv didChangeText];
+}
+
+- (IBAction)attachFile:(id)sender {
+    if (!_binding || !_textView.isEditable) return;
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedFileTypes = @[ @"png", @"jpg", @"jpeg", @"gif", @"tiff", @"tif", @"heic", @"bmp" ];
+    panel.allowsMultipleSelection = YES;
+    if ([panel runModal] != NSModalResponseOK) return;
+    for (NSURL *url in panel.URLs)
+        if (![self attachImageData:[NSData dataWithContentsOfURL:url]]) {
+            NSAlert *alert = [[NSAlert alloc] init];
+            alert.messageText = [NSString stringWithFormat:@"“%@” is not an image SimpleNotes can show.", url.lastPathComponent];
+            [alert runModal];
+        }
+}
+
+- (BOOL)attachImageData:(NSData *)data {
+    if (!_binding || !_textView.isEditable) return NO;
+    NSRange r = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return NO;
+    if (![_binding insertImageData:data inRange:r]) return NO;
+    [_textView didChangeText];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    return YES;
+}
+
+- (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    if (!_binding || !_textView.isEditable || [self typingInTable]) return nil;
+    NSRange r = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return nil;
+    NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
+    if (made) [_textView didChangeText];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_grids update];
+    return made;
+}
+
+/* Two rows, two columns, as Apple Notes' are, its first cell typed in. */
+- (IBAction)addTable:(id)sender {
+    NSString *made = [self insertTableWithRows:2 columns:2];
+    [[_grids gridForAttachmentID:made] beginEditing];
+}
+
+- (SNTableGrid *)gridForAttachmentID:(NSString *)attachmentID {
+    return [_grids gridForAttachmentID:attachmentID];
+}
+
+- (IBAction)copyNoteLink:(id)sender {
+    SNNote *note = [self selectedNote];
+    if (!note.id) return;
+    NSString *link = SNLinkToNote(note.id).absoluteString;
+    NSPasteboard *pb = [NSPasteboard generalPasteboard];
+    [pb declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+    [pb setString:link forType:NSPasteboardTypeString];
+}
+
 #pragma mark sorting and grouping
 
 /* The device's choice; every list follows it (SNNotes says so). */
@@ -655,6 +796,15 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
+    if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
+    if (a == @selector(moveCheckedToBottom:))
+        return _binding != nil && _textView.isEditable && ![self typingInTable] && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
+    if (a == @selector(toggleKeepCheckedAtBottom:)) {
+        item.state = _notes.movesCheckedToBottom ? NSControlStateValueOn : NSControlStateValueOff;
+        return YES;
+    }
     SNSortOrder order = _notes.sortOrder;
     if (a == @selector(sortByDateEdited:)) item.state = order == SNSortByDateEdited ? NSControlStateValueOn : NSControlStateValueOff;
     if (a == @selector(sortByDateCreated:)) item.state = order == SNSortByDateCreated ? NSControlStateValueOn : NSControlStateValueOff;
@@ -670,10 +820,25 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark formatting
 
+/* What character formatting and links go on: a table's cell typed in, or
+   else the note's text; and its binding. */
+- (NSTextView *)formattedTextView:(SNTextBinding **)binding {
+    NSTextView *cell = (NSTextView *)[_grids cellTypedIn];
+    SNTextBinding *b = cell ? [_grids bindingOfCell:cell] : nil;
+    *binding = b ?: _binding;
+    return b ? cell : _textView;
+}
+
+/* A table's cell typed in: its paragraphs are not formatted (no styles, no
+   lists, as Apple Notes' cells), and nothing is put in it but text. */
+- (BOOL)typingInTable {
+    return [_grids cellTypedIn] != nil;
+}
+
 /* Paragraph formatting, undoably: begun over the paragraphs a range
    touches, ended once the binding has changed them. */
 - (BOOL)beginFormattingAt:(NSRange)range {
-    if (!_binding || !_textView.isEditable) return NO;
+    if (!_binding || !_textView.isEditable || [self typingInTable]) return NO;
     return [_textView shouldChangeTextInRange:[_binding paragraphsRangeForRange:range] replacementString:nil];
 }
 
@@ -683,15 +848,17 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 /* On the selection, undoably; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
-    if (!_binding) return;
-    NSRange range = _textView.selectedRange;
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSRange range = tv.selectedRange;
     if (!range.length) {
-        [_binding toggle:key inRange:range];
+        [binding toggle:key inRange:range];
         return;
     }
-    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
-    [_binding toggle:key inRange:range];
-    [_textView didChangeText];
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding toggle:key inRange:range];
+    [tv didChangeText];
 }
 
 - (void)style:(NSString *)style {
@@ -733,6 +900,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (![self beginFormattingAt:r]) return;
     [_binding toggleCheckedForParagraphsInRange:r];
     [self endFormatting];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:r.location];
+}
+
+- (IBAction)moveCheckedToBottom:(id)sender {
+    [self moveCheckedToBottomAt:_textView.selectedRange.location];
+}
+
+- (IBAction)toggleKeepCheckedAtBottom:(id)sender {
+    _notes.movesCheckedToBottom = !_notes.movesCheckedToBottom;
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:_textView.selectedRange.location];
 }
 - (IBAction)increaseIndentation:(id)sender { [self indentBy:1]; }
 - (IBAction)decreaseIndentation:(id)sender { [self indentBy:-1]; }
@@ -755,11 +932,18 @@ static const NSInteger SNMoveToMenuTag = 7001;
     BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:);
     if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
     BOOL enabled = _binding != nil && _textView.isEditable;
+    if (inline_[name]) {
+        SNTextBinding *binding;
+        NSTextView *tv = [self formattedTextView:&binding];
+        item.state = enabled && [binding range:tv.selectedRange has:inline_[name]] ? NSControlStateValueOn : NSControlStateValueOff;
+        *enabledOut = enabled;
+        return YES;
+    }
+    if ([self typingInTable]) enabled = NO;
     NSDictionary *p = enabled ? [_binding paragraphAttributesAt:_textView.selectedRange.location] : @{};
     BOOL on = NO;
     if (styles[name]) on = [styles[name] length] ? [p[SNStyleKey] isEqual:styles[name]] : (!p[SNStyleKey] && !p[SNListKey]);
     else if (lists[name]) on = [p[SNListKey] isEqual:lists[name]];
-    else if (inline_[name]) on = enabled && [_binding range:_textView.selectedRange has:inline_[name]];
     else if (a == @selector(toggleChecked:)) {
         on = [p[SNCheckedKey] boolValue];
         enabled = enabled && [p[SNListKey] isEqual:SNListCheck];

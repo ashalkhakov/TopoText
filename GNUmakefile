@@ -44,7 +44,8 @@ endif
 TopoText_NEEDS_GUI = no
 TopoText_OBJC_FILES = \
 	Sources/TopoText/TopoText.m \
-	Sources/TopoText/TTCoding.m
+	Sources/TopoText/TTCoding.m \
+	Sources/TopoText/TTTable.m
 TopoText_HEADER_FILES = TopoText.h
 TopoText_HEADER_FILES_DIR = Sources/TopoText/include/TopoText
 TopoText_HEADER_FILES_INSTALL_DIR = TopoText

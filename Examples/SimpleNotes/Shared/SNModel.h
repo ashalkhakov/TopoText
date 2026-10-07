@@ -4,12 +4,15 @@
 //   Folder   id (key), name, created, parent (to-one: the folder it is
 //            in), children, notes, modified, versions
 //   Note     id (key), title, body, bodyText, created, edited, pinned,
-//            deletedAt, folder (to-one), modified, versions
+//            deletedAt, folder (to-one), attachments, modified, versions
+//   Attachment  id (key), kind ("image"), type (MIME), data, width,
+//            height, created, note (to-one), modified, versions
 //
 // Versions: 1, the first; 2 adds Note.deletedAt (Recently Deleted); 3 adds
 // Folder.parent (folders in folders), and renames Note.updated edited:
 // on Apple's Core Data, "updated" is NSManagedObject's own (-isUpdated), and
 // what key-value coding reads and writes for it (ODataKit, a sync) is that.
+// 4 adds Attachment (images in notes).
 //
 // Both are ODataSync both entities: either side changes them. A note's body
 // is a TopoText (bodyText), merged when two devices edited it apart; body
@@ -24,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 FOUNDATION_EXPORT NSString * const SNFolderEntity;  // @"Folder"
 FOUNDATION_EXPORT NSString * const SNNoteEntity;    // @"Note"
+FOUNDATION_EXPORT NSString * const SNAttachmentEntity;  // @"Attachment"
 
 // The compiled model in a bundle's resources (SimpleNotes.momd).
 FOUNDATION_EXPORT NSURL *_Nullable SNModelURLInBundle(NSBundle *bundle);
@@ -48,6 +52,17 @@ FOUNDATION_EXPORT NSDictionary<NSString *, id> *SNUpgradeBody(NSDictionary<NSStr
 // (letters, digits, - and _, at least one letter), at the start or after a
 // space. Where they are in text, each range its # included.
 FOUNDATION_EXPORT NSArray<NSValue *> *SNTagRangesInText(NSString *text);
+// Web addresses in text, as Apple Notes links them while one types:
+// http:// and https:// ones, and www. ones; a trailing full stop, comma or
+// closing bracket not theirs.
+FOUNDATION_EXPORT NSArray<NSValue *> *SNLinkRangesInText(NSString *text);
+// A link to a note (simplenotes://note/<id>), and the note's id in one
+// (nil: not a link to a note).
+FOUNDATION_EXPORT NSURL *SNLinkToNote(NSString *noteID);
+FOUNDATION_EXPORT NSString *_Nullable SNNoteIDInLink(NSURL *_Nullable link);
+// What a link typed or detected opens: as given when it has a scheme, else
+// https:// (www.example.com).
+FOUNDATION_EXPORT NSURL *_Nullable SNURLOfLink(NSString *text);
 // The tags in text, lowercase (one tag whatever its case), each once, in
 // order, without their #.
 FOUNDATION_EXPORT NSArray<NSString *> *SNTagsInText(NSString *text);

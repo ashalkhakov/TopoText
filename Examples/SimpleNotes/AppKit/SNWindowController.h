@@ -10,6 +10,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class SNTableGrid;
+
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
                                                     NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
@@ -66,8 +68,35 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)toggleChecklist:(nullable id)sender;
 - (IBAction)toggleChecked:(nullable id)sender;
 - (IBAction)increaseIndentation:(nullable id)sender;
+// Format > Move Checked to Bottom, and Keep Checked at Bottom (every tick).
+- (IBAction)moveCheckedToBottom:(nullable id)sender;
+- (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
 - (IBAction)findNote:(nullable id)sender;
+// Format > Add Link… (a link on the selection, or the one at the insertion
+// point changed), and File > Copy Link to Note (simplenotes://note/<id>,
+// pasted as a link it opens the note).
+- (IBAction)addLink:(nullable id)sender;
+- (IBAction)copyNoteLink:(nullable id)sender;
+// File > Attach File…: an image into the note, at the insertion point (one
+// pasted or dropped is one too).
+- (IBAction)attachFile:(nullable id)sender;
+// An image's data into the note at the insertion point, undoably (NO: not
+// an image, or no note open).
+- (BOOL)attachImageData:(NSData *)data;
+// Format > Table > Insert Table: a table in the note at the insertion
+// point, its first cell typed in. (Not -insertTable:, NSTextView's own,
+// which the note's text view, first in the responder chain, would take.) A table is edited where it is, its grid
+// over it (SNTableGrid): its rows and columns from Format > Table, or a
+// cell's menu.
+- (IBAction)addTable:(nullable id)sender;
+// A table put in the note (rows x columns), undoably, not typed in: its
+// attachment's id.
+- (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns;
+// The open note's table's grid (nil: none).
+- (nullable SNTableGrid *)gridForAttachmentID:(NSString *)attachmentID;
+// The note shown and chosen, as a link to it opens it (NO: not here).
+- (BOOL)showNote:(SNNote *)note;
 // View > Sort By, and Group By Date.
 - (IBAction)sortByDateEdited:(nullable id)sender;
 - (IBAction)sortByDateCreated:(nullable id)sender;

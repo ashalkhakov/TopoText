@@ -86,6 +86,18 @@
                                     <action selector="togglePinned:" target="-1" id="SNm-ac-205"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Copy Link to Note" id="SNm-mi-901">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="copyNoteLink:" target="-1" id="SNm-ac-901"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Attach File…" keyEquivalent="a" id="SNm-mi-906">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="attachFile:" target="-1" id="SNm-ac-906"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Delete Note" id="SNm-mi-206">
                                 <string key="keyEquivalent" base64-UTF8="YES">CA</string>
                                 <connections>
@@ -234,6 +246,18 @@
                                     <action selector="toggleChecked:" target="-1" id="SNm-ac-412"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Move Checked to Bottom" id="SNm-mi-904">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="moveCheckedToBottom:" target="-1" id="SNm-ac-904"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Keep Checked at Bottom" id="SNm-mi-905">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="toggleKeepCheckedAtBottom:" target="-1" id="SNm-ac-905"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-413"/>
                             <menuItem title="Increase Indentation" keyEquivalent="]" id="SNm-mi-414">
                                 <connections>
@@ -266,6 +290,57 @@
                                 <connections>
                                     <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-420"/>
                                 </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-902"/>
+                            <menuItem title="Add Link…" keyEquivalent="k" id="SNm-mi-903">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                                <connections>
+                                    <action selector="addLink:" target="-1" id="SNm-ac-903"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Table" id="SNm-mi-910">
+                                <menu key="submenu" title="Table" id="SNm-mn-910">
+                                    <items>
+                                        <menuItem title="Insert Table" keyEquivalent="t" id="SNm-mi-907">
+                                            <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="addTable:" target="-1" id="SNm-ac-907"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="SNm-mi-911"/>
+                                        <menuItem title="Add Row Above" id="SNm-mi-912">
+                                            <connections>
+                                                <action selector="addRowAbove:" target="-1" id="SNm-ac-912"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Add Row Below" id="SNm-mi-913">
+                                            <connections>
+                                                <action selector="addRowBelow:" target="-1" id="SNm-ac-913"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Add Column Before" id="SNm-mi-914">
+                                            <connections>
+                                                <action selector="addColumnBefore:" target="-1" id="SNm-ac-914"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Add Column After" id="SNm-mi-915">
+                                            <connections>
+                                                <action selector="addColumnAfter:" target="-1" id="SNm-ac-915"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="SNm-mi-916"/>
+                                        <menuItem title="Delete Row" id="SNm-mi-917">
+                                            <connections>
+                                                <action selector="deleteRow:" target="-1" id="SNm-ac-917"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Delete Column" id="SNm-mi-918">
+                                            <connections>
+                                                <action selector="deleteColumn:" target="-1" id="SNm-ac-918"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                         </items>
                     </menu>

@@ -2,6 +2,7 @@
 #import "SNWindowController.h"
 #import "SNModel.h"
 #import "SNRichText.h"
+#import "SNTableGrid.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -23,6 +24,24 @@ static BOOL SNWait(NSTimeInterval seconds, BOOL (^done)(void)) {
 static void SNFinish(void) {
     fprintf(stderr, "self-test: %s\n", SNFailed ? "FAILED" : "passed");
     exit(SNFailed);
+}
+
+/* A small image, as a PNG: what Attach File reads. */
+static NSData *SNSelfTestPNG(void) {
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:64 pixelsHigh:48 bitsPerSample:8 samplesPerPixel:4
+                                                                      hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+    [NSGraphicsContext setCurrentContext:context];
+    [[NSColor colorWithCalibratedRed:0.99 green:0.78 blue:0.17 alpha:1] setFill];
+    NSRectFill(NSMakeRect(0, 0, 64, 48));
+    [context flushGraphics];   /* gnustep-back: into the bitmap */
+    [NSGraphicsContext restoreGraphicsState];
+#ifdef GNUSTEP
+    return [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+    return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
 }
 
 @interface SNSelfTest : NSObject
@@ -109,6 +128,76 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         }
         SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [weekend.body hasSuffix:@"water the plants"],
               [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+
+        /* The ticked item to the bottom, from the Format menu; an image
+           attached; a link to another note followed. */
+        tv.selectedRange = NSMakeRange(lines.location, 0);
+        SNSay([tv tryToPerform:@selector(moveCheckedToBottom:) with:nil], @"Move Checked to Bottom from the menu");
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertNewline:nil];   /* on the empty item: the list ends */
+        SNSay([window attachImageData:SNSelfTestPNG()], @"an image attached");
+        /* A table after it, from the Format menu, typed into where it is:
+           Tab to the next cell, and from the last one a row more. */
+        [tv insertNewline:nil];
+        SNSay([tv tryToPerform:@selector(addTable:) with:nil], @"Insert Table from the menu");
+        NSString *tableID = [tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        SNTableGrid *grid = tableID ? [window gridForAttachmentID:tableID] : nil;
+        SNSay(grid && grid.table.rowCount == 2 && grid.table.columnCount == 2 && tv.window.firstResponder == [grid textViewAtRow:0 column:0],
+              @"a table in the note, its first cell typed in");
+        NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday morning, before lunch" ] ];
+        for (NSUInteger k = 0; k < 4; k++) {
+            NSTextView *cell = (NSTextView *)tv.window.firstResponder;
+            [cell insertText:cells[k / 2][k % 2]];
+            [cell doCommandBySelector:@selector(insertTab:)];
+        }
+        SNSay(grid.table.rowCount == 3 && tv.window.firstResponder == [grid textViewAtRow:2 column:0],
+              [NSString stringWithFormat:@"Tab from the last cell: a row more (%lu)", (unsigned long)grid.table.rowCount]);
+        SNSay([tv.window.firstResponder tryToPerform:@selector(deleteRow:) with:nil] && grid.table.rowCount == 2,
+              @"Delete Row from the menu");
+        SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed (%@)", grid.table.strings]);
+        /* A cell's characters formatted, as the note's: Bold from the menu,
+           on what is selected in the cell; a cell's paragraphs not. */
+        NSTextView *bike = (NSTextView *)[grid textViewAtRow:0 column:0];
+        [tv.window makeFirstResponder:bike];
+        bike.selectedRange = NSMakeRange(0, 4);
+        SNSay([bike tryToPerform:@selector(toggleBold:) with:nil] &&
+              [[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"Bold in a cell, from the menu: the cell's text bold");
+        NSMenuItem *titleItem = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(styleTitle:) keyEquivalent:@""];
+        SNSay(![window validateMenuItem:titleItem], @"no Title in a cell");
+        /* Over its place in the text, which keeps its room. */
+        NSLayoutManager *tlm = tv.layoutManager;
+        NSUInteger tg = [tlm glyphRangeForCharacterRange:NSMakeRange(tv.string.length - 1, 1) actualCharacterRange:NULL].location;
+        NSRect room = [tlm boundingRectForGlyphRange:NSMakeRange(tg, 1) inTextContainer:tv.textContainer];
+        room = NSOffsetRect(room, tv.textContainerOrigin.x, tv.textContainerOrigin.y);
+        SNSay(grid.superview == tv && fabs(NSMinX(grid.frame) - NSMinX(room)) < 2 && NSMinY(grid.frame) >= NSMinY(room) - 2 &&
+              NSMaxY(grid.frame) <= NSMaxY(room) + 2 && NSHeight(grid.frame) > 40,
+              [NSString stringWithFormat:@"the grid over its room (%@, %@)", NSStringFromRect(grid.frame), NSStringFromRect(room)]);
+        [grid save];
+        SNWait(2, ^BOOL { return NO; });
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        for (SNNote *n in [other notesInFolder:nil matching:@"Weekend"]) weekend = n;
+        wt = weekend.text;
+        NSArray *lines2 = [wt.string componentsSeparatedByString:@"\n"];
+        SNSay(lines2.count == 6 && [lines2[3] isEqual:@"fix the bike"],
+              [NSString stringWithFormat:@"the second device has it at the bottom (%@)", [lines2 componentsJoinedByString:@" | "]]);
+        NSString *imageID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNAttachment *image = imageID ? [other attachmentWithID:imageID] : nil;
+        SNSay(image.data.length > 0 && image.width.doubleValue == 64, [NSString stringWithFormat:@"and the image (%@, %@)", imageID, image.type]);
+        NSString *tableThereID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNAttachment *tableThere = tableThereID ? [other attachmentWithID:tableThereID] : nil;
+        SNSay([[other tableOfAttachment:tableThere].strings isEqual:cells],
+              [NSString stringWithFormat:@"and the table (%@)", [other tableOfAttachment:tableThere].strings]);
+        SNSay([[[[other tableOfAttachment:tableThere] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"its cell's bold too");
+        SNNote *groceries = nil;
+        for (SNNote *n in [notes notesInFolder:nil matching:@"Groceries"]) groceries = n;
+        [window textView:window.textView clickedOnLink:SNLinkToNote(groceries.id) atIndex:0];
+        SNSay([tv.string hasPrefix:@"Groceries"], @"a link to a note opens it");
+        [window selectNoteTitled:@"Weekend"];
         /* Folders in folders, and tags, in the sidebar. */
         NSArray *sidebar = [window sidebarRows];
         SNSay([sidebar containsObject:@"Work"] && [sidebar containsObject:@"  Projects"],

@@ -122,6 +122,7 @@ NSString *SNDateText(NSDate *date) {
     NSHashTable<SNNoteEditor *> *_editors;
     BOOL _deletes;   /* the model has Recently Deleted (version 2 on) */
     BOOL _nests;     /* the model has folders in folders (version 3 on) */
+    BOOL _attaches;  /* the model has attachments (version 4 on) */
     BOOL _savePending;
     NSTimer *_timer;
 }
@@ -163,6 +164,7 @@ NSString *SNDateText(NSDate *date) {
     _deletes = [note.attributesByName objectForKey:@"deletedAt"] != nil;
     NSEntityDescription *folderEntity = model.entitiesByName[SNFolderEntity];
     _nests = [folderEntity.relationshipsByName objectForKey:@"parent"] != nil;
+    _attaches = [model.entitiesByName objectForKey:SNAttachmentEntity] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
@@ -422,6 +424,14 @@ NSString *SNDateText(NSDate *date) {
     [self say:_status synced:NO];
 }
 
+- (BOOL)movesCheckedToBottom {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SNMoveCheckedToBottom"];
+}
+
+- (void)setMovesCheckedToBottom:(BOOL)moves {
+    [[NSUserDefaults standardUserDefaults] setBool:moves forKey:@"SNMoveCheckedToBottom"];
+}
+
 - (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes {
     return SNGroupNotes(notes, self.sortOrder, self.groupsByDate, [NSDate date]);
 }
@@ -435,6 +445,52 @@ NSString *SNDateText(NSDate *date) {
 
 - (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
     return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
+}
+
+- (SNAttachment *)addImageToNote:(SNNote *)note data:(NSData *)data type:(NSString *)type width:(double)width height:(double)height {
+    SNAttachment *a = [self insert:SNAttachmentEntity];
+    a.kind = SNAttachmentKindImage;
+    a.type = type;
+    a.data = data;
+    a.width = @(width);
+    a.height = @(height);
+    a.note = note;
+    [self save];
+    return a;
+}
+
+- (SNAttachment *)addTableToNote:(SNNote *)note rows:(NSUInteger)rows columns:(NSUInteger)columns {
+    SNAttachment *a = [self insert:SNAttachmentEntity];
+    a.kind = SNAttachmentKindTable;
+    a.type = SNTableType;
+    a.data = [TTTable tableWithRows:rows columns:columns replica:0].data;
+    a.note = note;
+    [self save];
+    return a;
+}
+
+- (TTTable *)tableOfAttachment:(SNAttachment *)attachment {
+    if (![attachment.kind isEqual:SNAttachmentKindTable] || !attachment.data) return nil;
+    return [TTTable tableWithData:attachment.data replica:0 error:NULL];
+}
+
+- (void)saveTable:(TTTable *)table toAttachment:(SNAttachment *)attachment {
+    TTTable *stored = attachment.data ? [TTTable tableWithData:attachment.data replica:table.replica error:NULL] : nil;
+    if (stored) [stored mergeTable:table];
+    NSData *data = (stored ?: table).data;
+    if ([data isEqual:attachment.data]) return;
+    attachment.data = data;
+    [self save];
+}
+
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    if (!attachmentID.length || !_attaches) return nil;
+    return [self fetch:SNAttachmentEntity where:[NSPredicate predicateWithFormat:@"id == %@", attachmentID] sortedBy:nil].firstObject;
+}
+
+- (SNNote *)noteWithID:(NSString *)noteID {
+    if (!noteID.length) return nil;
+    return [self fetch:SNNoteEntity where:[NSPredicate predicateWithFormat:@"id == %@", noteID] sortedBy:nil].firstObject;
 }
 
 - (NSArray<SNNote *> *)deletedNotesMatching:(NSString *)text {
@@ -638,6 +694,24 @@ NSString *SNDateText(NSDate *date) {
 - (SNNote *)note {
     SNNote *n = (SNNote *)[_notes.context existingObjectWithID:_noteID error:NULL];
     return n.isDeleted ? nil : n;
+}
+
+- (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height {
+    SNNotes *notes = _notes;
+    SNNote *note = [self note];
+    if (!notes || !note) return nil;
+    return [notes addImageToNote:note data:data type:type width:width height:height].id;
+}
+
+- (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    SNNotes *notes = _notes;
+    SNNote *note = [self note];
+    if (!notes || !note) return nil;
+    return [notes addTableToNote:note rows:rows columns:columns].id;
+}
+
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    return [_notes attachmentWithID:attachmentID];
 }
 
 - (void)textDidChange {

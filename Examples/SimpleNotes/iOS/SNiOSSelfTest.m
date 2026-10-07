@@ -1,8 +1,16 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
+#import "SNTableGrid.h"
+#import "SNModel.h"
 
 NSURL *SNSelfTestRoot;
+
+/* The grid's links, UIKit's (iOS/SNTableGrid+System.m). */
+@interface SNTableGrid (SNSelfTestLinks)
+- (nullable NSURL *)linkInCell:(UITextView *)cell atPoint:(CGPoint)point;
+- (void)followLink:(NSURL *)url;
+@end
 
 static int SNFailed;
 
@@ -37,7 +45,8 @@ static void SNSnapshot(UIView *v, NSString *path) {
     @try {
         self.run();
     } @catch (NSException *e) {
-        fprintf(stderr, "FAIL %s: %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String);
+        fprintf(stderr, "FAIL %s: %s\nFAIL   %s\nself-test: FAILED\n", e.name.UTF8String, e.reason.UTF8String,
+                [e.callStackSymbols componentsJoinedByString:@"\nFAIL   "].UTF8String);
         exit(1);
     }
 }
@@ -103,8 +112,95 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
         [wtv insertText:@"\n"];
         [wtv insertText:@"water the plants"];
+        /* The ticked item to the bottom; the list ended (Return on an empty
+           item), and a photo after it. */
+        wtv.selectedRange = NSMakeRange(first, 0);
+        [we moveCheckedToBottom:nil];
+        wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
+        /* As the keyboard types: the delegate asked first (insertText:
+           alone does not ask it). */
+        for (int i = 0; i < 2; i++)
+            if ([we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:@"\n"]) [wtv insertText:@"\n"];
+        UIGraphicsImageRenderer *photo = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(64, 48)];
+        [we insertImageData:UIImagePNGRepresentation([photo imageWithActions:^(UIGraphicsImageRendererContext *c) {
+            [[UIColor systemYellowColor] setFill];
+            UIRectFill(CGRectMake(0, 0, 64, 48));
+        }])];
+        /* A table after it, from the bar, typed into where it is: the
+           keyboard's Tab to the next cell, and from the last a row more. */
+        if ([we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:@"\n"]) [wtv insertText:@"\n"];
+        [we addTable:nil];
+        NSString *tableID = [wtv.textStorage attribute:SNAttachmentAttributeName atIndex:wtv.text.length - 1 effectiveRange:NULL];
+        SNTableGrid *grid = tableID ? [we gridForAttachmentID:tableID] : nil;
+        SNSay(grid && grid.table.rowCount == 2 && [grid textViewAtRow:0 column:0].isFirstResponder, @"a table in the note, its first cell typed in");
+        NSArray *cells = @[ @[ @"Bike", @"Saturday" ], @[ @"Grandma", @"Sunday" ] ];
+        for (NSUInteger k = 0; k < 4; k++) {
+            UITextView *cell = [grid textViewAtRow:k / 2 column:k % 2];
+            if (!cell.isFirstResponder) break;
+            [cell insertText:cells[k / 2][k % 2]];
+            if ([cell.delegate textView:cell shouldChangeTextInRange:cell.selectedRange replacementText:@"\t"]) [cell insertText:@"\t"];
+        }
+        UITextView *added = [grid textViewAtRow:2 column:0];
+        SNSay(grid.table.rowCount == 3 && added.isFirstResponder, @"Tab from the last cell: a row more");
+        SNSay([added canPerformAction:@selector(deleteRow:) withSender:nil] || [grid canPerformAction:@selector(deleteRow:) withSender:nil],
+              @"Delete Row in the cell's menu");
+        [[UIApplication sharedApplication] sendAction:@selector(deleteRow:) to:nil from:nil forEvent:nil];
+        SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed, the row deleted (%@)", grid.table.strings]);
+        /* A cell's characters formatted, as the note's: Bold from the bar
+           over the keyboard (up the responder chain, to the editor). */
+        UITextView *bike = [grid textViewAtRow:0 column:0];
+        [bike becomeFirstResponder];
+        bike.selectedRange = NSMakeRange(0, 4);
+        [[UIApplication sharedApplication] sendAction:@selector(bold:) to:nil from:nil forEvent:nil];
+        SNSay([[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"Bold in a cell: the cell's text bold");
+        /* A hardware keyboard's Shift-Tab: the cell before. */
+        [[grid textViewAtRow:1 column:1] becomeFirstResponder];
+        BOOL hasBack = NO;
+        for (UIKeyCommand *k in grid.keyCommands)
+            if ([k.input isEqualToString:@"\t"] && k.modifierFlags == UIKeyModifierShift) hasBack = YES;
+        [[UIApplication sharedApplication] sendAction:@selector(previousCell:) to:nil from:nil forEvent:nil];
+        SNSay(hasBack && [grid textViewAtRow:1 column:0].isFirstResponder, @"Shift-Tab: the cell before");
+        /* A link in a cell, tapped: a note's opened, as one in the note. */
+        UITextView *grandma = [grid textViewAtRow:1 column:0];
+        NSURL *toGroceries = SNLinkToNote(groceries.id);
+        [[grid bindingOfCell:grandma] setLink:toGroceries.absoluteString inRange:NSMakeRange(0, 7)];
+        UITextPosition *start = grandma.beginningOfDocument;
+        CGRect gr = [grandma firstRectForRange:[grandma textRangeFromPosition:start toPosition:[grandma positionFromPosition:start offset:3]]];
+        NSURL *tapped = [grid linkInCell:grandma atPoint:CGPointMake(CGRectGetMidX(gr), CGRectGetMidY(gr))];
+        SNSay([tapped isEqual:toGroceries] && [grid linkInCell:grandma atPoint:CGPointMake(grandma.bounds.size.width - 4, CGRectGetMidY(gr))] == nil,
+              [NSString stringWithFormat:@"a link in a cell, under a tap there and not beside it (%@)", tapped]);
+        if (tapped) [grid followLink:tapped];
+        SNWait(0.5, ^BOOL { return NO; });
+        UIViewController *opened = navigation.topViewController;
+        SNSay(opened != we && [opened isKindOfClass:[SNEditorViewController class]] &&
+              [((SNEditorViewController *)opened).textView.text hasPrefix:@"Groceries"], @"followed: the note opened");
+        if (opened != we) [navigation popViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        NSLayoutManager *tlm = wtv.layoutManager;
+        CGRect room = [tlm boundingRectForGlyphRange:[tlm glyphRangeForCharacterRange:NSMakeRange(wtv.text.length - 1, 1) actualCharacterRange:NULL]
+                                     inTextContainer:wtv.textContainer];
+        room = CGRectOffset(room, wtv.textContainerInset.left, wtv.textContainerInset.top);
+        SNSay(grid.superview == wtv && fabs(CGRectGetMinX(grid.frame) - CGRectGetMinX(room)) < 2 && CGRectGetMinY(grid.frame) >= CGRectGetMinY(room) - 2 &&
+              CGRectGetMaxY(grid.frame) <= CGRectGetMaxY(room) + 2 && grid.frame.size.height > 40,
+              [NSString stringWithFormat:@"the grid over its room (%@, %@)", NSStringFromCGRect(grid.frame), NSStringFromCGRect(room)]);
+        [grid save];
+        /* From a cell back into the note: the note's bar over the keyboard,
+           not the cell's (UIKit kept the cell's, unless told). */
+        [wtv.window endEditing:YES];
+        SNWait(1, ^BOOL { return NO; });
+        [wtv becomeFirstResponder];
+        wtv.selectedRange = NSMakeRange(0, 0);
+        SNWait(3, ^BOOL { return we.formatBar.window != nil; });
+        SNSay(we.formatBar.window != nil && [grid textViewAtRow:0 column:0].inputAccessoryView.window == nil,
+              @"from a cell into the note: the note's bar over the keyboard");
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
+            /* The bar over the keyboard is in the keyboard's window, which
+               a snapshot of this one leaves out: held up a while, for the
+               simulator's own screenshot (xcrun simctl io screenshot). */
+            fprintf(stderr, "self-test: the keyboard is up\n");
+            SNWait(5, ^BOOL { return NO; });
             [wtv resignFirstResponder];
             SNWait(1, ^BOOL { return NO; });
             SNSnapshot(navigation.view.window, @(snapshot));
@@ -120,8 +216,14 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
             [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
         }
-        SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [wt.string hasSuffix:@"water the plants"],
-              [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-" ]],
+              [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
+        NSString *photoID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
+        NSString *tableThere = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNSay([[other tableOfAttachment:[other attachmentWithID:tableThere]].strings isEqual:cells], @"and the table");
+        SNSay([[[[other tableOfAttachment:[other attachmentWithID:tableThere]] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"its cell's bold too");
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

@@ -8,7 +8,7 @@ name: Release
 #   macOS    SimpleNotes.app, universal, signed with a Developer ID and
 #            notarized (unsigned, and named so, without the secrets)
 #   Linux    SimpleNotes as an AppImage, with simplenotes-server in it
-#            (`SimpleNotes-*.AppImage server ...`)
+#            (`SimpleNotes-*.AppImage --server ...`)
 #   iOS      an unsigned device build (.ipa, to be signed for the App Store
 #            later) and a simulator build
 #
@@ -413,7 +413,7 @@ jobs:
       # the window lays out with the fonts the image carries.
       - name: Smoke-test the AppImage on a clean system
         run: |
-          image=$(ls SimpleNotes-Linux-*.AppImage)
+          image=$(ls SimpleNotes-*.AppImage)
           chmod +x "$image"
           docker run --rm -v "$PWD:/w" -w /w ubuntu:22.04 bash -c '
             export DEBIAN_FRONTEND=noninteractive APPIMAGE_EXTRACT_AND_RUN=1
@@ -430,12 +430,12 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SimpleNotes-Linux-${{ env.APP_VERSION }}
-          path: ${{ github.workspace }}/source/SimpleNotes-Linux-*.AppImage
+          name: SimpleNotes-AppImage-${{ env.APP_VERSION }}
+          path: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
 
       - name: Attach to the release
         if: env.TAG != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
-          files: ${{ github.workspace }}/source/SimpleNotes-Linux-*.AppImage
+          files: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
