@@ -8,6 +8,7 @@
 #import "SNModel.h"
 #import "SNNotes.h"
 #import "SNNotebooks.h"
+#import "SNPeers.h"
 #import <ODataIncrementalStore/ODataConfiguration.h>
 
 @interface SNNotesTests : XCTestCase <SNNoteEditorDelegate>
@@ -680,6 +681,7 @@
     NSDictionary *key = HSGenerateSigningKey(&error);
     XCTAssertNotNil(key, @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
+    SNOfferPeerTokens(_service);   /* as the server does once a sign-in is set */
     HSJWTAuthenticator *jwt = [[HSJWTAuthenticator alloc] initWithIssuer:@"https://id.test" audience:nil];
     jwt.keySet = @{ @"keys": @[ HSPublicKey(key) ] };
     _service.authenticator = jwt;
@@ -747,6 +749,78 @@
     SNNotes *alice = [self deviceOf:@"alice" key:key];
     [self sync:alice];
     XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"From before" ]);
+}
+
+#pragma mark devices nearby
+
+- (void)waitUntil:(BOOL (^)(void))done {
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!done() && [until timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+}
+
+/* Two devices met with no server between them: one serves its notes (in
+   the process here, as its peer server's service), the other syncs with
+   it; edits made apart both kept, and what the peer wrote merged into an
+   editor open on the device serving. */
+- (void)testDevicesNearbySyncWithEachOther {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:[a addFolderNamed:@"Trip"]] on:a with:^(TopoText *t) { [t insertString:@"pack bags" atIndex:0 attributes:nil]; }];
+    ODataSyncPeerServer *served = [[ODataSyncPeerServer alloc] initWithEngine:a.engine host:@"127.0.0.1" port:SNPeersPort];
+    served.service.allowsAnonymousRequests = YES;
+    ODataSyncRemote *toA = [ODataSyncRemote peerWithServiceRoot:served.serviceRoot];
+    toA.transport = served.service;
+    NSError *error = nil;
+    XCTAssertTrue([b syncWithRemote:toA andWait:&error], @"%@", error);
+    XCTAssertEqualObjects([self onlyNote:b].body, @"pack bags");
+    XCTAssertEqualObjects([b.folders valueForKey:@"name"], @[ @"Trip" ]);
+
+    SNNoteEditor *open = [a editorForNote:[self onlyNote:a]];
+    NSMutableArray *merged = _merged = [NSMutableArray array];
+    open.delegate = self;
+    [open.text insertString:@"Paris: " atIndex:0 attributes:nil];
+    [open textDidChange];
+    [open flush];
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@", book hotel" atIndex:t.length attributes:nil]; }];
+    XCTAssertTrue([b syncWithRemote:toA andWait:&error], @"%@", error);
+    /* Written into a's store by its peer server: shown in a's editor. */
+    [self waitUntil:^BOOL { return [open.text.string isEqual:@"Paris: pack bags, book hotel"]; }];
+    XCTAssertEqualObjects(open.text.string, @"Paris: pack bags, book hotel");
+    XCTAssertGreaterThan(merged.count, 0u);
+    XCTAssertEqualObjects([self onlyNote:b].body, @"Paris: pack bags, book hotel");
+    [open close];
+    XCTAssertEqual(a.engine.issues.count + b.engine.issues.count, 0u);
+}
+
+/* The server signs peer tokens with a key it keeps; a signed-in device
+   asks for one, and keeps it. */
+- (void)testAServerIssuesPeerTokens {
+    NSURL *file = [self temporaryStore];
+    NSError *error = nil;
+    NSDictionary *signing = SNPeerSigningKeyAt(file, &error);
+    XCTAssertNotNil(signing, @"%@", error);
+    XCTAssertEqualObjects(SNPeerSigningKeyAt(file, NULL), signing, @"made once, then kept");
+    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:file.path error:NULL];
+    XCTAssertEqual([attributes[NSFilePosixPermissions] integerValue], 0600);
+
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNIssuePeerTokens(_histories, signing);
+    SNNotes *alice = [self deviceOf:@"alice" key:key];
+    NSURL *directory = [[self temporaryStore] URLByAppendingPathExtension:@"peers"];
+    [_files addObject:directory];
+    SNPeers *peers = [[SNPeers alloc] initWithNotes:alice directory:directory error:&error];
+    XCTAssertNotNil(peers, @"%@", error);
+    XCTAssertFalse(peers.hasToken);
+    [peers fetchToken];
+    [self waitUntil:^BOOL { return !peers.fetchingToken; }];
+    XCTAssertTrue(peers.hasToken, @"%@", peers.status);
+    XCTAssertGreaterThan(peers.tokenExpires.timeIntervalSinceNow, 3600);
+    [peers stop];
+    /* Kept: the next launch has it. */
+    SNPeers *again = [[SNPeers alloc] initWithNotes:alice directory:directory error:&error];
+    XCTAssertTrue(again.hasToken);
+    [again.trust.identity removeWithError:NULL];
+    [[NSFileManager defaultManager] removeItemAtURL:directory error:NULL];
 }
 
 @end

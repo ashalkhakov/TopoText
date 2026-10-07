@@ -15,6 +15,10 @@
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
 		};
+		08F47A52C6068AE0E8AC7B10 /* SNPeers.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = EC831ABEA7538032BF787133;
+		};
 		095BECCD974EC50D623BA7B9 /* TextPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3BD4E32C20887A161DAC86F3;
@@ -395,6 +399,14 @@
 			isa = PBXBuildFile;
 			fileRef = 3A2C9D1C292C6680E66D6F77;
 		};
+		C93C1B38E5CC45EE1BFB472B /* DevicesNearby.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = F311510A21AD054DB71F2A08;
+		};
+		CC4B057F37426811B1569081 /* SNPeers.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = EC831ABEA7538032BF787133;
+		};
 		CEC41A05EBF780F532ACBE1E /* SNServer.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 99E1B2886F448CC0C50995D2;
@@ -442,6 +454,10 @@
 		E05ABAA287682CBC6906D83E /* ODataSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
+		};
+		E28023D9DDBD289626CB9170 /* SNPeersWindow.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = CDAACC1B7695C7D881D1F53C;
 		};
 		E717F2ED317246A1601D506D /* SNSmartFilter.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -1090,6 +1106,13 @@
 			sourceTree = "<group>";
 			name = SNAppController.h;
 		};
+		7BE055293592C706F9CD7F11 /* SNPeers.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNPeers.h;
+			sourceTree = "<group>";
+			name = SNPeers.h;
+		};
 		7E6474CC5566165BCB367580 /* SNResolver.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1131,6 +1154,13 @@
 			path = AppKit/SNTextView.m;
 			sourceTree = "<group>";
 			name = SNTextView.m;
+		};
+		96680BD1CF6A14847F144BB9 /* SNPeersWindow.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNPeersWindow.h;
+			sourceTree = "<group>";
+			name = SNPeersWindow.h;
 		};
 		97D0F5F29F835BA15429813C /* SNSmartFilter.m */ = {
 			isa = PBXFileReference;
@@ -1236,6 +1266,13 @@
 			sourceTree = "<group>";
 			name = SNEditorViewController.xib;
 		};
+		CDAACC1B7695C7D881D1F53C /* SNPeersWindow.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNPeersWindow.m;
+			sourceTree = "<group>";
+			name = SNPeersWindow.m;
+		};
 		D3C1318F32564720F1410E27 /* ODataKit.xcodeproj */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = "wrapper.pb-project";
@@ -1317,6 +1354,20 @@
 			lastKnownFileType = wrapper.xcdatamodel;
 			path = "SimpleNotes 6.xcdatamodel";
 			sourceTree = "<group>";
+		};
+		EC831ABEA7538032BF787133 /* SNPeers.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNPeers.m;
+			sourceTree = "<group>";
+			name = SNPeers.m;
+		};
+		F311510A21AD054DB71F2A08 /* DevicesNearby.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/DevicesNearby.xib;
+			sourceTree = "<group>";
+			name = DevicesNearby.xib;
 		};
 		F3FA6CE187CC612529B3727F /* SNSelfTest.h */ = {
 			isa = PBXFileReference;
@@ -1406,6 +1457,8 @@
 				41670A389C12C54CF89C242D,
 				DEA5B0CE6DF1EE709FE2B2EA,
 				D70D32CA3559A9A3C8792783,
+				96680BD1CF6A14847F144BB9,
+				CDAACC1B7695C7D881D1F53C,
 				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
@@ -1414,6 +1467,7 @@
 				3BD4E32C20887A161DAC86F3,
 				7E6A0E52D2824B01873D4747,
 				7B171DA9ABD39A0E778CE234,
+				F311510A21AD054DB71F2A08,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1477,6 +1531,8 @@
 				117AF9FFC9CA6E63B5C2C73A,
 				44BFF922A6C593FCEB928AA9,
 				E432D0D1BDAEABC5F8DE44B6,
+				7BE055293592C706F9CD7F11,
+				EC831ABEA7538032BF787133,
 				719BCFED3ECD01936BB14F74,
 				848C622D1A0C34A6F10D548E,
 				47029EC1BB7F394FB43D846A,
@@ -1747,6 +1803,7 @@
 				095BECCD974EC50D623BA7B9,
 				AC1307ED585C96E4A0074734,
 				0FCC9C9E0E329BC98E59E527,
+				C93C1B38E5CC45EE1BFB472B,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1784,6 +1841,7 @@
 				86BC567CCDCCAB940C7793DF,
 				1AEA465EF57405F1763F16F7,
 				25879058FDC79CC840CE424F,
+				CC4B057F37426811B1569081,
 				AC28625FEB238C24115CFE5A,
 				5C0532B74F67EA76B21EA1B7,
 			);
@@ -1816,6 +1874,7 @@
 				FD8857A760C31A14282BD27A,
 				42A80778769E29C7DC69B57E,
 				78691EDAA70C27B6E68BBF1A,
+				E28023D9DDBD289626CB9170,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
@@ -1829,6 +1888,7 @@
 				D0EFBF4E8A299CC4F4ED3DBD,
 				31315B895C7B07BAF6DA0F94,
 				62A2E8AABDEEBB81A24162A0,
+				08F47A52C6068AE0E8AC7B10,
 				029C0375BBB48CBAAD4B77F8,
 				ED73A187727B64A1E926DC28,
 			);

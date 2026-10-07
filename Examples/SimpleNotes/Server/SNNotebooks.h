@@ -27,4 +27,16 @@ FOUNDATION_EXPORT void SNServeNotebookPerUser(ODataService *service);
 // owner; how many.
 FOUNDATION_EXPORT NSUInteger SNGiveUnownedRows(NSPersistentStoreCoordinator *coordinator, NSString *owner, NSError **error);
 
+// Peer tokens (ODataKit's docs/peer-sync.md): a signed-in device asks for
+// one (PeerToken), and the user's devices nearby sync with each other by
+// them while offline. The signing key, a JWK in file (made, 0600, the first
+// time; kept: a new key makes every token issued before worthless).
+FOUNDATION_EXPORT NSDictionary *_Nullable SNPeerSigningKeyAt(NSURL *file, NSError **error);
+// The PeerToken action, on service: before anything prepares it (the
+// operations are read once; SNServeNotebookPerUser prepares it).
+FOUNDATION_EXPORT void SNOfferPeerTokens(ODataService *service);
+// Issued by histories (its service offering them), named for the service
+// root.
+FOUNDATION_EXPORT void SNIssuePeerTokens(ODataSyncService *histories, NSDictionary *signingKey);
+
 NS_ASSUME_NONNULL_END

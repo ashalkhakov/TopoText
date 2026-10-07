@@ -74,6 +74,13 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // The same, waited for, on this thread (the main one): for tests and the
 // self-test.
 - (BOOL)syncAndWait:(NSError **)error;
+// The server's remote (nil: none): what a peer token is asked of.
+@property (nonatomic, readonly, nullable) ODataSyncRemote *serverRemote;
+// One remote alone (a peer met now and then; the server stays the one
+// -sync syncs with), named in the status. NO while a sync runs.
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote named:(NSString *)name;
+// The same, waited for (tests).
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote andWait:(NSError **)error;
 
 #pragma mark Reading
 

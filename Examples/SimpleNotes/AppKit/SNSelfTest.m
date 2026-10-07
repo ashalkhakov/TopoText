@@ -5,10 +5,27 @@
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
 #import "SNSyncPanel.h"
+#import "SNPeersWindow.h"
 
 NSURL *SNSelfTestRoot;
 
 /* What the Sync window chose. */
+/* A sign-in's secrets kept in memory: the self-test leaves the keychain
+   alone (a rebuilt app is another app to it, and is asked about). */
+@interface SNSelfTestSecrets : NSObject <SNSecretStoring>
+@end
+
+@implementation SNSelfTestSecrets {
+    NSMutableDictionary *_all;
+}
+- (NSDictionary *)secretsForAccount:(NSString *)account { return _all[account]; }
+- (BOOL)setSecrets:(NSDictionary *)secrets forAccount:(NSString *)account {
+    if (!_all) _all = [NSMutableDictionary dictionary];
+    _all[account] = secrets;
+    return YES;
+}
+@end
+
 @interface SNSyncChoice : NSObject <SNSyncPanelDelegate>
 @property (nonatomic, strong) NSURL *root;
 @property (nonatomic) BOOL chosen;
@@ -281,6 +298,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         /* The Sync window: this computer only warned of; a server that asks
            for no sign-in chosen as it is (learnt from its $metadata). */
         SNSyncPanel *sync = [[SNSyncPanel alloc] initWithServer:nil];
+        sync.secrets = [[SNSelfTestSecrets alloc] init];
         SNSyncChoice *choice = [[SNSyncChoice alloc] init];
         sync.delegate = choice;
         SNSay(sync.window && sync.serverField && sync.codeLabel && sync.localButton.state == NSControlStateValueOn && !sync.warningLabel.isHidden,
@@ -291,6 +309,19 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNWait(10, ^BOOL { return choice.chosen; });
         SNSay(choice.chosen && [choice.root isEqual:notes.serviceRoot] && sync.warningLabel.isHidden && sync.signIn.kind == SNSignInNone,
               [NSString stringWithFormat:@"a server with no sign-in chosen (%@)", choice.root]);
+        /* Devices Nearby: its window, and the peer token the server (no
+           sign-in: none to give) does not give. */
+        NSURL *peersDir = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                     [NSString stringWithFormat:@"sn-selftest-peers-%@", [NSProcessInfo processInfo].globallyUniqueString]]];
+        NSError *peersError = nil;
+        SNPeers *peers = [[SNPeers alloc] initWithNotes:notes directory:peersDir error:&peersError];
+        SNPeersWindow *nearby = peers ? [[SNPeersWindow alloc] initWithPeers:peers] : nil;
+        SNSay(nearby.window && nearby.devicesTable.dataSource == nearby && nearby.serveButton.state == NSControlStateValueOff && nearby.tokenButton.isEnabled,
+              [NSString stringWithFormat:@"the Devices Nearby window loads (%@)", peersError.localizedDescription ?: @"an identity made"]);
+        [nearby close];
+        [peers stop];
+        [peers.trust.identity removeWithError:NULL];
+        [[NSFileManager defaultManager] removeItemAtURL:peersDir error:NULL];
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
         SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
         [notes sync];

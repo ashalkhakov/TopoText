@@ -127,6 +127,8 @@ NSString *SNDateText(NSDate *date) {
     BOOL _savePending;
     /* A sync asked for while one ran: what changed meanwhile, sent after. */
     BOOL _syncAgain;
+    /* Saved by another context of the store's, not shown yet. */
+    BOOL _changedElsewhere;
     NSTimer *_timer;
 }
 
@@ -173,11 +175,16 @@ NSString *SNDateText(NSDate *date) {
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
     _status = @"Not synced yet.";
+    /* Written by others on this store (a peer, through the peer server):
+       shown as a sync's would be. */
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storeDidSave:)
+                                                 name:NSManagedObjectContextDidSaveNotification object:nil];
     [self removeExpiredNotes];
     return self;
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_timer invalidate];
 }
 
@@ -258,6 +265,85 @@ NSString *SNDateText(NSDate *date) {
     [self say:status synced:moved];
     if (again) [self sync];
 }
+
+- (ODataSyncRemote *)serverRemote {
+    return _serviceRoot ? _engine.remotes.firstObject : nil;
+}
+
+#pragma mark written elsewhere
+
+/* On the saving context's thread: only another context of this store's,
+   and only for the notes' own entities (not the engine's bookkeeping). */
+- (void)storeDidSave:(NSNotification *)n {
+    NSManagedObjectContext *saved = n.object;
+    if (saved == _context || saved.persistentStoreCoordinator != _coordinator) return;
+    BOOL ours = NO;
+    for (NSString *key in @[ NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey ])
+        for (NSManagedObject *o in n.userInfo[key])
+            if ([@[ SNNoteEntity, SNFolderEntity, SNAttachmentEntity ] containsObject:o.entity.name]) ours = YES;
+    if (!ours) return;
+    /* Once for many saves close together. */
+    @synchronized (self) {
+        if (_changedElsewhere) return;
+        _changedElsewhere = YES;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self performSelector:@selector(showChangesMadeElsewhere) withObject:nil afterDelay:0.1];
+    });
+}
+
+- (void)showChangesMadeElsewhere {
+    @synchronized (self) {
+        _changedElsewhere = NO;
+    }
+    /* A sync of ours shows them when it finishes. */
+    if (_syncing) return;
+    for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
+    for (SNNoteEditor *e in _editors.allObjects) [e flush];
+    [self say:_status synced:YES];
+}
+
+#pragma mark syncing one remote
+
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote named:(NSString *)name {
+    if (_syncing) return NO;
+    [self prepareToSync];
+    _syncing = YES;
+    [self say:[NSString stringWithFormat:@"Syncing with %@…", name] synced:NO];
+    ODataSyncEngine *engine = _engine;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *error = nil;
+        BOOL ok = [engine syncWithRemote:remote error:&error];
+        ODataSyncResult *result = engine.lastResult;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self finishSync:ok result:result error:error];
+        });
+    });
+    return YES;
+}
+
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote andWait:(NSError **)error {
+    if (_syncing) return NO;
+    [self prepareToSync];
+    _syncing = YES;
+    __block NSError *failure = nil;
+    __block BOOL ok = NO;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    ODataSyncEngine *engine = _engine;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *e = nil;
+        ok = [engine syncWithRemote:remote error:&e];
+        failure = e;
+        dispatch_semaphore_signal(done);
+    });
+    while (dispatch_semaphore_wait(done, DISPATCH_TIME_NOW))
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    [self finishSync:ok result:_engine.lastResult error:failure];
+    if (error) *error = failure;
+    return ok;
+}
+
+#pragma mark syncing the server
 
 - (void)sync {
     if (!_serviceRoot) return;

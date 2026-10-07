@@ -35,6 +35,11 @@
 //                else Shared
 //   GiveUnownedTo  a user's subject: the rows no one owns (made while the
 //                notebook was shared) given to them, at start
+//   PeerKey      the file of the key peer tokens are signed with (default
+//                SimpleNotes-peer-key.json beside a SQLite store, else
+//                here; made the first time); None: no peer tokens. Issued
+//                once a sign-in is set: a user's devices nearby then sync
+//                with each other while offline
 
 #import <ODataService/ODataServer.h>
 #include <dlfcn.h>
@@ -49,7 +54,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"Notebooks", @"GiveUnownedTo" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -158,6 +163,9 @@ static NSURL *SNURL(id value) {
        them (they are ODataSync's kind). */
     NSString *notebooks = [c setting:@"Notebooks"];
     BOOL signIn = [c setting:@"TrustedUserHeader"] || [c setting:@"JWTIssuer"] || [c setting:@"IntrospectionEndpoint"];
+    NSString *peerKey = [c setting:@"PeerKey"];
+    BOOL peers = signIn && ![peerKey isEqual:@"None"];
+    if (peers) SNOfferPeerTokens(_service);
     if (notebooks ? [notebooks caseInsensitiveCompare:@"PerUser"] == NSOrderedSame : signIn) SNServeNotebookPerUser(_service);
     NSString *heir = [c setting:@"GiveUnownedTo"];
     if (heir.length) {
@@ -169,6 +177,17 @@ static NSURL *SNURL(id value) {
         NSLog(@"%lu rows no one owned given to %@", (unsigned long)given, heir);
     }
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    if (peers) {
+        NSURL *file = peerKey.length ? [NSURL fileURLWithPath:peerKey]
+            : [NSURL fileURLWithPath:@"SimpleNotes-peer-key.json"
+                       relativeToURL:url.isFileURL && SNTemporaryStore == nil ? url.URLByDeletingLastPathComponent : nil];
+        NSDictionary *key = SNPeerSigningKeyAt(file, &failure);
+        if (!key) {
+            if (error) *error = failure;
+            return NO;
+        }
+        SNIssuePeerTokens(_histories, key);
+    }
     return YES;
 }
 

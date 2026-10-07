@@ -38,13 +38,13 @@ SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServer
 ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
 endif
-SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
-	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNMigration.m
+SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
+	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNMigration.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS)
 SimpleNotes_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
-SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib Icons/SimpleNotes.png
+SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib AppKit/DevicesNearby.xib Icons/SimpleNotes.png
 # SNNote+CoreDataProperties, SNFolder+CoreDataProperties: generated from
 # the model as it builds (Codegen: Category/Extension), as Xcode does.
 SimpleNotes_COREDATA_CODEGEN = yes

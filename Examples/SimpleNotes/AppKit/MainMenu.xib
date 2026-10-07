@@ -442,6 +442,12 @@ CA
                                     <action selector="chooseServer:" target="SNa-pp-del" id="SNm-ac-502"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Devices Nearby…" id="SNm-mi-503">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="showDevicesNearby:" target="SNa-pp-del" id="SNm-ac-503"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

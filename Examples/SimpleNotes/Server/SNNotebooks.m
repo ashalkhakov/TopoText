@@ -58,3 +58,49 @@ NSUInteger SNGiveUnownedRows(NSPersistentStoreCoordinator *coordinator, NSString
     if (!ok && error) *error = failure;
     return ok ? given : 0;
 }
+
+NSDictionary *SNPeerSigningKeyAt(NSURL *file, NSError **error) {
+    NSData *data = [NSData dataWithContentsOfURL:file];
+    if (data) {
+        NSDictionary *kept = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+        if ([kept isKindOfClass:[NSDictionary class]] && [kept[@"kty"] isEqual:@"EC"] && [kept[@"d"] isKindOfClass:[NSString class]]) return kept;
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadCorruptFileError
+                                            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not a signing key (a P-256 JWK)", file.path] }];
+        return nil;
+    }
+    NSDictionary *made = HSGenerateSigningKey(error);
+    if (!made) return nil;
+    data = [NSJSONSerialization dataWithJSONObject:made options:0 error:error];
+    /* The server's user's alone, from the first byte. */
+    if (!data || ![[NSFileManager defaultManager] createFileAtPath:file.path contents:nil attributes:@{ NSFilePosixPermissions: @0600 }] ||
+        ![data writeToURL:file options:0 error:error])
+        return nil;
+    return made;
+}
+
+/* PeerToken, answered by the service's part of ODataSync once there is one. */
+@interface SNPeerTokenOperations : NSObject <ODataSyncPeerTokenActions>
+@property (nonatomic, weak) ODataSyncService *histories;
+@end
+
+@implementation SNPeerTokenOperations
+- (NSDictionary *)peerTokenWithReplica:(NSString *)replica thumbprint:(NSString *)thumbprint reply:(ODataReply *)reply {
+    ODataSyncService *histories = _histories;
+    if (!histories) {
+        [reply failWithError:[NSError errorWithDomain:NSCocoaErrorDomain code:NSFeatureUnsupportedError
+                                             userInfo:@{ NSLocalizedDescriptionKey: @"This service issues no peer tokens" }]];
+        return nil;
+    }
+    return [histories peerTokenWithReplica:replica thumbprint:thumbprint reply:reply];
+}
+@end
+
+void SNOfferPeerTokens(ODataService *service) {
+    service.serviceOperations = [[SNPeerTokenOperations alloc] init];
+}
+
+void SNIssuePeerTokens(ODataSyncService *histories, NSDictionary *signingKey) {
+    SNPeerTokenOperations *operations = histories.service.serviceOperations;
+    if ([operations isKindOfClass:[SNPeerTokenOperations class]]) operations.histories = histories;
+    histories.peerTokens = [[ODataSyncPeerTokenIssuer alloc] initWithIssuer:histories.service.serviceRoot.absoluteString signingKey:signingKey];
+}

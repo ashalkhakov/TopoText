@@ -3,6 +3,7 @@
 #import "SNWindowController.h"
 #import "SNSelfTest.h"
 #import "SNSyncPanel.h"
+#import "SNPeersWindow.h"
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 /* Whether where to keep the notes was chosen once (else Sync… opens). */
@@ -17,6 +18,11 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     /* The server's sign-in (its credentials, for each sync). */
     SNSignIn *_signIn;
     SNSyncPanel *_panel;
+    /* Devices nearby (nil: this computer has no identity for them). */
+    SNPeers *_peers;
+    NSError *_peersError;
+    NSURL *_store;
+    SNPeersWindow *_peersWindow;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
@@ -57,6 +63,10 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
         return;
     }
     [_notes sync];
+    _store = store;
+    /* Served again if it was; else made when Devices Nearby opens (its
+       identity is a key in the keychain: none made for nothing). */
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey] && [self makePeers]) [_peers startServing:NULL];
     /* The first time: where to keep the notes, chosen. */
     if (![[NSUserDefaults standardUserDefaults] boolForKey:SNSyncChosenDefaultsKey] && !root) [self chooseServer:nil];
 }
@@ -65,7 +75,36 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     return YES;
 }
 
+/* Its files beside the store's; a token asked for once there is a server
+   to ask. */
+- (SNPeers *)makePeers {
+    if (_peers) return _peers;
+    NSError *error = nil;
+    _peers = [[SNPeers alloc] initWithNotes:_notes directory:[_store.URLByDeletingLastPathComponent URLByAppendingPathComponent:@"Peers" isDirectory:YES]
+                                      error:&error];
+    _peersError = error;
+    [self fetchPeerTokenIfNeeded];
+    return _peers;
+}
+
+- (void)fetchPeerTokenIfNeeded {
+    if (_peers && _notes.serverRemote && !_peers.hasToken) [_peers fetchToken];
+}
+
+- (IBAction)showDevicesNearby:(id)sender {
+    if (![self makePeers]) {
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = @"Devices nearby cannot be synced with.";
+        alert.informativeText = _peersError.localizedDescription ?: @"";
+        [alert runModal];
+        return;
+    }
+    if (!_peersWindow) _peersWindow = [[SNPeersWindow alloc] initWithPeers:_peers];
+    [_peersWindow showWindow:nil];
+}
+
 - (void)applicationWillTerminate:(NSNotification *)n {
+    [_peers stop];
     [_window closeEditor];
     [_notes saveAll];
 }
@@ -96,6 +135,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     _notes.configuration = signIn ? signIn.configuration : nil;
     _notes.serviceRoot = root;
     [_notes sync];
+    [self fetchPeerTokenIfNeeded];
 }
 
 @end
