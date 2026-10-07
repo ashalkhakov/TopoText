@@ -1,11 +1,17 @@
-// The table grid's cells on UIKit: UITextViews; Tab (a hardware keyboard's)
-// to the next, a bar over the keyboard with the table's actions and Next
-// Cell, a cell's edit menu with them too. The actions are UICommands, sent
-// up the responder chain: the cell typed in, then its grid.
+// The table grid's cells on UIKit: UITextViews; Tab to the next and, on a
+// hardware keyboard, Shift-Tab to the one before; a bar over the keyboard
+// with the table's actions and Next Cell, a cell's edit menu with them too.
+// The actions are UICommands, sent up the responder chain: the cell typed
+// in, then its grid. A link tapped in a cell is followed as one in the note.
 
 #import "SNTableGrid+System.h"
 
-@interface SNTableGrid (UIKit) <UITextViewDelegate>
+@interface SNTableGrid (UIKit) <UITextViewDelegate, UIGestureRecognizerDelegate>
+@end
+
+/* Whoever opens links (the note's editor, SNEditorViewController). */
+@protocol SNLinkOpening <NSObject>
+- (void)openLink:(NSURL *)url;
 @end
 
 @implementation SNTableGrid (System)
@@ -65,6 +71,11 @@
     tv.textColor = SNSystemTextColor();
     tv.textContainerInset = UIEdgeInsetsMake(6, 4, 6, 4);
     tv.inputAccessoryView = [self makeBar];
+    /* A link tapped: an editable text view only puts the insertion point
+       there. */
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tappedLink:)];
+    tap.delegate = self;
+    [tv addGestureRecognizer:tap];
     tv.delegate = self;
     return tv;
 }
@@ -100,6 +111,70 @@
                 [self moveFrom:tv by:1];
                 return;
             }
+}
+
+- (void)previousCell:(id)sender {
+    for (NSArray *row in _cells)
+        for (UITextView *tv in row)
+            if (tv.isFirstResponder) {
+                [self moveFrom:tv by:-1];
+                return;
+            }
+}
+
+/* A hardware keyboard's Tab and Shift-Tab, the grid's (up the responder
+   chain from the cell), before the system's moving of focus. */
+- (NSArray<UIKeyCommand *> *)keyCommands {
+    UIKeyCommand *next = [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:0 action:@selector(nextCell:)];
+    UIKeyCommand *back = [UIKeyCommand keyCommandWithInput:@"\t" modifierFlags:UIKeyModifierShift action:@selector(previousCell:)];
+    next.wantsPriorityOverSystemBehavior = YES;
+    back.wantsPriorityOverSystemBehavior = YES;
+    return @[ next, back ];
+}
+
+#pragma mark links
+
+/* The link under a point of a cell (nil: none): a given one or one found. */
+- (NSURL *)linkInCell:(UITextView *)cell atPoint:(CGPoint)point {
+    /* The character under the point: the one before or after the nearest
+       insertion point whose box holds it (TextKit 2's -characterRangeAtPoint:
+       answers the line's first). */
+    UITextPosition *near = [cell closestPositionToPoint:point];
+    if (!near) return nil;
+    NSInteger at = [cell offsetFromPosition:cell.beginningOfDocument toPosition:near];
+    NSUInteger length = cell.textStorage.length;
+    for (NSInteger i = at - 1; i <= at; i++) {
+        if (i < 0 || (NSUInteger)i >= length) continue;
+        UITextPosition *from = [cell positionFromPosition:cell.beginningOfDocument offset:i];
+        UITextRange *one = [cell textRangeFromPosition:from toPosition:[cell positionFromPosition:from offset:1]];
+        if (!one || !CGRectContainsPoint([cell firstRectForRange:one], point)) continue;
+        id link = [cell.textStorage attribute:NSLinkAttributeName atIndex:(NSUInteger)i effectiveRange:NULL];
+        return [link isKindOfClass:[NSURL class]] ? link : nil;
+    }
+    return nil;
+}
+
+/* Only a tap on a link: the cell has the others. */
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    if (![g isKindOfClass:[UITapGestureRecognizer class]] || ![g.view isKindOfClass:[UITextView class]]) return YES;
+    UITextView *cell = (UITextView *)g.view;
+    return [self linkInCell:cell atPoint:[g locationInView:cell]] != nil;
+}
+
+- (void)tappedLink:(UITapGestureRecognizer *)g {
+    UITextView *cell = (UITextView *)g.view;
+    NSURL *url = [self linkInCell:cell atPoint:[g locationInView:cell]];
+    if (url) [self followLink:url];
+}
+
+/* As one in the note: by whoever opens links up the responder chain (the
+   note's editor). */
+- (void)followLink:(NSURL *)url {
+    for (UIResponder *r = self.nextResponder; r; r = r.nextResponder)
+        if ([r respondsToSelector:@selector(openLink:)]) {
+            [(id<SNLinkOpening>)r openLink:url];
+            return;
+        }
 }
 
 - (void)endTyping:(id)sender {

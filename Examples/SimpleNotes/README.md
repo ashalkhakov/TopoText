@@ -122,15 +122,17 @@ deletes its attachments.
 button) puts a two-by-two table in the note, and you type into its first
 cell. Tables are edited where they are in the note, as in Apple Notes:
 
-- **Tab** goes to the next cell (Shift-Tab, the one before). Tab in the
-  last cell adds a row. Return starts a new line in the cell.
+- **Tab** goes to the next cell (Shift-Tab, the one before; on iOS, with a
+  hardware keyboard, or the bar's Next Cell button). Tab in the last cell
+  adds a row. Return starts a new line in the cell.
 - **Add Row Above/Below, Add Column Before/After, Delete Row, Delete
   Column** are in Format > Table and in a cell's context menu. On iOS
   they're on the table button in the bar over the keyboard, and in a cell's
   edit menu.
 - **Bold, italic, underline, strikethrough and links** work in a cell as in
   the note: from the Format menu and its shortcuts, or on iOS from the
-  format button in the bar over the keyboard. Styles and lists don't, as in
+  format button in the bar over the keyboard. A link in a cell opens as one
+  in the note does, by a click or a tap. Styles and lists don't, as in
   Apple Notes. Each cell has a text binding of its own (`SNTextBinding`,
   over the cell's TopoText).
 

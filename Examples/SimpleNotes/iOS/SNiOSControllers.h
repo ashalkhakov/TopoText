@@ -48,6 +48,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 @property (nonatomic, strong) IBOutlet UIBarButtonItem *listItem;
 @property (nonatomic, strong) IBOutlet UIBarButtonItem *attachItem;
 - (IBAction)hideKeyboard:(nullable id)sender;
+// A link followed: a note's opened here, any other in its own application
+// (one tapped in a table's cell too, up the responder chain).
+- (void)openLink:(NSURL *)url;
 - (IBAction)bold:(nullable id)sender;
 - (IBAction)italic:(nullable id)sender;
 - (IBAction)underline:(nullable id)sender;

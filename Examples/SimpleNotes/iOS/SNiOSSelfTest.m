@@ -2,8 +2,15 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
+#import "SNModel.h"
 
 NSURL *SNSelfTestRoot;
+
+/* The grid's links, UIKit's (iOS/SNTableGrid+System.m). */
+@interface SNTableGrid (SNSelfTestLinks)
+- (nullable NSURL *)linkInCell:(UITextView *)cell atPoint:(CGPoint)point;
+- (void)followLink:(NSURL *)url;
+@end
 
 static int SNFailed;
 
@@ -147,6 +154,29 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         [[UIApplication sharedApplication] sendAction:@selector(bold:) to:nil from:nil forEvent:nil];
         SNSay([[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
               @"Bold in a cell: the cell's text bold");
+        /* A hardware keyboard's Shift-Tab: the cell before. */
+        [[grid textViewAtRow:1 column:1] becomeFirstResponder];
+        BOOL hasBack = NO;
+        for (UIKeyCommand *k in grid.keyCommands)
+            if ([k.input isEqualToString:@"\t"] && k.modifierFlags == UIKeyModifierShift) hasBack = YES;
+        [[UIApplication sharedApplication] sendAction:@selector(previousCell:) to:nil from:nil forEvent:nil];
+        SNSay(hasBack && [grid textViewAtRow:1 column:0].isFirstResponder, @"Shift-Tab: the cell before");
+        /* A link in a cell, tapped: a note's opened, as one in the note. */
+        UITextView *grandma = [grid textViewAtRow:1 column:0];
+        NSURL *toGroceries = SNLinkToNote(groceries.id);
+        [[grid bindingOfCell:grandma] setLink:toGroceries.absoluteString inRange:NSMakeRange(0, 7)];
+        UITextPosition *start = grandma.beginningOfDocument;
+        CGRect gr = [grandma firstRectForRange:[grandma textRangeFromPosition:start toPosition:[grandma positionFromPosition:start offset:3]]];
+        NSURL *tapped = [grid linkInCell:grandma atPoint:CGPointMake(CGRectGetMidX(gr), CGRectGetMidY(gr))];
+        SNSay([tapped isEqual:toGroceries] && [grid linkInCell:grandma atPoint:CGPointMake(grandma.bounds.size.width - 4, CGRectGetMidY(gr))] == nil,
+              [NSString stringWithFormat:@"a link in a cell, under a tap there and not beside it (%@)", tapped]);
+        if (tapped) [grid followLink:tapped];
+        SNWait(0.5, ^BOOL { return NO; });
+        UIViewController *opened = navigation.topViewController;
+        SNSay(opened != we && [opened isKindOfClass:[SNEditorViewController class]] &&
+              [((SNEditorViewController *)opened).textView.text hasPrefix:@"Groceries"], @"followed: the note opened");
+        if (opened != we) [navigation popViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
         NSLayoutManager *tlm = wtv.layoutManager;
         CGRect room = [tlm boundingRectForGlyphRange:[tlm glyphRangeForCharacterRange:NSMakeRange(wtv.text.length - 1, 1) actualCharacterRange:NULL]
                                      inTextContainer:wtv.textContainer];
