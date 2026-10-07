@@ -116,6 +116,15 @@ A note's text can reach a device before its attachment does. Until the
 attachment arrives, a grey box takes its place. Deleting a note for good
 deletes its attachments.
 
+## Files
+
+Any other file (a PDF, a document, a recording) goes in the same way:
+**File > Attach File…**, paste, or drop it; on iOS, **Attach File** under
+the paperclip. It shows as a card with the file's icon, name, kind and
+size. Double-click the card to open the file in its own application; on
+iOS, tap it to see it in Quick Look. A file syncs whole with the note, so
+it can be no larger than 25 MB.
+
 ## Tables
 
 **Format > Table > Insert Table** (⌥⌘T; on iOS, the format bar's table
@@ -174,23 +183,46 @@ Today, Yesterday, Previous 7 Days, Previous 30 Days, then each month of this
 year, then each earlier year. Sorted by title, a list has just Pinned and
 Notes. The choice is the device's own (user defaults), as in Apple Notes.
 
+**View > Sort Folder By** (on iOS, the same menu in a folder) gives the
+folder shown an order of its own. That order belongs to the folder, so it
+syncs with it. **Default** goes back to the device's order.
+
+## Smart folders
+
+A smart folder lists the notes that match its rules, from any folder, as
+in Apple Notes. **File > New Smart Folder…** (⌥⇧⌘N; on iOS, **New Smart
+Folder** in the folder list's + menu) asks for its name and rules:
+
+- **Tags:** all of them, or any.
+- **Edited** or **Created** within a day, 7, 30 or 90 days, or a year.
+- **Checklists:** any, ticked items, or items not ticked.
+- **With attachments**, **Pinned**.
+
+A note is included when it matches all of the rules, or any of them, as
+you choose. Nothing is moved into a smart folder, and a note made in one is
+made in no folder. **Edit Smart Folder…** (on iOS, swipe it and choose
+**Edit**) changes its rules. It shows a gear before its name. Its rules are
+kept in the folder (`Folder.filter`, as JSON), so they sync with it.
+
 ## Model versions
 
 `SimpleNotes.xcdatamodeld` holds every version of the model:
 
 - **Version 2** added `Note.deletedAt` (Recently Deleted).
-- **Version 4** added `Attachment` (images and tables in notes).
 - **Version 3** added `Folder.parent` (folders in folders). It also renamed
   `Note.updated` to `edited`, with Renaming ID `updated` so migration keeps
   the dates. On Apple's Core Data, `updated` is `NSManagedObject`'s own
   (`-isUpdated`), and key-value coding gets that rather than the attribute.
   Syncing goes through key-value coding, so on macOS and iOS a note's edit
   date never reached the server.
+- **Version 4** added `Attachment` (images and tables in notes).
+- **Version 5** added `Folder.filter` (smart folders), `Folder.sortOrder`
+  (a folder's own order) and `Attachment.name` (files).
 
 To add a version:
 
 1. Add a version in Xcode (or copy the latest `.xcdatamodel` and name it
-   `SimpleNotes 4.xcdatamodel`), and give it the next
+   `SimpleNotes 6.xcdatamodel`), and give it the next
    `userDefinedModelVersionIdentifier`.
 2. Make it current in `.xccurrentversion`.
 3. Run `Scripts/xcodeproj.py`.
@@ -447,6 +479,5 @@ stays where the item was.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Files other than images, smart
-  folders, a sort order per folder, and undo across a merge (the undo stack
-  is cleared when a sync changes the open note).
+- Undo across a merge: the undo stack is cleared when a sync changes the
+  open note.

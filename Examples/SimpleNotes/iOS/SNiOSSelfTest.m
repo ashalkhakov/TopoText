@@ -224,6 +224,29 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([[other tableOfAttachment:[other attachmentWithID:tableThere]].strings isEqual:cells], @"and the table");
         SNSay([[[[other tableOfAttachment:[other attachmentWithID:tableThere]] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
               @"its cell's bold too");
+        /* A file: a card in a note, shown by Quick Look. */
+        SNEditorViewController *ge = [[SNEditorViewController alloc] initWithNotes:notes note:groceries];
+        [navigation pushViewController:ge animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        UITextView *gtv = ge.textView;
+        [gtv becomeFirstResponder];
+        gtv.selectedRange = NSMakeRange(gtv.text.length, 0);
+        if ([ge textView:gtv shouldChangeTextInRange:gtv.selectedRange replacementText:@"\n"]) [gtv insertText:@"\n"];
+        NSData *pdf = [@"%PDF-1.4 a lease" dataUsingEncoding:NSUTF8StringEncoding];
+        SNSay([ge insertFileData:pdf name:@"Lease.pdf"], @"a file attached");
+        NSString *fileID = [gtv.textStorage attribute:SNAttachmentAttributeName atIndex:gtv.text.length - 1 effectiveRange:NULL];
+        NSTextAttachment *card = [gtv.textStorage attribute:NSAttachmentAttributeName atIndex:gtv.text.length - 1 effectiveRange:NULL];
+        SNSay([[notes attachmentWithID:fileID].kind isEqual:SNAttachmentKindFile] && card.bounds.size.height > 40, @"shown as a card");
+        [gtv resignFirstResponder];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay([ge previewFileOfAttachment:fileID], @"written out for Quick Look");
+        SNWait(3, ^BOOL { return [navigation.presentedViewController isKindOfClass:[QLPreviewController class]]; });
+        SNSay([navigation.presentedViewController isKindOfClass:[QLPreviewController class]],
+              [NSString stringWithFormat:@"Quick Look up (%@)", navigation.presentedViewController]);
+        [navigation dismissViewControllerAnimated:NO completion:nil];
+        SNWait(0.5, ^BOOL { return NO; });
+        [navigation popViewControllerAnimated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];
@@ -240,6 +263,28 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
               [NSString stringWithFormat:@"Projects under Work (%@)", [folders componentsJoinedByString:@", "]]);
         SNSay([ft numberOfRowsInSection:3] == 3, @"the tags listed");
+        /* A smart folder from its form: every note tagged #work. */
+        SNSmartFilter *workTagged = [[SNSmartFilter alloc] init];
+        workTagged.tags = @[ @"work" ];
+        SNSmartFolderViewController *form = [(SNFoldersViewController *)root smartFolderEditorFor:nil];
+        form.name = @"Work Things";
+        form.filter = workTagged;
+        [form loadViewIfNeeded];
+        [form done:nil];
+        [root viewWillAppear:NO];
+        UIListContentConfiguration *smartRow = nil;
+        for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
+            UIListContentConfiguration *c = (UIListContentConfiguration *)[root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]].contentConfiguration;
+            if ([c.text isEqual:@"Work Things"]) smartRow = c;
+        }
+        SNSay(smartRow && [smartRow.secondaryText isEqual:@"2"] && [smartRow.image isEqual:[UIImage systemImageNamed:@"gearshape"]],
+              [NSString stringWithFormat:@"a smart folder from its form, its notes counted (%@)", smartRow.secondaryText]);
+        SNFolder *work = nil;
+        for (SNFolder *f in notes.folders) if ([f.name isEqual:@"Work"]) work = f;
+        SNNotesViewController *workList = [[SNNotesViewController alloc] initWithNotes:notes folder:work];
+        [workList loadViewIfNeeded];
+        [workList sortFolderByTitle:nil];
+        SNSay([[notes sortOrderOfFolder:work] isEqual:@(SNSortByTitle)], @"Sort Folder By Title");
         const char *folderShot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (folderShot) SNSnapshot(navigation.view.window, [[@(folderShot) stringByDeletingPathExtension] stringByAppendingString:@"-folders.png"]);
         SNNotesViewController *tagged = [[SNNotesViewController alloc] initWithNotes:notes tag:@"work"];

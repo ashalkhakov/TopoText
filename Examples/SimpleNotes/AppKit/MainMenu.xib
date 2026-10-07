@@ -3,7 +3,6 @@
     <dependencies>
         <deployment identifier="macosx"/>
         <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24127"/>
-        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="NSApplication">
@@ -111,7 +110,9 @@
                                 </connections>
                             </menuItem>
                             <menuItem title="Delete Note" id="SNm-mi-206">
-                                <string key="keyEquivalent" base64-UTF8="YES">CA</string>
+                                <string key="keyEquivalent" base64-UTF8="YES">
+CA
+</string>
                                 <connections>
                                     <action selector="deleteNote:" target="-1" id="SNm-ac-206"/>
                                 </connections>
@@ -305,7 +306,6 @@
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-902"/>
                             <menuItem title="Add Link…" keyEquivalent="k" id="SNm-mi-903">
-                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
                                 <connections>
                                     <action selector="addLink:" target="-1" id="SNm-ac-903"/>
                                 </connections>
@@ -463,6 +463,7 @@
                     </menu>
                 </menuItem>
             </items>
+            <point key="canvasLocation" x="141" y="154"/>
         </menu>
     </objects>
 </document>

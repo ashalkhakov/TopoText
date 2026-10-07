@@ -161,6 +161,10 @@
 			isa = PBXBuildFile;
 			fileRef = F6D896F11584BB5C77EEEA7A;
 		};
+		57C340E00E089F2758BECFEA /* SNSmartFolderViewController.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 054A76FC40094ADDD3CBC934;
+		};
 		5B455969B2358702B11C8D4F /* SNTextSystem.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = DB05A5F09546462524E26DCA;
@@ -728,6 +732,20 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		054A76FC40094ADDD3CBC934 /* SNSmartFolderViewController.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNSmartFolderViewController.m;
+			sourceTree = "<group>";
+			name = SNSmartFolderViewController.m;
+		};
+		0892E92D83242A6457DEFF1A /* SNSmartFolderViewController.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/SNSmartFolderViewController.h;
+			sourceTree = "<group>";
+			name = SNSmartFolderViewController.h;
+		};
 		09281A270847AF0DFF05CBD1 /* SNNote.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1372,6 +1390,8 @@
 				FE6690DC46D2B8C234FD7525,
 				9830E7D38501D4B632E0C8F2,
 				6E9D5B559DEB6B7E294A4AB3,
+				0892E92D83242A6457DEFF1A,
+				054A76FC40094ADDD3CBC934,
 				CCF418C8E3E8B505943CEE74,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
@@ -1624,6 +1644,7 @@
 				D5C2667A85764D80A464DAFB,
 				7A872943A4DF7167C961B66A,
 				72A18D153A49CB051B239C79,
+				57C340E00E089F2758BECFEA,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,
 				37DFBF31EE8E129D11C4F1E0,

@@ -79,8 +79,15 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"]
-                                                                              style:UIBarButtonItemStylePlain target:self action:@selector(newFolder:)];
+    /* A folder, or a smart folder (as Apple Notes' New Folder menu). */
+    UIMenu *add = [UIMenu menuWithTitle:@"" children:@[
+        [UIAction actionWithTitle:@"New Folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *a) {
+            [self newFolder:nil];
+        }],
+        [UIAction actionWithTitle:@"New Smart Folder" image:[UIImage systemImageNamed:@"gearshape"] identifier:nil handler:^(UIAction *a) {
+            [self newSmartFolder:nil];
+        }] ]];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"]
                                                                              style:UIBarButtonItemStylePlain target:self action:@selector(server:)];
     SNAddRefresh(self, @selector(refresh:));
@@ -118,6 +125,36 @@ static NSString *SNDaysLeftText(SNNote *note) {
     SNAsk(self, @"New Folder", @"Its name:", @"New Folder", ^(NSString *name) {
         if (name.length) [self->_notes addFolderNamed:name];
     });
+}
+
+- (SNSmartFolderViewController *)smartFolderEditorFor:(SNFolder *)folder {
+    SNSmartFilter *filter = folder ? [_notes filterOfFolder:folder] : [[SNSmartFilter alloc] init];
+    SNSmartFolderViewController *editor = [[SNSmartFolderViewController alloc] initWithName:folder.name ?: @"Smart Folder"
+                                                                                      filter:filter ?: [[SNSmartFilter alloc] init]];
+    editor.folder = folder;
+    editor.delegate = self;
+    return editor;
+}
+
+- (void)newSmartFolder:(id)sender {
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[self smartFolderEditorFor:nil]];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)smartFolderViewControllerDidFinish:(SNSmartFolderViewController *)editor {
+    SNFolder *f = editor.folder;
+    if (f) {
+        [_notes renameFolder:f to:editor.name];
+        [_notes setFilter:editor.filter ofFolder:f];
+    } else {
+        [_notes addSmartFolderNamed:editor.name filter:editor.filter inFolder:nil];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+    [self reload];
+}
+
+- (void)smartFolderViewControllerDidCancel:(SNSmartFolderViewController *)editor {
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)server:(id)sender {
@@ -175,7 +212,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     } else {
         SNFolder *f = ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil;
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
-        c.image = [UIImage systemImageNamed:f ? @"folder" : @"tray.full"];
+        c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
         count = [_notes countOfNotesInFolder:f];
         depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
     }
@@ -202,7 +239,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self->_notes moveFolder:folder toFolder:nil];
     }]];
     for (SNFolder *f in _notes.folderTree) {
-        if (f == folder || [_notes folder:f isInFolder:folder]) continue;
+        if (f == folder || [_notes folder:f isInFolder:folder] || [_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
         [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
                                                   style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
@@ -220,7 +257,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     SNFolder *f = _folders[(NSUInteger)ip.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            NSString *what = [self->_notes foldersInFolder:f].count
+            NSString *what = [self->_notes isSmartFolder:f] ? @"Its notes stay where they are." : [self->_notes foldersInFolder:f].count
                 ? @"The folders in it are deleted too. Their notes go to Recently Deleted, where they can be recovered for 30 days."
                 : @"Its notes go to Recently Deleted, where they can be recovered for 30 days.";
             SNConfirm(self, [NSString stringWithFormat:@"Delete “%@”?", f.name ?: @""], what, @"Delete", ^{
@@ -228,11 +265,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
             });
             done(YES);
         }];
-    UIContextualAction *rename = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Rename"
+    BOOL smart = [_notes isSmartFolder:f];
+    UIContextualAction *rename = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:smart ? @"Edit" : @"Rename"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            SNAsk(self, @"Rename Folder", nil, f.name ?: @"", ^(NSString *name) {
-                if (name.length) [self->_notes renameFolder:f to:name];
-            });
+            if (smart) {
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[self smartFolderEditorFor:f]];
+                [self presentViewController:nav animated:YES completion:nil];
+            } else {
+                SNAsk(self, @"Rename Folder", nil, f.name ?: @"", ^(NSString *name) {
+                    if (name.length) [self->_notes renameFolder:f to:name];
+                });
+            }
             done(YES);
         }];
     UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Move"
@@ -318,7 +361,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         _groups = deleted.count ? @[ [[SNNoteGroup alloc] initWithTitle:nil notes:deleted] ] : @[];
         self.navigationItem.rightBarButtonItem.enabled = deleted.count > 0;
     } else {
-        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]];
+        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]
+                               sortedBy:[_notes sortOrderForFolder:_tag ? nil : _folder]];
         self.navigationItem.rightBarButtonItems.lastObject.menu = [self viewMenu];
     }
     [self.tableView reloadData];
@@ -335,7 +379,15 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortByDateEdited:) on:order == SNSortByDateEdited],
         [self sortCommand:@"Date Created" action:@selector(sortByDateCreated:) on:order == SNSortByDateCreated],
         [self sortCommand:@"Title" action:@selector(sortByTitle:) on:order == SNSortByTitle] ]];
-    return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    /* The folder's own order, synced with it (Default: the device's). */
+    NSNumber *own = [_notes sortOrderOfFolder:_folder];
+    UIMenu *folderBy = [UIMenu menuWithTitle:@"Sort Folder By" image:[UIImage systemImageNamed:@"folder"] identifier:nil options:0 children:@[
+        [self sortCommand:@"Default" action:@selector(sortFolderByDefault:) on:!own],
+        [self sortCommand:@"Date Edited" action:@selector(sortFolderByDateEdited:) on:[own isEqual:@(SNSortByDateEdited)]],
+        [self sortCommand:@"Date Created" action:@selector(sortFolderByDateCreated:) on:[own isEqual:@(SNSortByDateCreated)]],
+        [self sortCommand:@"Title" action:@selector(sortFolderByTitle:) on:[own isEqual:@(SNSortByTitle)]] ]];
+    return [UIMenu menuWithTitle:@"" children:@[ folderBy, sortBy, group ]];
 }
 
 - (UICommand *)sortCommand:(NSString *)title action:(SEL)action on:(BOOL)on {
@@ -357,6 +409,10 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)sortByDateCreated:(id)sender { _notes.sortOrder = SNSortByDateCreated; }
 - (IBAction)sortByTitle:(id)sender { _notes.sortOrder = SNSortByTitle; }
 - (IBAction)toggleGroupByDate:(id)sender { _notes.groupsByDate = !_notes.groupsByDate; }
+- (IBAction)sortFolderByDefault:(id)sender { if (_folder) [_notes setSortOrder:nil ofFolder:_folder]; }
+- (IBAction)sortFolderByDateEdited:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByDateEdited) ofFolder:_folder]; }
+- (IBAction)sortFolderByDateCreated:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByDateCreated) ofFolder:_folder]; }
+- (IBAction)sortFolderByTitle:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByTitle) ofFolder:_folder]; }
 
 - (SNNote *)noteAt:(NSIndexPath *)ip {
     return _groups[(NSUInteger)ip.section].notes[(NSUInteger)ip.row];
@@ -393,6 +449,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self->_notes moveNote:note toFolder:nil];
     }]];
     for (SNFolder *f in _notes.folderTree) {
+        if ([_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
         [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
                                                   style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {

@@ -7,14 +7,17 @@
 #import "SNNotes.h"
 #import <PhotosUI/PhotosUI.h>
 #import <QuickLook/QuickLook.h>
+#import "SNSmartFolderViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
+// The smart folder form, for a new one (folder nil) or one to edit.
+- (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;
 @end
 
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>
@@ -27,6 +30,11 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)sortByDateCreated:(nullable id)sender;
 - (IBAction)sortByTitle:(nullable id)sender;
 - (IBAction)toggleGroupByDate:(nullable id)sender;
+// Sort Folder By: the folder shown, its own order (Default: the device's).
+- (IBAction)sortFolderByDefault:(nullable id)sender;
+- (IBAction)sortFolderByDateEdited:(nullable id)sender;
+- (IBAction)sortFolderByDateCreated:(nullable id)sender;
+- (IBAction)sortFolderByTitle:(nullable id)sender;
 // The groups listed: their headings and notes' titles, as in shownRows.
 - (NSArray<NSString *> *)shownRows;
 // Recently Deleted: recovered, or deleted for good, from here.

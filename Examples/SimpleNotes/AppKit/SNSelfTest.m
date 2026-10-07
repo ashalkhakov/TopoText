@@ -3,6 +3,7 @@
 #import "SNModel.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
+#import "SNSmartFolderPanel.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -247,6 +248,10 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [[window shownRows] containsObject:@"Standup notes"] && [[window shownRows] containsObject:@"Ideas"] &&
               ![[window shownRows] containsObject:@"Weekend"],
               [NSString stringWithFormat:@"a smart folder lists the notes its rules take (%@)", [[window shownRows] componentsJoinedByString:@" | "]]);
+        /* Its panel (SmartFolderPanel.xib) loads, and shows the rules. */
+        SNSmartFolderPanel *panel = [[SNSmartFolderPanel alloc] initWithName:@"Work Things" filter:workTagged];
+        SNSay(panel.window && panel.nameField && panel.tagsField && panel.editedPopUp.numberOfItems == 6 &&
+              panel.checklistsPopUp.numberOfItems == 4 && panel.pinnedBox, @"the smart folder panel loads");
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
         SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
         [notes sync];
