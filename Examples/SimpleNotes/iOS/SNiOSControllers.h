@@ -18,6 +18,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>
 // A folder's notes (nil: all of them).
 - (instancetype)initWithNotes:(SNNotes *)notes folder:(nullable SNFolder *)folder;
+// Recently Deleted: recovered, or deleted for good, from here.
+- (instancetype)initRecentlyDeletedWithNotes:(SNNotes *)notes;
 @end
 
 // SNEditorViewController.xib: the text view, and the format bar.
@@ -33,6 +35,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)title:(nullable id)sender;
 - (IBAction)heading:(nullable id)sender;
 - (IBAction)body:(nullable id)sender;
+// A note in Recently Deleted, recovered (the button over it).
+- (IBAction)recover:(nullable id)sender;
 @end
 
 NS_ASSUME_NONNULL_END

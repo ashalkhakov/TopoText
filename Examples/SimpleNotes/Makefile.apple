@@ -20,8 +20,10 @@ LIBS = -L$(TOPOTEXT_BUILD) -lTopoTextSync -lTopoText -Wl,-rpath,$(TOPOTEXT_BUILD
 	-framework OTelKit -framework ODataKit -framework CoreData -framework Foundation
 # The model's classes' properties, generated as Xcode generates them.
 GENERATED = $(BUILD)/Generated
-MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m \
+MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNMigration.m \
 	$(GENERATED)/SNNote+CoreDataProperties.m $(GENERATED)/SNFolder+CoreDataProperties.m
+# The model's files, spaces escaped: Xcode names a version "SimpleNotes 2".
+MODEL_FILES := $(shell find SimpleNotes.xcdatamodeld -type f | sed 's/ /\\ /g')
 SHARED = $(MODEL) Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m
 DEVELOPER := $(shell xcode-select -p)
 XCTEST_FRAMEWORKS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/Library/Frameworks
@@ -34,11 +36,11 @@ libraries:
 	@test -n "$(ODATAKIT_FRAMEWORKS)" || { echo "no ODataKit frameworks: make odatakit at the root"; exit 1; }
 	$(MAKE) -C $(ROOT) -f Makefile.apple
 
-$(BUILD)/SimpleNotes.momd: $(wildcard SimpleNotes.xcdatamodeld/*/*)
+$(BUILD)/SimpleNotes.momd: $(MODEL_FILES)
 	@mkdir -p $(BUILD)
 	rm -rf $@ && xcrun momc SimpleNotes.xcdatamodeld $(abspath $@) >/dev/null
 
-$(GENERATED)/SNNote+CoreDataProperties.m $(GENERATED)/SNFolder+CoreDataProperties.m: $(wildcard SimpleNotes.xcdatamodeld/*/*)
+$(GENERATED)/SNNote+CoreDataProperties.m $(GENERATED)/SNFolder+CoreDataProperties.m: $(MODEL_FILES)
 	rm -rf $(GENERATED) && mkdir -p $(GENERATED)
 	xcrun momc --action generate SimpleNotes.xcdatamodeld $(abspath $(GENERATED)) >/dev/null
 
@@ -49,11 +51,11 @@ $(BUILD)/simplenotes-server: Server/SNServer.m $(MODEL) libraries
 $(BUILD)/sn-check: Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNResolver.m libraries
 	$(CC) $(FLAGS) $(INC) Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNResolver.m $(LIBS) -o $@
 
-$(BUILD)/SimpleNotesTests.xctest: Tests/SNNotesTests.m Tests/SNTextBindingTests.m $(SHARED) $(BUILD)/SimpleNotes.momd libraries
+$(BUILD)/SimpleNotesTests.xctest: Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m $(SHARED) $(BUILD)/SimpleNotes.momd libraries
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources
 	rm -rf $@/Contents/Resources/SimpleNotes.momd && cp -R $(BUILD)/SimpleNotes.momd $@/Contents/Resources/
 	printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>SimpleNotesTests</string><key>CFBundleIdentifier</key><string>io.github.ashalkhakov.SimpleNotesTests</string><key>CFBundlePackageType</key><string>BNDL</string></dict></plist>\n' > $@/Contents/Info.plist
-	$(CC) $(FLAGS) $(INC) -bundle Tests/SNNotesTests.m Tests/SNTextBindingTests.m $(SHARED) $(LIBS) -framework AppKit \
+	$(CC) $(FLAGS) $(INC) -bundle Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m $(SHARED) $(LIBS) -framework AppKit \
 	  -F$(XCTEST_FRAMEWORKS) -framework XCTest -Wl,-rpath,$(XCTEST_FRAMEWORKS) -Wl,-rpath,$(XCTEST_LIBS) \
 	  -o $@/Contents/MacOS/SimpleNotesTests
 

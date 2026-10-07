@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		029C0375BBB48CBAAD4B77F8 /* SNMigration.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 5E12708819DD87E9D16589AF;
+		};
 		095BECCD974EC50D623BA7B9 /* TextPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3BD4E32C20887A161DAC86F3;
@@ -235,6 +239,10 @@
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
 		};
+		AC28625FEB238C24115CFE5A /* SNMigration.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 5E12708819DD87E9D16589AF;
+		};
 		AD87D96E34F8E4D3571ECBC0 /* SNCheck.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 848C622D1A0C34A6F10D548E;
@@ -328,6 +336,10 @@
 					RemoveHeadersOnCopy,
 				);
 			};
+		};
+		D90D2FE1CB02EF0327E26267 /* SNMigration.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 5E12708819DD87E9D16589AF;
 		};
 		DA4BE8F58CFE299DB944A8A1 /* ODataService.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
@@ -761,6 +773,12 @@
 			sourceTree = "<group>";
 			name = SNModel.m;
 		};
+		3BBC93E5156C8D3EC4A97323 /* SimpleNotes.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = SimpleNotes.xcdatamodel;
+			sourceTree = "<group>";
+		};
 		3BD4E32C20887A161DAC86F3 /* TextPanel.xib */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = file.xib;
@@ -768,18 +786,19 @@
 			sourceTree = "<group>";
 			name = TextPanel.xib;
 		};
+		47029EC1BB7F394FB43D846A /* SNMigration.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNMigration.h;
+			sourceTree = "<group>";
+			name = SNMigration.h;
+		};
 		4BE397C044903B570E6795E6 /* SNRichText.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
 			path = Shared/SNRichText.m;
 			sourceTree = "<group>";
 			name = SNRichText.m;
-		};
-		502CCF66908D5F362B4DDC5C /* SimpleNotes.xcdatamodel */ = {
-			isa = PBXFileReference;
-			lastKnownFileType = wrapper.xcdatamodel;
-			path = SimpleNotes.xcdatamodel;
-			sourceTree = "<group>";
 		};
 		575D635025FF7766A4A183D2 /* Info.plist */ = {
 			isa = PBXFileReference;
@@ -794,6 +813,13 @@
 			path = Shared/SNModel.h;
 			sourceTree = "<group>";
 			name = SNModel.h;
+		};
+		5E12708819DD87E9D16589AF /* SNMigration.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNMigration.m;
+			sourceTree = "<group>";
+			name = SNMigration.m;
 		};
 		5E850E6E249BC7D03BC7E072 /* Debug.xcconfig */ = {
 			isa = PBXFileReference;
@@ -906,6 +932,12 @@
 			path = AppKit/SNAppController.m;
 			sourceTree = "<group>";
 			name = SNAppController.m;
+		};
+		BCCB2602B0C5007DD193EFB5 /* SimpleNotes 2.xcdatamodel */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcdatamodel;
+			path = "SimpleNotes 2.xcdatamodel";
+			sourceTree = "<group>";
 		};
 		C44F8D8D21AA72A450BB869A /* Release.xcconfig */ = {
 			isa = PBXFileReference;
@@ -1089,6 +1121,8 @@
 				4BE397C044903B570E6795E6,
 				719BCFED3ECD01936BB14F74,
 				848C622D1A0C34A6F10D548E,
+				47029EC1BB7F394FB43D846A,
+				5E12708819DD87E9D16589AF,
 				571D7F2A670DB7D88A910D92,
 			);
 			sourceTree = "<group>";
@@ -1371,6 +1405,7 @@
 				6333306B7D1ED627E640309C,
 				099EC221977E4E9C431EA752,
 				86BC567CCDCCAB940C7793DF,
+				AC28625FEB238C24115CFE5A,
 				5C0532B74F67EA76B21EA1B7,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1383,6 +1418,7 @@
 				144C28E98CC0E78EF5C3A32C,
 				20327598F541A2BE0FF21B15,
 				3B84FACBA94F3E3FB501528F,
+				D90D2FE1CB02EF0327E26267,
 				38CC23531B27ECEF96DAF8AF,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1402,6 +1438,7 @@
 				9A875137FA1C56A505E3F568,
 				8325B3AFD178A1008D2AB02F,
 				D0EFBF4E8A299CC4F4ED3DBD,
+				029C0375BBB48CBAAD4B77F8,
 				ED73A187727B64A1E926DC28,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1655,9 +1692,10 @@
 		571D7F2A670DB7D88A910D92 /* SimpleNotes.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
-				502CCF66908D5F362B4DDC5C,
+				BCCB2602B0C5007DD193EFB5,
+				3BBC93E5156C8D3EC4A97323,
 			);
-			currentVersion = 502CCF66908D5F362B4DDC5C;
+			currentVersion = BCCB2602B0C5007DD193EFB5;
 			path = SimpleNotes.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

@@ -123,7 +123,7 @@
     [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"keep me" atIndex:0 attributes:nil]; }];
     [self sync:a];
     [self sync:b];
-    [a deleteNote:[self onlyNote:a]];
+    [a deleteNoteImmediately:[self onlyNote:a]];
     [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@"!" atIndex:t.length attributes:nil]; }];
     [self sync:a];
     [self sync:b];
@@ -157,7 +157,7 @@
     XCTAssertEqualObjects([self onlyNote:a].body, @"zero one two three");
 }
 
-- (void)testAFolderDeletedKeepsItsNotes {
+- (void)testAFolderDeletedSendsItsNotesToRecentlyDeleted {
     SNNotes *a = [self device], *b = [self device];
     SNFolder *work = [a addFolderNamed:@"Work"];
     [a addNoteInFolder:work];
@@ -169,7 +169,111 @@
     [self sync:a];
     [self sync:b];
     XCTAssertEqual(b.folders.count, 0u);
-    XCTAssertEqual([b notesInFolder:nil matching:nil].count, 2u);
+    XCTAssertEqual([b notesInFolder:nil matching:nil].count, 0u);
+    XCTAssertEqual(b.countOfDeletedNotes, 2u, @"its notes, in Recently Deleted");
+    /* Recovered, a note whose folder is gone comes back to All Notes. */
+    [b recoverNote:[b deletedNotesMatching:nil].firstObject];
+    [self sync:b];
+    [self sync:a];
+    XCTAssertEqual([a notesInFolder:nil matching:nil].count, 1u);
+    XCTAssertNil([a notesInFolder:nil matching:nil].firstObject.folder);
+}
+
+#pragma mark Recently Deleted
+
+- (void)testADeletedNoteIsInRecentlyDeletedEverywhere {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:[a addFolderNamed:@"Home"]] on:a with:^(TopoText *t) { [t insertString:@"Old list" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [a deleteNote:[self onlyNote:a]];
+    XCTAssertEqual([a notesInFolder:nil matching:nil].count, 0u, @"gone from the lists");
+    XCTAssertEqual([a countOfNotesInFolder:a.folders.firstObject], 0u);
+    XCTAssertEqual([a notesInFolder:nil matching:@"Old"].count, 0u, @"and from search");
+    XCTAssertEqual([a deletedNotesMatching:nil].count, 1u, @"in Recently Deleted");
+    XCTAssertEqual(SNDaysLeft([a deletedNotesMatching:nil].firstObject), SNRecentlyDeletedDays);
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqual([b notesInFolder:nil matching:nil].count, 0u);
+    XCTAssertEqualObjects([b deletedNotesMatching:@"Old"].firstObject.body, @"Old list", @"deleted there too, and found there");
+    /* Recovered on the other device: back in its folder, everywhere. */
+    [b recoverNote:[b deletedNotesMatching:nil].firstObject];
+    [self sync:b];
+    [self sync:a];
+    XCTAssertEqual(a.countOfDeletedNotes, 0u);
+    XCTAssertEqualObjects([a notesInFolder:a.folders.firstObject matching:nil].firstObject.body, @"Old list");
+}
+
+- (void)testAnEditToANoteDeletedElsewhereIsKeptInIt {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"draft" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [a deleteNote:[self onlyNote:a]];
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@" two" atIndex:t.length attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [self sync:a];
+    for (SNNotes *d in @[ a, b ]) {
+        XCTAssertEqual([d notesInFolder:nil matching:nil].count, 0u, @"deleted, on both");
+        XCTAssertEqualObjects([d deletedNotesMatching:nil].firstObject.body, @"draft two", @"with the edit, to recover");
+    }
+}
+
+- (void)testNotesDeletedMoreThanThirtyDaysAgoGoForGood {
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *old = [a addNoteInFolder:nil], *recent = [a addNoteInFolder:nil];
+    [a deleteNote:old];
+    [a deleteNote:recent];
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqual(b.countOfDeletedNotes, 2u);
+    /* A month on, for the first of them. */
+    old.deletedAt = [NSDate dateWithTimeIntervalSinceNow:-(SNRecentlyDeletedDays + 1) * 86400.0];
+    XCTAssertEqual([a removeNotesDeletedBefore:[NSDate dateWithTimeIntervalSinceNow:-SNRecentlyDeletedDays * 86400.0]], 1u);
+    XCTAssertEqual(a.countOfDeletedNotes, 1u);
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqual(b.countOfDeletedNotes, 1u, @"gone for good there too");
+}
+
+- (void)testDeleteImmediatelyAndDeleteAll {
+    SNNotes *a = [self device], *b = [self device];
+    for (int i = 0; i < 3; i++) [a deleteNote:[a addNoteInFolder:nil]];
+    [a addNoteInFolder:nil];
+    [self sync:a];
+    [self sync:b];
+    [b deleteNoteImmediately:[b deletedNotesMatching:nil].firstObject];
+    XCTAssertEqual(b.countOfDeletedNotes, 2u);
+    [b emptyRecentlyDeleted];
+    XCTAssertEqual(b.countOfDeletedNotes, 0u);
+    [self sync:b];
+    [self sync:a];
+    XCTAssertEqual(a.countOfDeletedNotes, 0u);
+    XCTAssertEqual([a notesInFolder:nil matching:nil].count, 1u, @"the note not deleted, kept");
+}
+
+#pragma mark Moving
+
+- (void)testMovingANoteBetweenFolders {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *home = [a addFolderNamed:@"Home"], *work = [a addFolderNamed:@"Work"];
+    SNNote *note = [a addNoteInFolder:home];
+    [self sync:a];
+    [self sync:b];
+    [a moveNote:note toFolder:work];
+    XCTAssertEqual([a countOfNotesInFolder:home], 0u);
+    XCTAssertEqual([a countOfNotesInFolder:work], 1u);
+    [self sync:a];
+    [self sync:b];
+    SNFolder *bWork = nil;
+    for (SNFolder *f in b.folders) if ([f.name isEqual:@"Work"]) bWork = f;
+    XCTAssertEqual([b countOfNotesInFolder:bWork], 1u, @"moved there too");
+    /* Out of Recently Deleted, by moving it: recovered. */
+    [b deleteNote:[self onlyNote:b]];
+    [b moveNote:[b deletedNotesMatching:nil].firstObject toFolder:bWork];
+    XCTAssertEqual(b.countOfDeletedNotes, 0u);
+    XCTAssertEqual([b countOfNotesInFolder:bWork], 1u);
 }
 
 - (void)testPinnedFirst {

@@ -96,11 +96,18 @@ def file_ref(p, path, name=None):
 
 
 def model_ref(p, path):
-    child = p.add(oid(p.name, 'model', path, 'v'), 'SimpleNotes.xcdatamodel',
-                  {'isa': 'PBXFileReference', 'lastKnownFileType': 'wrapper.xcdatamodel', 'path': 'SimpleNotes.xcdatamodel', 'sourceTree': '<group>'})
+    """A versioned model: each version in it, the current one as its
+    .xccurrentversion says."""
+    d = os.path.join(ROOT, os.path.dirname(p.path), path)
+    versions = sorted(v for v in os.listdir(d) if v.endswith('.xcdatamodel'))
+    with open(os.path.join(d, '.xccurrentversion')) as f:
+        current = re.search(r'<string>(.*?)</string>', f.read()).group(1)
+    children = {v: p.add(oid(p.name, 'model', path, v), v,
+                         {'isa': 'PBXFileReference', 'lastKnownFileType': 'wrapper.xcdatamodel', 'path': v, 'sourceTree': '<group>'})
+                for v in versions}
     return p.add(oid(p.name, 'model', path), os.path.basename(path),
-                 {'isa': 'XCVersionGroup', 'children': [child], 'currentVersion': child, 'path': path,
-                  'sourceTree': '<group>', 'versionGroupType': 'wrapper.xcdatamodel'})
+                 {'isa': 'XCVersionGroup', 'children': [children[v] for v in versions], 'currentVersion': children[current],
+                  'path': path, 'sourceTree': '<group>', 'versionGroupType': 'wrapper.xcdatamodel'})
 
 
 def group(p, name, children, path=None):
@@ -267,7 +274,8 @@ def simplenotes(topotext_ids):
     configs = [file_ref(p, '../../Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
     F = lambda path: file_ref(p, path, os.path.basename(path))
     shared = {n: F('Shared/' + n) for n in ('SNModel.h', 'SNModel.m', 'SNNote.h', 'SNNote.m', 'SNFolder.h', 'SNFolder.m', 'SNNotes.h',
-                                           'SNNotes.m', 'SNResolver.h', 'SNResolver.m', 'SNRichText.h', 'SNRichText.m', 'SNCheck.h', 'SNCheck.m')}
+                                           'SNNotes.m', 'SNResolver.h', 'SNResolver.m', 'SNRichText.h', 'SNRichText.m', 'SNCheck.h', 'SNCheck.m',
+                                           'SNMigration.h', 'SNMigration.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
                                            'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'Info.plist',
@@ -301,7 +309,7 @@ def simplenotes(topotext_ids):
 
     def sources_of(d, names):
         return [(d[n], n) for n in names]
-    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNNotes.m', 'SNResolver.m', 'SNRichText.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
+    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNNotes.m', 'SNResolver.m', 'SNRichText.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
     mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNSelfTest.m'])
@@ -323,7 +331,7 @@ def simplenotes(topotext_ids):
     # The server: a tool; Xcode compiles its model beside it, where it looks.
     src = phase(p, 'simplenotes-server', 'PBXSourcesBuildPhase', 'Sources',
                 [build_file(p, 'simplenotes-server', 'Sources', ref, c) for ref, c in
-                 sources_of(server, ['SNServer.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
+                 sources_of(server, ['SNServer.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
     fw = phase(p, 'simplenotes-server', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
     s = {'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'PRODUCT_NAME': 'simplenotes-server', 'SKIP_INSTALL': 'YES',

@@ -59,6 +59,28 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNNote *there = [other notesInFolder:nil matching:@"Groceries"].firstObject;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
+
+        /* Deleted, into Recently Deleted on the other device; recovered
+           from the editor's Recover, back there too. */
+        [notes deleteNote:groceries];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNSay([other deletedNotesMatching:@"Groceries"].count == 1, @"a note deleted here is in Recently Deleted there");
+        SNNotesViewController *trash = [[SNNotesViewController alloc] initRecentlyDeletedWithNotes:notes];
+        [navigation pushViewController:trash animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay([trash.tableView numberOfRowsInSection:0] == 1, @"Recently Deleted lists it");
+        SNEditorViewController *deleted = [[SNEditorViewController alloc] initWithNotes:notes note:groceries];
+        [navigation pushViewController:deleted animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay(!deleted.textView.editable && deleted.navigationItem.rightBarButtonItem != nil, @"read only, with Recover");
+        [deleted recover:nil];
+        [navigation popToRootViewControllerAnimated:NO];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNSay([other notesInFolder:nil matching:@"Groceries"].count == 1, @"recovered here, back there");
         fprintf(stderr, "self-test: %s\n", SNFailed ? "FAILED" : "passed");
         exit(SNFailed);
     };
