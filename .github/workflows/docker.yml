@@ -5,7 +5,7 @@ name: Docker
 # checks it: the image started, seeded, its notes read back, on SQLite and
 # on PostgreSQL. A v* tag also publishes it to the GitHub Container Registry,
 # ghcr.io/<owner>/simplenotes-server, for amd64 and arm64, tagged with the
-# version and latest.
+# version and latest (a pre-release, v0.2.0-rc1, with its version only).
 #
 # Each architecture is built on a runner of its own (ubuntu-24.04 and
 # ubuntu-24.04-arm), not under QEMU, which would take hours over the GNUstep
@@ -158,5 +158,8 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           sources=()
           for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
-          docker buildx imagetools create -t "$IMAGE:$version" -t "$IMAGE:latest" "${sources[@]}"
+          # A pre-release (v0.2.0-rc1: a - in it) keeps latest where it was.
+          tags=(-t "$IMAGE:$version")
+          case "$version" in *-*) ;; *) tags+=(-t "$IMAGE:latest") ;; esac
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
           docker buildx imagetools inspect "$IMAGE:$version"
