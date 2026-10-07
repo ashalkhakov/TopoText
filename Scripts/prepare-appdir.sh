@@ -70,9 +70,8 @@ if [ -n "$backend" ]; then
   ln -sfn "$(basename "$backend")" "$(dirname "$backend")/back.bundle"
 fi
 
-# Fonts, so the window lays out the same on a machine that has none.
-mkdir -p AppDir/usr/etc/fonts
-cp Scripts/appimage/fonts.conf AppDir/usr/etc/fonts/fonts.conf
+# Fonts, so the window lays out the same on a machine that has none (AppRun
+# writes the fontconfig that finds them).
 for dir in /usr/share/fonts/truetype/dejavu /usr/share/fonts/truetype/liberation; do
   if [ -d "$dir" ]; then
     mkdir -p "AppDir/usr/share/fonts/truetype/$(basename "$dir")"

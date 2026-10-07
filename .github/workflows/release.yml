@@ -29,7 +29,7 @@ permissions:
 
 env:
   # ci.yml's pins: the release is built from what CI tested.
-  ODATAKIT_REF: ee5c94e5a20c03a7e41ea6d68bb4b71dc24a6cde
+  ODATAKIT_REF: fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
   GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
   FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
   TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
@@ -350,13 +350,21 @@ jobs:
             libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev \
             libfreetype6-dev libfontconfig1-dev libxrender-dev \
             libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
-            clang cmake file fuse libfuse2 desktop-file-utils fonts-dejavu fonts-liberation
+            clang file fuse libfuse2 desktop-file-utils fonts-dejavu fonts-liberation python3-pip
           if [ -x /usr/bin/ld.gold ]; then
             sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 10
           else
             sudo apt-get -q -y install lld
             sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld 10
           fi
+
+      # libdispatch wants CMake 3.26 or newer, and 22.04's is 3.22: from pip,
+      # the same on a runner (which has its own) and in a container.
+      - name: CMake
+        run: |
+          python3 -m pip install --user --quiet 'cmake>=3.26'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/cmake" --version | head -1
 
       # The recipe hash covers the build script, COMPONENTS, the toolchain and
       # every patch. Restored and saved apart, so the cache holds the stack
@@ -415,7 +423,7 @@ jobs:
               sleep 10
             done
             rm -rf /usr/share/fonts
-            ./'"$image"' server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &
+            ./'"$image"' --server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &
             for i in $(seq 1 60); do python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:18090/odata/\")" 2>/dev/null && break; sleep 1; done
             python3 Examples/SimpleNotes/Tests/seed.py http://127.0.0.1:18090/odata/ || { cat /tmp/server.log; exit 1; }
             timeout 300 xvfb-run -a ./'"$image"' --self-test http://127.0.0.1:18090/odata/'

@@ -235,10 +235,14 @@ Separating each user's notes is still to come (see "Not yet").
 
 ### On Linux, without Docker
 
-The AppImage carries the server too:
+The Docker image is the way to host the server, on a machine of your own,
+in an LXC container, or on a Raspberry Pi (it's built for arm64 too). For a
+machine that can run neither, the AppImage carries the server as well. It
+never starts on its own: opening the image starts the app, and the server
+runs only when asked:
 
 ```sh
-./SimpleNotes-Linux-*.AppImage server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+./SimpleNotes-Linux-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
 ```
 
 The apps:
