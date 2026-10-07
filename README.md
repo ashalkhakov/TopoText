@@ -71,7 +71,8 @@ array):
   both kept, in one order. Each cell is a TopoText, keyed by its row's id
   and its column's. Edits to a cell merge as text, and a column removed
   takes its cells with it. A table is exchanged and merged whole, because
-  its pieces' clocks are each their own.
+  its pieces' clocks are each their own. The papers behind it, and behind
+  TopoText's text, are in [docs/References.md](docs/References.md).
 - **Values are property-list types**: strings, numbers, data, dates, and arrays
   and dictionaries of them. NSNull removes a key. An editor maps its fonts and
   colours to such values and back.
