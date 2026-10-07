@@ -318,4 +318,91 @@
     XCTAssertEqualObjects([self checksOf:nil], @"-oxx-");
 }
 
+#pragma mark attachments
+
+/* A small image, as a PNG. */
+- (NSData *)png {
+#if TARGET_OS_IPHONE
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(8, 6)];
+    return UIImagePNGRepresentation([r imageWithActions:^(UIGraphicsImageRendererContext *c) { [[UIColor redColor] setFill]; UIRectFill(CGRectMake(0, 0, 8, 6)); }]);
+#else
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:8 pixelsHigh:6 bitsPerSample:8 samplesPerPixel:4
+                                                                      hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+#ifdef GNUSTEP
+    return [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+    return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+#endif
+}
+
+- (void)testAnImageInsertedIsAnAttachmentOfTheNote {
+    XCTAssertTrue([_binding insertImageData:[self png] inRange:NSMakeRange(5, 0)]);
+    XCTAssertEqualObjects(_editor.text.string, @"Hello\uFFFC world");
+    NSString *attachmentID = [_editor.text attributesAtIndex:5 effectiveRange:NULL][SNAttachmentKey];
+    XCTAssertNotNil(attachmentID);
+    SNAttachment *a = [_editor attachmentWithID:attachmentID];
+    XCTAssertEqualObjects(a.type, @"image/png");
+    XCTAssertEqual(a.width.doubleValue, 8.0);
+    XCTAssertNotNil([_storage attribute:NSAttachmentAttributeName atIndex:5 effectiveRange:NULL], @"shown");
+    XCTAssertFalse([_binding insertImageData:[@"not an image" dataUsingEncoding:NSUTF8StringEncoding] inRange:NSMakeRange(0, 0)]);
+}
+
+/* A large image is kept smaller, and still an image: drawn, not blank
+   (gnustep-back draws into a bitmap only when flushed). */
+- (void)testALargeImageIsScaledDown {
+#if !TARGET_OS_IPHONE
+    NSBitmapImageRep *big = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:3200 pixelsHigh:100 bitsPerSample:8 samplesPerPixel:4
+                                                                      hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    memset(big.bitmapData, 0xFF, (size_t)(big.bytesPerRow * 100));   /* white, opaque */
+#ifdef GNUSTEP
+    NSData *png = [big representationUsingType:NSPNGFileType properties:@{}];
+#else
+    NSData *png = [big representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *kept = SNImageDataForAttachment(png, &type, &w, &h);
+    XCTAssertEqual(w, 1600.0);
+    XCTAssertEqual(h, 50.0);
+    NSColor *pixel = [[NSBitmapImageRep imageRepWithData:kept] colorAtX:800 y:25];
+    XCTAssertGreaterThan(pixel.alphaComponent, 0.9, @"drawn, not blank: %@", pixel);
+#endif
+}
+
+- (void)testAnImagePastedIsMadeOneOfTheNotes {
+    NSTextAttachment *pasted = [[NSTextAttachment alloc] init];
+#if TARGET_OS_IPHONE
+    pasted.image = [UIImage imageWithData:[self png]];
+#else
+    pasted.fileWrapper = [[NSFileWrapper alloc] initRegularFileWithContents:[self png]];
+#endif
+    unichar c = 0xFFFC;
+    [_storage replaceCharactersInRange:NSMakeRange(0, 0) withAttributedString:
+        [[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:@{ NSAttachmentAttributeName: pasted }]];
+    [_binding textDidChange];
+    NSString *attachmentID = [_editor.text attributesAtIndex:0 effectiveRange:NULL][SNAttachmentKey];
+    XCTAssertNotNil([_editor attachmentWithID:attachmentID], @"saved: %@", attachmentID);
+    XCTAssertEqualObjects([_storage attribute:SNAttachmentAttributeName atIndex:0 effectiveRange:NULL], attachmentID, @"and its view knows it");
+}
+
+/* A note with an image opened, and an image merged in from elsewhere: the
+   view keeps its character (gnustep-gui takes a U+FFFC with no attachment
+   out of a text storage). */
+- (void)testAnImageOpenedOrMergedIsKept {
+    XCTAssertTrue([_binding insertImageData:[self png] inRange:NSMakeRange(11, 0)]);
+    NSString *first = [_editor.text attributesAtIndex:11 effectiveRange:NULL][SNAttachmentKey];
+    [_binding unbind];
+    NSTextStorage *again = [[NSTextStorage alloc] init];
+    _storage = again;
+    _binding = [[SNTextBinding alloc] initWithTextView:self editor:_editor];
+    XCTAssertEqualObjects(_storage.string, _editor.text.string, @"opened again, the image's character is there");
+    XCTAssertNotNil([_storage attribute:NSAttachmentAttributeName atIndex:11 effectiveRange:NULL]);
+    TopoText *elsewhere = [_editor.text copyWithReplica:0];
+    [elsewhere insertString:@"\uFFFC" atIndex:0 attributes:@{ SNAttachmentKey: first }];
+    [_binding applyEdits:[_editor.text mergeText:elsewhere]];
+    XCTAssertEqualObjects(_storage.string, _editor.text.string, @"merged in, too");
+    XCTAssertNotNil([_storage attribute:NSAttachmentAttributeName atIndex:0 effectiveRange:NULL]);
+}
+
 @end

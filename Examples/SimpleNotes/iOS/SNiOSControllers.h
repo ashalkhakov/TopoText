@@ -5,6 +5,7 @@
 #pragma once
 #import <UIKit/UIKit.h>
 #import "SNNotes.h"
+#import <PhotosUI/PhotosUI.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -32,7 +33,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 @end
 
 // SNEditorViewController.xib: the text view, and the format bar.
-@interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate>
+@interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate,
+                                                       PHPickerViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory.
@@ -55,6 +57,10 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)checklist:(nullable id)sender;
 // A link on the selection (or the one at the insertion point changed).
 - (IBAction)addLink:(nullable id)sender;
+// Photos into the note (the photo picker).
+- (IBAction)attachPhoto:(nullable id)sender;
+// An image's data into the note at the insertion point (as a photo picked).
+- (void)insertImageData:(NSData *)data;
 // Mark as Checked: the checklist items selected ticked (or unticked).
 - (IBAction)toggleChecked:(nullable id)sender;
 // Move Checked to Bottom, and Keep Checked at Bottom (every tick).

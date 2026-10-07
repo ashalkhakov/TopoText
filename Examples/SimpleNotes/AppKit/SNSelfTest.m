@@ -25,6 +25,24 @@ static void SNFinish(void) {
     exit(SNFailed);
 }
 
+/* A small image, as a PNG: what Attach File reads. */
+static NSData *SNSelfTestPNG(void) {
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:64 pixelsHigh:48 bitsPerSample:8 samplesPerPixel:4
+                                                                      hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+    [NSGraphicsContext setCurrentContext:context];
+    [[NSColor colorWithCalibratedRed:0.99 green:0.78 blue:0.17 alpha:1] setFill];
+    NSRectFill(NSMakeRect(0, 0, 64, 48));
+    [context flushGraphics];   /* gnustep-back: into the bitmap */
+    [NSGraphicsContext restoreGraphicsState];
+#ifdef GNUSTEP
+    return [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+    return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+}
+
 @interface SNSelfTest : NSObject
 @property (nonatomic, copy) void (^run)(void);
 @end
@@ -109,6 +127,32 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         }
         SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [weekend.body hasSuffix:@"water the plants"],
               [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+
+        /* The ticked item to the bottom, from the Format menu; an image
+           attached; a link to another note followed. */
+        tv.selectedRange = NSMakeRange(lines.location, 0);
+        SNSay([tv tryToPerform:@selector(moveCheckedToBottom:) with:nil], @"Move Checked to Bottom from the menu");
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertNewline:nil];   /* on the empty item: the list ends */
+        SNSay([window attachImageData:SNSelfTestPNG()], @"an image attached");
+        SNWait(2, ^BOOL { return NO; });
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        for (SNNote *n in [other notesInFolder:nil matching:@"Weekend"]) weekend = n;
+        wt = weekend.text;
+        NSArray *lines2 = [wt.string componentsSeparatedByString:@"\n"];
+        SNSay(lines2.count == 5 && [lines2[3] isEqual:@"fix the bike"],
+              [NSString stringWithFormat:@"the second device has it at the bottom (%@)", [lines2 componentsJoinedByString:@" | "]]);
+        NSString *imageID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNAttachment *image = imageID ? [other attachmentWithID:imageID] : nil;
+        SNSay(image.data.length > 0 && image.width.doubleValue == 64, [NSString stringWithFormat:@"and the image (%@, %@)", imageID, image.type]);
+        SNNote *groceries = nil;
+        for (SNNote *n in [notes notesInFolder:nil matching:@"Groceries"]) groceries = n;
+        [window textView:window.textView clickedOnLink:SNLinkToNote(groceries.id) atIndex:0];
+        SNSay([tv.string hasPrefix:@"Groceries"], @"a link to a note opens it");
+        [window selectNoteTitled:@"Weekend"];
         /* Folders in folders, and tags, in the sidebar. */
         NSArray *sidebar = [window sidebarRows];
         SNSay([sidebar containsObject:@"Work"] && [sidebar containsObject:@"  Projects"],

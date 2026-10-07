@@ -76,6 +76,12 @@ NS_ASSUME_NONNULL_BEGIN
 // pasted as a link it opens the note).
 - (IBAction)addLink:(nullable id)sender;
 - (IBAction)copyNoteLink:(nullable id)sender;
+// File > Attach File…: an image into the note, at the insertion point (one
+// pasted or dropped is one too).
+- (IBAction)attachFile:(nullable id)sender;
+// An image's data into the note at the insertion point, undoably (NO: not
+// an image, or no note open).
+- (BOOL)attachImageData:(NSData *)data;
 // The note shown and chosen, as a link to it opens it (NO: not here).
 - (BOOL)showNote:(SNNote *)note;
 // View > Sort By, and Group By Date.

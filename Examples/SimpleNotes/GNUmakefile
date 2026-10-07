@@ -39,7 +39,7 @@ ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
 endif
 SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNSelfTest.m Shared/SNCheck.m \
-	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNMigration.m
+	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNMigration.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS)
@@ -50,7 +50,7 @@ SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/T
 SimpleNotes_COREDATA_CODEGEN = yes
 
 TOOL_NAME = simplenotes-server
-simplenotes-server_OBJC_FILES = Server/SNServer.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNMigration.m
+simplenotes-server_OBJC_FILES = Server/SNServer.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m
 simplenotes-server_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
 simplenotes-server_COREDATA_CODEGEN = yes
 simplenotes-server_INCLUDE_DIRS = $(SN_INCLUDES)

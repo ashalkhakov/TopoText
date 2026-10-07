@@ -92,6 +92,12 @@
                                     <action selector="copyNoteLink:" target="-1" id="SNm-ac-901"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Attach File…" keyEquivalent="a" id="SNm-mi-906">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="attachFile:" target="-1" id="SNm-ac-906"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Delete Note" id="SNm-mi-206">
                                 <string key="keyEquivalent" base64-UTF8="YES">CA</string>
                                 <connections>

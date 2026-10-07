@@ -4,6 +4,8 @@
 //
 //   Of a character:  bold, italic, underline, strike: YES
 //                    link: a URL's text (simplenotes://note/<id>: a note)
+//                    attachment: an attachment's id, on U+FFFC (an image:
+//                    SNAttachment; the view shows it, NSTextAttachment)
 //   Of a paragraph:  style: title, heading, subheading or mono (else body)
 //                    list: bullet, dash, number or check
 //                    checked: YES (a checklist item ticked)
@@ -40,6 +42,7 @@ FOUNDATION_EXPORT NSString * const SNItalicKey;      // @"italic"
 FOUNDATION_EXPORT NSString * const SNUnderlineKey;   // @"underline"
 FOUNDATION_EXPORT NSString * const SNStrikeKey;      // @"strike"
 FOUNDATION_EXPORT NSString * const SNLinkKey;        // @"link"
+FOUNDATION_EXPORT NSString * const SNAttachmentKey;  // @"attachment"
 FOUNDATION_EXPORT NSString * const SNStyleKey;       // @"style"
 FOUNDATION_EXPORT NSString * const SNStyleTitle;     // @"title"
 FOUNDATION_EXPORT NSString * const SNStyleHeading;   // @"heading"
@@ -63,6 +66,18 @@ FOUNDATION_EXPORT NSString * const SNIndentAttributeName;   // @"SNIndent"
 // (an address typed, linked as Apple Notes does) has NSLinkAttributeName
 // alone, and is the view's, not the text's.
 FOUNDATION_EXPORT NSString * const SNLinkAttributeName;     // @"SNLink"
+// An attachment's id (SNAttachmentKey), beside the NSTextAttachment that
+// shows it: one pasted or dropped has none, until it is made one of the
+// note's.
+FOUNDATION_EXPORT NSString * const SNAttachmentAttributeName;   // @"SNAttachment"
+
+// Images are kept no larger than this across (pixels), re-encoded (a JPEG,
+// or a PNG for one with transparency) when larger or of another kind.
+FOUNDATION_EXPORT const double SNAttachmentMaxPixels;   // 1600
+// An image's data as an attachment keeps it, its type and size; nil: not an
+// image.
+FOUNDATION_EXPORT NSData *_Nullable SNImageDataForAttachment(NSData *data, NSString *_Nullable *_Nonnull type,
+                                                             double *width, double *height);
 
 // The text view's attributes for TopoText's (a character's and its
 // paragraph's together), and TopoText's for the view's.
@@ -116,6 +131,12 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // A link on the range's characters (nil: taken off), and the one at a place.
 - (void)setLink:(nullable NSString *)link inRange:(NSRange)range;
 - (nullable NSString *)linkAt:(NSUInteger)index;
+// An image in place of the range, made one of the note's attachments
+// (re-encoded, saved, synced); NO: not an image.
+- (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range;
+// Attachments shown again: those a sync has brought since (a text can come
+// before its attachment).
+- (void)refreshAttachments;
 // The rest on every paragraph the range touches.
 // A style (nil: body), the paragraphs' list taken off.
 - (void)setStyle:(nullable NSString *)style forParagraphsInRange:(NSRange)range;

@@ -224,6 +224,8 @@ static const NSInteger SNMoveToMenuTag = 7001;
 - (void)notesChanged:(NSNotification *)n {
     [self reloadFolders];
     [self reloadNotes];
+    /* An attachment can come after the text that has it. */
+    [_binding refreshAttachments];
     [self showStatus:n.userInfo[@"status"] ?: @""];
 }
 
@@ -699,6 +701,30 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [_textView didChangeText];
 }
 
+- (IBAction)attachFile:(id)sender {
+    if (!_binding || !_textView.isEditable) return;
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedFileTypes = @[ @"png", @"jpg", @"jpeg", @"gif", @"tiff", @"tif", @"heic", @"bmp" ];
+    panel.allowsMultipleSelection = YES;
+    if ([panel runModal] != NSModalResponseOK) return;
+    for (NSURL *url in panel.URLs)
+        if (![self attachImageData:[NSData dataWithContentsOfURL:url]]) {
+            NSAlert *alert = [[NSAlert alloc] init];
+            alert.messageText = [NSString stringWithFormat:@"“%@” is not an image SimpleNotes can show.", url.lastPathComponent];
+            [alert runModal];
+        }
+}
+
+- (BOOL)attachImageData:(NSData *)data {
+    if (!_binding || !_textView.isEditable) return NO;
+    NSRange r = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return NO;
+    if (![_binding insertImageData:data inRange:r]) return NO;
+    [_textView didChangeText];
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    return YES;
+}
+
 - (IBAction)copyNoteLink:(id)sender {
     SNNote *note = [self selectedNote];
     if (!note.id) return;
@@ -732,7 +758,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
-    if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(addLink:) || a == @selector(attachFile:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(moveCheckedToBottom:))
         return _binding != nil && _textView.isEditable && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
     if (a == @selector(toggleKeepCheckedAtBottom:)) {

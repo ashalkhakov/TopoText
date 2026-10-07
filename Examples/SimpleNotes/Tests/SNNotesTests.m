@@ -463,4 +463,33 @@
     a.sortOrder = was;
 }
 
+#pragma mark attachments
+
+- (void)testAnAttachmentGoesToTheOtherDevice {
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    NSData *data = [NSData dataWithBytes:"\x89PNG not really" length:16];
+    SNAttachment *image = [a addImageToNote:note data:data type:@"image/png" width:40 height:30];
+    [self edit:note on:a with:^(TopoText *t) {
+        [t insertString:@"Photo \uFFFC" atIndex:0 attributes:nil];
+        [t addAttributes:@{ @"attachment": image.id } range:NSMakeRange(6, 1)];
+    }];
+    XCTAssertEqualObjects(note.title, @"Photo", @"the attachment's character is not a word");
+    [self sync:a];
+    [self sync:b];
+    SNNote *there = [self onlyNote:b];
+    NSString *attachmentID = [there.text attributesAtIndex:6 effectiveRange:NULL][@"attachment"];
+    SNAttachment *came = [b attachmentWithID:attachmentID];
+    XCTAssertEqualObjects(came.data, data);
+    XCTAssertEqualObjects(came.type, @"image/png");
+    XCTAssertEqual(came.note, there);
+    /* Gone with its note. */
+    [b deleteNote:there];
+    [b deleteNoteImmediately:there];
+    XCTAssertNil([b attachmentWithID:attachmentID]);
+    [self sync:b];
+    [self sync:a];
+    XCTAssertNil([a attachmentWithID:attachmentID], @"and everywhere");
+}
+
 @end

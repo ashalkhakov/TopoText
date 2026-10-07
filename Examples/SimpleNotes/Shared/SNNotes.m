@@ -122,6 +122,7 @@ NSString *SNDateText(NSDate *date) {
     NSHashTable<SNNoteEditor *> *_editors;
     BOOL _deletes;   /* the model has Recently Deleted (version 2 on) */
     BOOL _nests;     /* the model has folders in folders (version 3 on) */
+    BOOL _attaches;  /* the model has attachments (version 4 on) */
     BOOL _savePending;
     NSTimer *_timer;
 }
@@ -163,6 +164,7 @@ NSString *SNDateText(NSDate *date) {
     _deletes = [note.attributesByName objectForKey:@"deletedAt"] != nil;
     NSEntityDescription *folderEntity = model.entitiesByName[SNFolderEntity];
     _nests = [folderEntity.relationshipsByName objectForKey:@"parent"] != nil;
+    _attaches = [model.entitiesByName objectForKey:SNAttachmentEntity] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
@@ -445,6 +447,23 @@ NSString *SNDateText(NSDate *date) {
     return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
 }
 
+- (SNAttachment *)addImageToNote:(SNNote *)note data:(NSData *)data type:(NSString *)type width:(double)width height:(double)height {
+    SNAttachment *a = [self insert:SNAttachmentEntity];
+    a.kind = SNAttachmentKindImage;
+    a.type = type;
+    a.data = data;
+    a.width = @(width);
+    a.height = @(height);
+    a.note = note;
+    [self save];
+    return a;
+}
+
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    if (!attachmentID.length || !_attaches) return nil;
+    return [self fetch:SNAttachmentEntity where:[NSPredicate predicateWithFormat:@"id == %@", attachmentID] sortedBy:nil].firstObject;
+}
+
 - (SNNote *)noteWithID:(NSString *)noteID {
     if (!noteID.length) return nil;
     return [self fetch:SNNoteEntity where:[NSPredicate predicateWithFormat:@"id == %@", noteID] sortedBy:nil].firstObject;
@@ -651,6 +670,17 @@ NSString *SNDateText(NSDate *date) {
 - (SNNote *)note {
     SNNote *n = (SNNote *)[_notes.context existingObjectWithID:_noteID error:NULL];
     return n.isDeleted ? nil : n;
+}
+
+- (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height {
+    SNNotes *notes = _notes;
+    SNNote *note = [self note];
+    if (!notes || !note) return nil;
+    return [notes addImageToNote:note data:data type:type width:width height:height].id;
+}
+
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    return [_notes attachmentWithID:attachmentID];
 }
 
 - (void)textDidChange {

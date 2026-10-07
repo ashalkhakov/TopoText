@@ -24,6 +24,10 @@ NSString * const SNListAttributeName = @"SNList";
 NSString * const SNCheckedAttributeName = @"SNChecked";
 NSString * const SNIndentAttributeName = @"SNIndent";
 NSString * const SNLinkAttributeName = @"SNLink";
+NSString * const SNAttachmentKey = @"attachment";
+NSString * const SNAttachmentAttributeName = @"SNAttachment";
+const double SNAttachmentMaxPixels = 1600;
+static const unichar SNAttachmentCharacter = 0xFFFC;
 /* Bold and italic said beside the font too: a font with no italic face
    (or bold) still says what was meant. */
 static NSString * const SNBoldAttributeName = @"SNBold";
@@ -248,6 +252,7 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
         v[SNLinkAttributeName] = link;
         v[NSLinkAttributeName] = url;
     }
+    if ([attrs[SNAttachmentKey] isKindOfClass:[NSString class]]) v[SNAttachmentAttributeName] = attrs[SNAttachmentKey];
     if (style) v[SNStyleAttributeName] = style;
     if (list) v[SNListAttributeName] = list;
     if (p[SNCheckedKey]) v[SNCheckedAttributeName] = @YES;
@@ -276,6 +281,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if ([view[NSUnderlineStyleAttributeName] integerValue]) t[SNUnderlineKey] = @YES;
     if ([view[NSStrikethroughStyleAttributeName] integerValue]) t[SNStrikeKey] = @YES;
     if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
+    if ([view[SNAttachmentAttributeName] isKindOfClass:[NSString class]]) t[SNAttachmentKey] = view[SNAttachmentAttributeName];
     return t;
 }
 
@@ -286,7 +292,8 @@ static NSArray *SNOwnViewKeys(void) {
     if (!keys)
         keys = @[ NSFontAttributeName, NSForegroundColorAttributeName, NSUnderlineStyleAttributeName, NSStrikethroughStyleAttributeName,
                   NSParagraphStyleAttributeName, SNStyleAttributeName, SNListAttributeName, SNCheckedAttributeName,
-                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName ];
+                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName,
+                  SNAttachmentAttributeName ];
     return keys;
 }
 
@@ -339,6 +346,162 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     return p;
 }
 
+#pragma mark attachments
+
+#if TARGET_OS_IPHONE
+typedef UIImage SNImage;
+#else
+typedef NSImage SNImage;
+#endif
+
+static BOOL SNHasPrefix(NSData *data, const char *bytes, NSUInteger n) {
+    return data.length >= n && memcmp(data.bytes, bytes, n) == 0;
+}
+
+/* An image's size in pixels (not points). */
+static void SNPixelSize(SNImage *image, NSData *data, double *w, double *h) {
+#if TARGET_OS_IPHONE
+    *w = image.size.width * image.scale;
+    *h = image.size.height * image.scale;
+#else
+    NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:data];
+    *w = rep ? rep.pixelsWide : image.size.width;
+    *h = rep ? rep.pixelsHigh : image.size.height;
+#endif
+}
+
+NSData *SNImageDataForAttachment(NSData *data, NSString **type, double *width, double *height) {
+    if (!data.length) return nil;
+    SNImage *image = [[SNImage alloc] initWithData:data];
+    if (!image) return nil;
+    double w = 0, h = 0;
+    SNPixelSize(image, data, &w, &h);
+    if (w < 1 || h < 1) return nil;
+    BOOL png = SNHasPrefix(data, "\x89PNG", 4), jpeg = SNHasPrefix(data, "\xFF\xD8\xFF", 3);
+    double scale = MIN(1.0, SNAttachmentMaxPixels / MAX(w, h));
+    if (scale >= 1.0 && (png || jpeg)) {
+        *type = png ? @"image/png" : @"image/jpeg";
+        *width = w;
+        *height = h;
+        return data;
+    }
+    NSUInteger tw = (NSUInteger)MAX(1.0, round(w * scale)), th = (NSUInteger)MAX(1.0, round(h * scale));
+    NSData *out = nil;
+#if TARGET_OS_IPHONE
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.scale = 1;
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(tw, th) format:format];
+    UIImage *drawn = [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
+        [image drawInRect:CGRectMake(0, 0, tw, th)];
+    }];
+    out = png ? UIImagePNGRepresentation(drawn) : UIImageJPEGRepresentation(drawn, 0.85);
+#else
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:(NSInteger)tw pixelsHigh:(NSInteger)th
+                                                                 bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO
+                                                                colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+    [NSGraphicsContext setCurrentContext:context];
+#ifdef GNUSTEP
+    [image drawInRect:NSMakeRect(0, 0, tw, th) fromRect:NSZeroRect operation:NSCompositeCopy fraction:1.0];
+#else
+    [image drawInRect:NSMakeRect(0, 0, tw, th) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1.0];
+#endif
+    /* Into the bitmap: gnustep-back's cairo draws on a surface of its own,
+       copied into the bitmap only when flushed. */
+    [context flushGraphics];
+    [NSGraphicsContext restoreGraphicsState];
+#ifdef GNUSTEP
+    out = png ? [rep representationUsingType:NSPNGFileType properties:@{}]
+              : [rep representationUsingType:NSJPEGFileType properties:@{ NSImageCompressionFactor: @0.85 }];
+#else
+    out = png ? [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]
+              : [rep representationUsingType:NSBitmapImageFileTypeJPEG properties:@{ NSImageCompressionFactor: @0.85 }];
+#endif
+#endif
+    if (!out) return nil;
+    *type = png ? @"image/png" : @"image/jpeg";
+    *width = tw;
+    *height = th;
+    return out;
+}
+
+/* An attachment shown: the view's, made from the note's attachment of
+   attachmentID; loaded NO while it has not come yet (a grey box shows). */
+@interface SNTextAttachment : NSTextAttachment
+@property (nonatomic, copy) NSString *attachmentID;
+@property (nonatomic) BOOL loaded;
+@end
+
+@implementation SNTextAttachment
+@end
+
+/* A box to show while an attachment has not come yet. */
+static SNImage *SNPlaceholderImage(double w, double h) {
+#if TARGET_OS_IPHONE
+    UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(w, h)];
+    return [r imageWithActions:^(UIGraphicsImageRendererContext *c) {
+        [[UIColor systemGray5Color] setFill];
+        [[UIBezierPath bezierPathWithRoundedRect:CGRectMake(0, 0, w, h) cornerRadius:8] fill];
+    }];
+#else
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(w, h)];
+    [image lockFocus];
+    [[NSColor colorWithCalibratedWhite:0.85 alpha:1] setFill];
+    [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(0, 0, w, h) xRadius:8 yRadius:8] fill];
+    [image unlockFocus];
+    return image;
+#endif
+}
+
+/* The attachment's view: its image as wide as it is, or as the text is. */
+static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *attachment, CGFloat maxWidth) {
+    NSData *data = attachment.data;
+    SNImage *image = data ? [[SNImage alloc] initWithData:data] : nil;
+    double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
+    if (image && (w < 1 || h < 1)) SNPixelSize(image, data, &w, &h);
+    if (w < 1 || h < 1) { w = 160; h = 120; }
+    double scale = MIN(1.0, maxWidth / w);
+#if TARGET_OS_IPHONE
+    scale = MIN(scale, 1.0 / [UIScreen mainScreen].scale);
+#endif
+    CGFloat dw = MAX(1, w * scale), dh = MAX(1, h * scale);
+    if (!image) image = SNPlaceholderImage(dw, dh);
+#if TARGET_OS_IPHONE
+    SNTextAttachment *a = [[SNTextAttachment alloc] initWithData:data ofType:nil];
+    a.image = image;
+    a.bounds = CGRectMake(0, 0, dw, dh);
+#else
+    SNTextAttachment *a;
+    if (data) {
+        NSFileWrapper *file = [[NSFileWrapper alloc] initRegularFileWithContents:data];
+        file.preferredFilename = [attachment.type isEqual:@"image/png"] ? @"image.png" : @"image.jpg";
+        a = [[SNTextAttachment alloc] initWithFileWrapper:file];
+    } else {
+        a = [[SNTextAttachment alloc] init];
+    }
+    image.size = NSMakeSize(dw, dh);
+    a.attachmentCell = [[NSTextAttachmentCell alloc] initImageCell:image];
+#endif
+    a.attachmentID = attachmentID;
+    a.loaded = data != nil;
+    return a;
+}
+
+/* What a view's attachment holds, as data (one pasted or dropped). */
+static NSData *SNDataOfTextAttachment(NSTextAttachment *a) {
+#if TARGET_OS_IPHONE
+    if (a.contents.length) return a.contents;
+    if (a.fileWrapper.regularFile) return a.fileWrapper.regularFileContents;
+    return a.image ? UIImagePNGRepresentation(a.image) : nil;
+#else
+    if (a.fileWrapper.isRegularFile) return a.fileWrapper.regularFileContents;
+    id cell = a.attachmentCell;
+    NSImage *image = [cell respondsToSelector:@selector(image)] ? [cell image] : nil;
+    return image.TIFFRepresentation;
+#endif
+}
+
 #pragma mark the binding
 
 @implementation SNTextBinding {
@@ -349,6 +512,9 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     NSMutableIndexSet *_afterNewline;
     /* The empty last paragraph's formatting, when it was given one. */
     NSDictionary *_endParagraph;
+    /* Images pasted or dropped, made attachments of the note: each view
+       attachment, to have its id once the view's edit is done. */
+    NSMapTable<NSTextAttachment *, NSString *> *_pendingAttachments;
 }
 
 - (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor {
@@ -358,8 +524,14 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     _editor = editor;
     _dirty = NSMakeRange(NSNotFound, 0);
     _afterNewline = [NSMutableIndexSet indexSet];
+    _pendingAttachments = [NSMapTable strongToStrongObjectsMapTable];
     _applying = YES;
-    [_storage setAttributedString:SNViewString(editor.text)];
+    /* Each attachment's character with its view from the first: a U+FFFC
+       without one is taken out of the text by gnustep-gui's attribute
+       fixing. */
+    NSMutableAttributedString *shown = [SNViewString(editor.text) mutableCopy];
+    [self showAttachmentsIn:shown range:NSMakeRange(0, shown.length)];
+    [_storage setAttributedString:shown];
     _applying = NO;
     [self showTagsInRange:NSMakeRange(0, _storage.length)];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storageEdited:)
@@ -405,8 +577,15 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
         NSString *string = _storage.string;
         for (NSValue *v in SNAttributeRuns(_storage, r)) {
             NSRange run = v.rangeValue;
-            [t insertString:[string substringWithRange:run] atIndex:at
-                 attributes:SNTextAttributes([_storage attributesAtIndex:run.location effectiveRange:NULL])];
+            NSDictionary *view = [_storage attributesAtIndex:run.location effectiveRange:NULL];
+            NSMutableDictionary *attrs = [SNTextAttributes(view) mutableCopy];
+            NSTextAttachment *pasted = view[NSAttachmentAttributeName];
+            /* An image pasted or dropped: one of the note's attachments now. */
+            if (pasted && !attrs[SNAttachmentKey]) {
+                NSString *made = [self attachmentForPasted:pasted];
+                if (made) attrs[SNAttachmentKey] = made;
+            }
+            [t insertString:[string substringWithRange:run] atIndex:at attributes:attrs];
             at += run.length;
         }
         [self noteTyped:r replacing:old in:string];
@@ -471,15 +650,18 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [_storage beginEditing];
     for (TTEdit *e in edits) {
         switch (e.kind) {
-        case TTEditInsert:
-            [_storage replaceCharactersInRange:NSMakeRange(e.range.location, 0)
-                          withAttributedString:[[NSAttributedString alloc] initWithString:e.string attributes:SNViewAttributes(e.attributes)]];
+        case TTEditInsert: {
+            NSMutableAttributedString *view = [[NSMutableAttributedString alloc] initWithString:e.string attributes:SNViewAttributes(e.attributes)];
+            [self showAttachmentsIn:view range:NSMakeRange(0, view.length)];
+            [_storage replaceCharactersInRange:NSMakeRange(e.range.location, 0) withAttributedString:view];
             break;
+        }
         case TTEditDelete:
             [_storage deleteCharactersInRange:e.range];
             break;
         case TTEditAttributes:
             [_storage setAttributes:SNViewAttributes(e.attributes) range:e.range];
+            [self showAttachmentsIn:_storage range:e.range];
             break;
         }
         if (e.kind != TTEditAttributes) _endParagraph = nil;
@@ -493,6 +675,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [_storage endEditing];
     _applying = NO;
     [self showTagsInRange:NSMakeRange(0, _storage.length)];
+    [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
     _dirty = NSMakeRange(NSNotFound, 0);
     [_afterNewline removeAllIndexes];
     if (start != NSNotFound) {
@@ -551,6 +734,106 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     }
     [_storage endEditing];
     _applying = was;
+}
+
+#pragma mark attachments
+
+/* How wide an image may be shown: the text's width. */
+- (CGFloat)attachmentWidth {
+    NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
+    NSTextContainer *c = lm.textContainers.firstObject;
+#ifdef GNUSTEP
+    CGFloat w = c ? c.containerSize.width - 2 * c.lineFragmentPadding - 4 : 0;
+#else
+    CGFloat w = c ? c.size.width - 2 * c.lineFragmentPadding - 4 : 0;
+#endif
+    return w > 40 && w < 4000 ? w : 480;
+}
+
+/* The note's attachments in a range of a view's string shown: each U+FFFC
+   with an id has its image (a box while it has not come). */
+- (void)showAttachmentsIn:(NSMutableAttributedString *)target range:(NSRange)range {
+    NSString *s = target.string;
+    range = NSIntersectionRange(range, NSMakeRange(0, s.length));
+    for (NSUInteger i = range.location; i < NSMaxRange(range); i++) {
+        if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
+        NSString *attachmentID = [target attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        if (!attachmentID) continue;
+        SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        SNAttachment *attachment = [_editor attachmentWithID:attachmentID];
+        if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID] &&
+            (shown.loaded || !attachment.data))
+            continue;
+        [target addAttribute:NSAttachmentAttributeName value:SNShowAttachment(attachmentID, attachment, [self attachmentWidth])
+                       range:NSMakeRange(i, 1)];
+    }
+}
+
+- (void)showAttachmentsInRange:(NSRange)range {
+    BOOL was = _applying;
+    _applying = YES;
+    [_storage beginEditing];
+    [self showAttachmentsIn:_storage range:range];
+    [_storage endEditing];
+    _applying = was;
+}
+
+- (void)refreshAttachments {
+    [self showAttachmentsInRange:NSMakeRange(0, _storage.length)];
+}
+
+/* A pasted image saved as one of the note's attachments, its id; its view
+   attachment is given the id once the view's edit is done (not while the
+   storage is still processing it). */
+- (NSString *)attachmentForPasted:(NSTextAttachment *)pasted {
+    NSString *made = [_pendingAttachments objectForKey:pasted];
+    if (made) return made;
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *data = SNImageDataForAttachment(SNDataOfTextAttachment(pasted), &type, &w, &h);
+    if (!data) return nil;
+    made = [_editor addImageData:data type:type width:w height:h];
+    if (!made) return nil;
+    [_pendingAttachments setObject:made forKey:pasted];
+    [self performSelector:@selector(idsForPastedAttachments) withObject:nil afterDelay:0];
+    return made;
+}
+
+- (void)idsForPastedAttachments {
+    if (!_pendingAttachments.count) return;
+    NSString *s = _storage.string;
+    BOOL was = _applying;
+    _applying = YES;
+    [_storage beginEditing];
+    for (NSUInteger i = 0; i < s.length; i++) {
+        if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
+        NSTextAttachment *a = [_storage attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
+        NSString *made = a ? [_pendingAttachments objectForKey:a] : nil;
+        if (!made) continue;
+        [_storage addAttribute:SNAttachmentAttributeName value:made range:NSMakeRange(i, 1)];
+        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth])
+                         range:NSMakeRange(i, 1)];
+    }
+    [_storage endEditing];
+    [_pendingAttachments removeAllObjects];
+    _applying = was;
+}
+
+- (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range {
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *image = SNImageDataForAttachment(data, &type, &w, &h);
+    if (!image) return NO;
+    NSString *made = [_editor addImageData:image type:type width:w height:h];
+    if (!made) return NO;
+    NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
+    t[SNAttachmentKey] = made;
+    NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
+    view[NSAttachmentAttributeName] = SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth]);
+    unichar c = SNAttachmentCharacter;
+    [_storage replaceCharactersInRange:range
+                  withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+    return YES;
 }
 
 #pragma mark formatting
@@ -855,6 +1138,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
 }
 
 - (void)textDidChange {
+    [self idsForPastedAttachments];
     NSString *s = _storage.string;
     if (_dirty.location != NSNotFound && _dirty.location <= s.length) {
         /* The line after too: a newline typed began it. */

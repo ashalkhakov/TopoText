@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="24G720" minimumToolsVersion="Automatic" sourceLanguage="Objective-C" userDefinedModelVersionIdentifier="4">
+    <entity name="Attachment" representedClassName="SNAttachment" codeGenerationType="category" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="String" preserveAfterDeletion="YES">
+            <userInfo>
+                <entry key="OData.key" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="kind" optional="YES" attributeType="String"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <attribute name="data" optional="YES" attributeType="Binary"/>
+        <attribute name="width" optional="YES" attributeType="Double" usesScalarValueType="NO"/>
+        <attribute name="height" optional="YES" attributeType="Double" usesScalarValueType="NO"/>
+        <attribute name="created" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modified" optional="YES" attributeType="String"/>
+        <attribute name="versions" optional="YES" attributeType="String"/>
+        <relationship name="note" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Note" inverseName="attachments" inverseEntity="Note"/>
+        <userInfo>
+            <entry key="OData.entitySet" value="Attachments"/>
+            <entry key="ODataSync.direction" value="both"/>
+            <entry key="ODataSync.modified" value="modified"/>
+            <entry key="ODataSync.versions" value="versions"/>
+        </userInfo>
+    </entity>
+    <entity name="Folder" representedClassName="SNFolder" codeGenerationType="category" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="String" preserveAfterDeletion="YES">
+            <userInfo>
+                <entry key="OData.key" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="created" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modified" optional="YES" attributeType="String"/>
+        <attribute name="versions" optional="YES" attributeType="String"/>
+        <relationship name="children" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Folder" inverseName="parent" inverseEntity="Folder"/>
+        <relationship name="notes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Note" inverseName="folder" inverseEntity="Note"/>
+        <relationship name="parent" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Folder" inverseName="children" inverseEntity="Folder"/>
+        <userInfo>
+            <entry key="OData.entitySet" value="Folders"/>
+            <entry key="ODataSync.direction" value="both"/>
+            <entry key="ODataSync.modified" value="modified"/>
+            <entry key="ODataSync.versions" value="versions"/>
+        </userInfo>
+    </entity>
+    <entity name="Note" representedClassName="SNNote" codeGenerationType="category" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="String" preserveAfterDeletion="YES">
+            <userInfo>
+                <entry key="OData.key" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="body" optional="YES" attributeType="String"/>
+        <attribute name="bodyText" optional="YES" attributeType="Binary">
+            <userInfo>
+                <entry key="TopoText.text" value="YES"/>
+                <entry key="TopoText.string" value="body"/>
+            </userInfo>
+        </attribute>
+        <attribute name="created" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="edited" optional="YES" attributeType="Date" usesScalarValueType="NO" elementID="updated"/>
+        <attribute name="pinned" optional="YES" attributeType="Boolean" usesScalarValueType="NO"/>
+        <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modified" optional="YES" attributeType="String"/>
+        <attribute name="versions" optional="YES" attributeType="String"/>
+        <relationship name="attachments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Attachment" inverseName="note" inverseEntity="Attachment"/>
+        <relationship name="folder" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Folder" inverseName="notes" inverseEntity="Folder"/>
+        <userInfo>
+            <entry key="OData.entitySet" value="Notes"/>
+            <entry key="ODataSync.direction" value="both"/>
+            <entry key="ODataSync.modified" value="modified"/>
+            <entry key="ODataSync.versions" value="versions"/>
+        </userInfo>
+    </entity>
+</model>

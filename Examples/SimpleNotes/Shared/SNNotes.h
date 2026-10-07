@@ -14,6 +14,7 @@
 #import <TopoText/TopoText.h>
 #import "SNNote.h"
 #import "SNFolder.h"
+#import "SNAttachment.h"
 
 @class SNNoteEditor, SNNoteGroup;
 
@@ -80,6 +81,14 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // folders', as Apple Notes lists them.
 - (NSArray<SNNote *> *)notesInFolder:(nullable SNFolder *)folder matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesInFolder:(nullable SNFolder *)folder;
+// An image in a note: its data (as SNRichText makes it, a JPEG or a PNG no
+// larger than SNAttachmentMaxPixels across), and its size; saved and synced
+// like a note. The note's text then refers to it by its id.
+- (SNAttachment *)addImageToNote:(SNNote *)note data:(NSData *)data type:(NSString *)type
+                           width:(double)width height:(double)height;
+// The attachment of that id; nil: none here (yet: a note's text can come
+// before its attachment in a sync).
+- (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 // The note of that id (SNLinkToNote's), deleted or not; nil: none here.
 - (nullable SNNote *)noteWithID:(NSString *)noteID;
 // Recently Deleted: the notes deleted, and not yet for good, the latest
@@ -185,6 +194,10 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Whoever shows the text: told of merges, and of the note going.
 @property (nonatomic, weak, nullable) id<SNNoteEditorDelegate> delegate;
 @property (nonatomic, readonly, getter=isGone) BOOL gone;
+// An image added to the note (SNNotes' -addImageToNote:...), its id; an
+// attachment's, by id.
+- (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height;
+- (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 // The user changed text: written and saved a moment later.
 - (void)textDidChange;
 // What the store has merged in, what was typed written; saved.

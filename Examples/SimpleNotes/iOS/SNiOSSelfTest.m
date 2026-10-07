@@ -103,6 +103,20 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
         [wtv insertText:@"\n"];
         [wtv insertText:@"water the plants"];
+        /* The ticked item to the bottom; the list ended (Return on an empty
+           item), and a photo after it. */
+        wtv.selectedRange = NSMakeRange(first, 0);
+        [we moveCheckedToBottom:nil];
+        wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
+        /* As the keyboard types: the delegate asked first (insertText:
+           alone does not ask it). */
+        for (int i = 0; i < 2; i++)
+            if ([we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:@"\n"]) [wtv insertText:@"\n"];
+        UIGraphicsImageRenderer *photo = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(64, 48)];
+        [we insertImageData:UIImagePNGRepresentation([photo imageWithActions:^(UIGraphicsImageRendererContext *c) {
+            [[UIColor systemYellowColor] setFill];
+            UIRectFill(CGRectMake(0, 0, 64, 48));
+        }])];
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             [wtv resignFirstResponder];
@@ -120,8 +134,10 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
             [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
         }
-        SNSay([seen isEqual:@[ @"-", @"check+", @"check", @"check" ]] && [wt.string hasSuffix:@"water the plants"],
-              [NSString stringWithFormat:@"the second device has the checklist, the first item ticked (%@)", [seen componentsJoinedByString:@" "]]);
+        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-" ]],
+              [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
+        NSString *photoID = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

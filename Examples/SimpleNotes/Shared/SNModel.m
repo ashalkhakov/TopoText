@@ -2,6 +2,14 @@
 
 NSString * const SNFolderEntity = @"Folder";
 NSString * const SNNoteEntity = @"Note";
+NSString * const SNAttachmentEntity = @"Attachment";
+
+/* What a line says, read: an attachment's character (U+FFFC) is not
+   words. */
+static NSString *SNReadable(NSString *line) {
+    NSString *t = [line stringByReplacingOccurrencesOfString:@"\uFFFC" withString:@""];
+    return [t stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
 
 NSURL *SNModelURLInBundle(NSBundle *bundle) {
     return [bundle URLForResource:@"SimpleNotes" withExtension:@"momd"] ?: [bundle URLForResource:@"SimpleNotes" withExtension:@"mom"];
@@ -19,20 +27,18 @@ NSManagedObjectModel *SNModel(void) {
 }
 
 NSString *SNTitleOfBody(NSString *body) {
-    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     for (NSString *line in [body componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
-        NSString *t = [line stringByTrimmingCharactersInSet:space];
+        NSString *t = SNReadable(line);
         if (t.length) return t.length > 120 ? [t substringToIndex:120] : t;
     }
     return @"New Note";
 }
 
 NSString *SNSnippetOfBody(NSString *body) {
-    NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     NSMutableArray *lines = [NSMutableArray array];
     BOOL title = NO;
     for (NSString *line in [body componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
-        NSString *t = [line stringByTrimmingCharactersInSet:space];
+        NSString *t = SNReadable(line);
         if (!t.length) continue;
         if (!title) { title = YES; continue; }
         [lines addObject:t];

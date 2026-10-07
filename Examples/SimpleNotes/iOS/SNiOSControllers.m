@@ -1,6 +1,7 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
 #import "SNModel.h"
+#import <PhotosUI/PhotosUI.h>
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 
@@ -567,6 +568,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 /* In Recently Deleted (here, or by a sync), a note is read, not written:
    Recover first. */
 - (void)followDeletion {
+    /* An attachment can come after the text that has it. */
+    [_binding refreshAttachments];
     BOOL deleted = _note.deletedAt != nil;
     _textView.editable = !deleted;
     self.navigationItem.rightBarButtonItem = deleted
@@ -758,6 +761,35 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)dashList:(id)sender { [self list:SNListDash]; }
 - (IBAction)numberList:(id)sender { [self list:SNListNumber]; }
 - (IBAction)checklist:(id)sender { [self list:SNListCheck]; }
+/* Photos into the note, at the insertion point (one pasted is one too). */
+- (IBAction)attachPhoto:(id)sender {
+    if (!_textView.editable) return;
+    PHPickerConfiguration *config = [[PHPickerConfiguration alloc] init];
+    config.filter = [PHPickerFilter imagesFilter];
+    config.selectionLimit = 0;
+    PHPickerViewController *picker = [[PHPickerViewController alloc] initWithConfiguration:config];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    for (PHPickerResult *result in results)
+        [result.itemProvider loadDataRepresentationForTypeIdentifier:@"public.image" completionHandler:^(NSData *data, NSError *error) {
+            if (!data) return;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self insertImageData:data];
+            });
+        }];
+}
+
+- (void)insertImageData:(NSData *)data {
+    NSRange r = _textView.selectedRange;
+    if (![_binding insertImageData:data inRange:r]) return;
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+}
+
 /* On the selection; with none, on the link the insertion point is in. */
 - (IBAction)addLink:(id)sender {
     if (!_textView.editable) return;
