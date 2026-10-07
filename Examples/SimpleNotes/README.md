@@ -242,7 +242,7 @@ never starts on its own: opening the image starts the app, and the server
 runs only when asked:
 
 ```sh
-./SimpleNotes-Linux-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
+./SimpleNotes-*.AppImage --server -StoreURL notes.sqlite -Port 8080 -Localhost NO
 ```
 
 The apps:
@@ -278,7 +278,7 @@ and attach:
   `MACOS_CERTIFICATE_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and
   `NOTARY_PASSWORD`; otherwise it's unsigned, and named so. Either way it
   must pass its self-test first.
-- **Linux** (`release.yml`): `SimpleNotes-Linux-<version>-x86_64.AppImage`,
+- **Linux** (`release.yml`): `SimpleNotes-<version>-x86_64.AppImage`,
   built on Ubuntu 22.04 so it runs there and on anything newer. It is
   checked on a clean Ubuntu: its own server is started and seeded, and the
   app's self-test runs against it.

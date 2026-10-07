@@ -6,6 +6,7 @@ NSString * const SNBoldKey = @"bold";
 NSString * const SNItalicKey = @"italic";
 NSString * const SNUnderlineKey = @"underline";
 NSString * const SNStrikeKey = @"strike";
+NSString * const SNLinkKey = @"link";
 NSString * const SNStyleKey = @"style";
 NSString * const SNStyleTitle = @"title";
 NSString * const SNStyleHeading = @"heading";
@@ -22,6 +23,7 @@ NSString * const SNStyleAttributeName = @"SNStyle";
 NSString * const SNListAttributeName = @"SNList";
 NSString * const SNCheckedAttributeName = @"SNChecked";
 NSString * const SNIndentAttributeName = @"SNIndent";
+NSString * const SNLinkAttributeName = @"SNLink";
 /* Bold and italic said beside the font too: a font with no italic face
    (or bold) still says what was meant. */
 static NSString * const SNBoldAttributeName = @"SNBold";
@@ -240,6 +242,12 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     v[NSForegroundColorAttributeName] = SNTextColor();
     if ([attrs[SNUnderlineKey] boolValue]) v[NSUnderlineStyleAttributeName] = @(NSUnderlineStyleSingle);
     if ([attrs[SNStrikeKey] boolValue]) v[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
+    NSString *link = [attrs[SNLinkKey] isKindOfClass:[NSString class]] ? attrs[SNLinkKey] : nil;
+    NSURL *url = link ? SNURLOfLink(link) : nil;
+    if (url) {
+        v[SNLinkAttributeName] = link;
+        v[NSLinkAttributeName] = url;
+    }
     if (style) v[SNStyleAttributeName] = style;
     if (list) v[SNListAttributeName] = list;
     if (p[SNCheckedKey]) v[SNCheckedAttributeName] = @YES;
@@ -267,6 +275,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if ([view[SNItalicAttributeName] boolValue]) t[SNItalicKey] = @YES;
     if ([view[NSUnderlineStyleAttributeName] integerValue]) t[SNUnderlineKey] = @YES;
     if ([view[NSStrikethroughStyleAttributeName] integerValue]) t[SNStrikeKey] = @YES;
+    if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
     return t;
 }
 
@@ -277,7 +286,7 @@ static NSArray *SNOwnViewKeys(void) {
     if (!keys)
         keys = @[ NSFontAttributeName, NSForegroundColorAttributeName, NSUnderlineStyleAttributeName, NSStrikethroughStyleAttributeName,
                   NSParagraphStyleAttributeName, SNStyleAttributeName, SNListAttributeName, SNCheckedAttributeName,
-                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName ];
+                  SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName ];
     return keys;
 }
 
@@ -505,20 +514,40 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     }
 }
 
-/* Tags (#word) in the paragraphs a range touches shown in the accent
-   colour, as Apple Notes does: the view's only, nothing of the text's. */
+/* What is found in the paragraphs a range touches, shown as Apple Notes
+   shows it: tags (#word) in the accent colour, web addresses typed as
+   links. The view's only, nothing of the text's: a link given (SNLink)
+   stays as it is. */
 - (void)showTagsInRange:(NSRange)range {
     NSString *s = _storage.string;
     NSRange para = SNParagraphsRange(s, range);
     if (!para.length) return;
+    NSString *text = [s substringWithRange:para];
     BOOL was = _applying;
     _applying = YES;
     [_storage beginEditing];
     [_storage addAttribute:NSForegroundColorAttributeName value:SNTextColor() range:para];
-    for (NSValue *v in SNTagRangesInText([s substringWithRange:para])) {
+    for (NSValue *v in SNTagRangesInText(text)) {
         NSRange tag = v.rangeValue;
         tag.location += para.location;
         [_storage addAttribute:NSForegroundColorAttributeName value:SNAccent() range:tag];
+    }
+    /* Detected links: off where none is now, on where one is. */
+    for (NSValue *v in SNAttributeRuns(_storage, para)) {
+        NSRange run = v.rangeValue;
+        if (![_storage attribute:SNLinkAttributeName atIndex:run.location effectiveRange:NULL])
+            [_storage removeAttribute:NSLinkAttributeName range:run];
+    }
+    for (NSValue *v in SNLinkRangesInText(text)) {
+        NSRange found = v.rangeValue;
+        found.location += para.location;
+        NSURL *url = SNURLOfLink([s substringWithRange:found]);
+        if (!url) continue;
+        for (NSValue *r in SNAttributeRuns(_storage, found)) {
+            NSRange run = r.rangeValue;
+            if (![_storage attribute:SNLinkAttributeName atIndex:run.location effectiveRange:NULL])
+                [_storage addAttribute:NSLinkAttributeName value:url range:run];
+        }
     }
     [_storage endEditing];
     _applying = was;
@@ -592,6 +621,17 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [self setTextAttributes:@{ key: on ? @YES : [NSNull null] } inRange:range];
 }
 
+- (void)setLink:(NSString *)link inRange:(NSRange)range {
+    if (!range.length) return;
+    NSString *trimmed = [link stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    [self setTextAttributes:@{ SNLinkKey: trimmed.length ? trimmed : [NSNull null] } inRange:range];
+}
+
+- (NSString *)linkAt:(NSUInteger)index {
+    if (index >= _storage.length) return nil;
+    return [_storage attribute:SNLinkAttributeName atIndex:index effectiveRange:NULL];
+}
+
 - (NSRange)paragraphsRangeForRange:(NSRange)range {
     return SNParagraphsRange(_storage.string, range);
 }
@@ -657,6 +697,59 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     [self paragraphsChanged];
 }
 
+- (BOOL)isCheckItemAt:(NSUInteger)start {
+    return [[self paragraphAttributesAt:start][SNListKey] isEqual:SNListCheck] && start < _storage.length;
+}
+
+- (NSRange)checklistRangeAt:(NSUInteger)index {
+    NSString *s = _storage.string;
+    NSUInteger start = SNParagraphStart(s, MIN(index, s.length));
+    if (![self isCheckItemAt:start]) return NSMakeRange(NSNotFound, 0);
+    while (start > 0 && [self isCheckItemAt:SNParagraphStart(s, start - 1)]) start = SNParagraphStart(s, start - 1);
+    NSUInteger end = SNParagraphEnd(s, start);
+    while (end < s.length && [self isCheckItemAt:end]) end = SNParagraphEnd(s, end);
+    return NSMakeRange(start, end - start);
+}
+
+- (BOOL)moveCheckedToBottomOfChecklistAt:(NSUInteger)index {
+    NSRange list = [self checklistRangeAt:index];
+    if (list.location == NSNotFound) return NO;
+    NSString *s = _storage.string;
+    NSMutableArray<NSValue *> *items = [NSMutableArray array];
+    for (NSUInteger i = list.location; i < NSMaxRange(list); i = SNParagraphEnd(s, i))
+        [items addObject:[NSValue valueWithRange:NSMakeRange(i, SNParagraphEnd(s, i) - i)]];
+    /* The ticked ones at the bottom already stay; those above an unticked
+       one move. */
+    NSUInteger tail = items.count;
+    while (tail > 0 && [[self paragraphAttributesAt:items[tail - 1].rangeValue.location][SNCheckedKey] boolValue]) tail--;
+    NSMutableArray<NSValue *> *moving = [NSMutableArray array];
+    for (NSUInteger i = 0; i < tail; i++)
+        if ([[self paragraphAttributesAt:items[i].rangeValue.location][SNCheckedKey] boolValue]) [moving addObject:items[i]];
+    if (!moving.count) return NO;
+    /* Each above the last item ends with its newline. They go above the
+       ticked ones at the bottom already, keeping the ticked ones' order; or
+       at the end when there are none. */
+    NSMutableAttributedString *moved = [[NSMutableAttributedString alloc] init];
+    for (NSValue *v in moving) [moved appendAttributedString:[_storage attributedSubstringFromRange:v.rangeValue]];
+    NSUInteger at = tail < items.count ? items[tail].rangeValue.location : NSMaxRange(list);
+    BOOL endsText = tail == items.count && NSMaxRange(list) == s.length && [s characterAtIndex:s.length - 1] != '\n';
+    NSDictionary *lastItem = endsText ? [_storage attributesAtIndex:s.length - 1 effectiveRange:NULL] : nil;
+    for (NSValue *v in moving.reverseObjectEnumerator) [_storage deleteCharactersInRange:v.rangeValue];
+    for (NSValue *v in moving) at -= v.rangeValue.length;
+    if (endsText) {
+        /* After a last item with no newline: one before them (the item's
+           own: a paragraph is its newline's), none after. */
+        [moved deleteCharactersInRange:NSMakeRange(moved.length - 1, 1)];
+        [moved insertAttributedString:[[NSAttributedString alloc] initWithString:@"\n" attributes:lastItem] atIndex:0];
+    }
+    [_storage insertAttributedString:moved atIndex:at];
+    /* Moved, not typed: no new items to untick (textDidChange). */
+    _dirty = NSMakeRange(NSNotFound, 0);
+    [_afterNewline removeAllIndexes];
+    [self showTagsInRange:NSMakeRange(list.location, NSMaxRange(list) - list.location)];
+    return YES;
+}
+
 - (void)toggleCheckedForParagraphsInRange:(NSRange)range {
     NSArray<NSValue *> *paragraphs = [self paragraphRangesIn:range];
     NSNumber *first = nil;
@@ -698,6 +791,8 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     else if (index < len) from = index;
     else if (index > 0) from = index - 1;
     NSMutableDictionary *t = from == NSNotFound ? [NSMutableDictionary dictionary] : SNInlineOf([self textAttributesAt:from]);
+    /* A link ends where it ends: what is typed after it is not in it. */
+    [t removeObjectForKey:SNLinkKey];
     [t addEntriesFromDictionary:[self paragraphAttributesAt:index]];
     return SNViewAttributes(t);
 }
@@ -709,6 +804,7 @@ static NSUInteger SNMoved(NSUInteger p, TTEdit *e) {
     if (keep) {
         [t removeObjectsForKeys:SNInlineOf(t).allKeys];
         [t addEntriesFromDictionary:SNInlineOf([self typing])];
+        [t removeObjectForKey:SNLinkKey];
     }
     [self setTyping:SNViewAttributes(t)];
 }

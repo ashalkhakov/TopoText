@@ -1,5 +1,6 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
+#import "SNModel.h"
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 
@@ -456,6 +457,20 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [UISwipeActionsConfiguration configurationWithActions:@[ delete, move ]];
 }
 
+/* A note pressed and held: its link (simplenotes://note/<id>), to paste
+   into another note as a link that opens it. */
+- (UIContextMenuConfiguration *)tableView:(UITableView *)t contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)ip point:(CGPoint)point {
+    SNNote *note = [self noteAt:ip];
+    if (!note.id || note.deletedAt) return nil;
+    NSString *link = SNLinkToNote(note.id).absoluteString;
+    return [UIContextMenuConfiguration configurationWithIdentifier:nil previewProvider:nil actionProvider:^UIMenu *(NSArray *suggested) {
+        return [UIMenu menuWithTitle:@"" children:@[ [UIAction actionWithTitle:@"Copy Link" image:[UIImage systemImageNamed:@"link"]
+                                                                  identifier:nil handler:^(UIAction *a) {
+            [UIPasteboard generalPasteboard].string = link;
+        }] ]];
+    }];
+}
+
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)t leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)ip {
     SNNote *note = [self noteAt:ip];
     if (_deleted) {
@@ -614,8 +629,36 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 /* Only a tap on a checkbox: the text view has the others. */
+/* The link under a tap: a given one or one detected; nil for none. */
+- (NSURL *)linkAt:(UIGestureRecognizer *)g {
+    NSTextStorage *ts = _textView.textStorage;
+    if (!ts.length) return nil;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    p = CGPointMake(p.x - inset.left, p.y - inset.top);
+    NSLayoutManager *lm = _textView.layoutManager;
+    NSUInteger glyph = [lm glyphIndexForPoint:p inTextContainer:_textView.textContainer];
+    CGRect box = [lm boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
+    if (!CGRectContainsPoint(box, p)) return nil;
+    NSUInteger at = [lm characterIndexForGlyphAtIndex:glyph];
+    id link = at < ts.length ? [ts attribute:NSLinkAttributeName atIndex:at effectiveRange:NULL] : nil;
+    return [link isKindOfClass:[NSURL class]] ? link : nil;
+}
+
+/* Only a tap on a checkbox or a link: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound;
+    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil;
+}
+
+/* A link to a note opens its editor; any other, in its own application. */
+- (void)openLink:(NSURL *)url {
+    NSString *noteID = SNNoteIDInLink(url);
+    if (!noteID) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+        return;
+    }
+    SNNote *note = [_notes noteWithID:noteID];
+    if (note) [self.navigationController pushViewController:[[SNEditorViewController alloc] initWithNotes:_notes note:note] animated:YES];
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
@@ -623,10 +666,16 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSURL *link = [self checkboxAt:g] == NSNotFound ? [self linkAt:g] : nil;
+    if (link) {
+        [self openLink:link];
+        return;
+    }
     NSUInteger at = [self checkboxAt:g];
     if (at == NSNotFound || !_textView.editable) return;
     NSRange sel = _textView.selectedRange;
     [_binding toggleCheckedForParagraphsInRange:NSMakeRange(at, 0)];
+    if (_notes.movesCheckedToBottom) [_binding moveCheckedToBottomOfChecklistAt:at];
     [self formatted:sel];
 }
 
@@ -646,8 +695,18 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],
         [UICommand commandWithTitle:@"Numbered List" image:[UIImage systemImageNamed:@"list.number"] action:@selector(numberList:) propertyList:nil],
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UICommand commandWithTitle:@"Move Checked to Bottom" image:[UIImage systemImageNamed:@"arrow.down.to.line"]
+                                 action:@selector(moveCheckedToBottom:) propertyList:nil],
+            [self keepCheckedCommand] ]],
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
             [UICommand commandWithTitle:@"Increase Indentation" image:[UIImage systemImageNamed:@"increase.indent"] action:@selector(indent:) propertyList:nil],
             [UICommand commandWithTitle:@"Decrease Indentation" image:[UIImage systemImageNamed:@"decrease.indent"] action:@selector(outdent:) propertyList:nil] ]] ]];
+}
+
+- (UICommand *)keepCheckedCommand {
+    UICommand *c = [UICommand commandWithTitle:@"Keep Checked at Bottom" image:nil action:@selector(toggleKeepCheckedAtBottom:) propertyList:nil];
+    c.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return c;
 }
 
 /* After the binding changed paragraphs: the selection as it was, typing
@@ -699,11 +758,41 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)dashList:(id)sender { [self list:SNListDash]; }
 - (IBAction)numberList:(id)sender { [self list:SNListNumber]; }
 - (IBAction)checklist:(id)sender { [self list:SNListCheck]; }
+/* On the selection; with none, on the link the insertion point is in. */
+- (IBAction)addLink:(id)sender {
+    if (!_textView.editable) return;
+    NSRange range = _textView.selectedRange;
+    NSString *current = [_binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    if (!range.length && current && range.location)
+        [_textView.textStorage attribute:SNLinkAttributeName atIndex:range.location - 1 longestEffectiveRange:&range
+                                 inRange:NSMakeRange(0, _textView.textStorage.length)];
+    if (!range.length) return;
+    NSRange chosen = range;
+    SNAsk(self, @"Add Link", @"A web address, or a link to a note; empty: none.", current ?: @"https://", ^(NSString *link) {
+        [self->_binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:chosen];
+        [self formatted:chosen];
+    });
+}
+
 - (IBAction)toggleChecked:(id)sender {
     if (!_textView.editable) return;
     NSRange r = _textView.selectedRange;
     [_binding toggleCheckedForParagraphsInRange:r];
+    if (_notes.movesCheckedToBottom) [_binding moveCheckedToBottomOfChecklistAt:r.location];
     [self formatted:r];
+}
+
+- (IBAction)moveCheckedToBottom:(id)sender {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding moveCheckedToBottomOfChecklistAt:r.location];
+    [self formatted:r];
+}
+
+- (IBAction)toggleKeepCheckedAtBottom:(id)sender {
+    _notes.movesCheckedToBottom = !_notes.movesCheckedToBottom;
+    [self makeFormatMenus];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottom:nil];
 }
 - (IBAction)indent:(id)sender { [self indentBy:1]; }
 - (IBAction)outdent:(id)sender { [self indentBy:-1]; }

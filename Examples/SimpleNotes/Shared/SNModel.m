@@ -81,3 +81,38 @@ NSDictionary *SNUpgradeBody(NSDictionary *body, NSEntityDescription *entity) {
     [b removeObjectForKey:@"Updated"];
     return b;
 }
+
+NSArray<NSValue *> *SNLinkRangesInText(NSString *text) {
+    static NSRegularExpression *web;
+    if (!web)
+        web = [NSRegularExpression regularExpressionWithPattern:@"(?:https?://|www\\.)[^\\s<>\"]+" options:NSRegularExpressionCaseInsensitive error:NULL];
+    NSMutableArray *ranges = [NSMutableArray array];
+    NSCharacterSet *trailing = [NSCharacterSet characterSetWithCharactersInString:@".,;:!?)]}'"];
+    for (NSTextCheckingResult *m in [web matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
+        NSRange r = m.range;
+        if (r.location && ![[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:[text characterAtIndex:r.location - 1]] &&
+            [text characterAtIndex:r.location - 1] != '(')
+            continue;
+        while (r.length && [trailing characterIsMember:[text characterAtIndex:NSMaxRange(r) - 1]]) r.length--;
+        if (r.length > 4) [ranges addObject:[NSValue valueWithRange:r]];
+    }
+    return ranges;
+}
+
+static NSString * const SNNoteLinkPrefix = @"simplenotes://note/";
+
+NSURL *SNLinkToNote(NSString *noteID) {
+    return [NSURL URLWithString:[SNNoteLinkPrefix stringByAppendingString:noteID]];
+}
+
+NSString *SNNoteIDInLink(NSURL *link) {
+    NSString *s = link.absoluteString;
+    return [s hasPrefix:SNNoteLinkPrefix] && s.length > SNNoteLinkPrefix.length ? [s substringFromIndex:SNNoteLinkPrefix.length] : nil;
+}
+
+NSURL *SNURLOfLink(NSString *text) {
+    NSString *t = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (!t.length) return nil;
+    if ([t rangeOfString:@"://"].location == NSNotFound && ![t hasPrefix:@"mailto:"]) t = [@"https://" stringByAppendingString:t];
+    return [NSURL URLWithString:t];
+}

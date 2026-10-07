@@ -86,6 +86,12 @@
                                     <action selector="togglePinned:" target="-1" id="SNm-ac-205"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Copy Link to Note" id="SNm-mi-901">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="copyNoteLink:" target="-1" id="SNm-ac-901"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Delete Note" id="SNm-mi-206">
                                 <string key="keyEquivalent" base64-UTF8="YES">CA</string>
                                 <connections>
@@ -234,6 +240,18 @@
                                     <action selector="toggleChecked:" target="-1" id="SNm-ac-412"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Move Checked to Bottom" id="SNm-mi-904">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="moveCheckedToBottom:" target="-1" id="SNm-ac-904"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Keep Checked at Bottom" id="SNm-mi-905">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="toggleKeepCheckedAtBottom:" target="-1" id="SNm-ac-905"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-413"/>
                             <menuItem title="Increase Indentation" keyEquivalent="]" id="SNm-mi-414">
                                 <connections>
@@ -265,6 +283,13 @@
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
                                 <connections>
                                     <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-420"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-902"/>
+                            <menuItem title="Add Link…" keyEquivalent="k" id="SNm-mi-903">
+                                <modifierMask key="keyEquivalentModifierMask" command="YES"/>
+                                <connections>
+                                    <action selector="addLink:" target="-1" id="SNm-ac-903"/>
                                 </connections>
                             </menuItem>
                         </items>

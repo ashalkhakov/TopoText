@@ -43,7 +43,7 @@ done < <( { find AppDir/usr/System/Library/Bundles AppDir/usr/Local/Library/Bund
                  -type f -perm -111 2>/dev/null; find AppDir/usr -name 'libCD*Store.so*' -type f 2>/dev/null; } \
               | xargs -r file | awk -F: '/ELF/{print $1}')
 
-export OUTPUT="SimpleNotes-Linux-${APP_VERSION:-dev}-${arch}.AppImage"
+export OUTPUT="SimpleNotes-${APP_VERSION:-dev}-${arch}.AppImage"
 export APPIMAGE_EXTRACT_AND_RUN=1
 export NO_VALIDATE=1
 # Keep the symbol tables: Objective-C methods are named only in .symtab, which

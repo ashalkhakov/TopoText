@@ -253,4 +253,69 @@
     XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:5 effectiveRange:NULL], plain);
 }
 
+#pragma mark links
+
+- (void)testALinkGivenIsTheTextsAndOneTypedIsTheViews {
+    [self start:@"see notes and www.example.com"];
+    [_binding setLink:@"https://apple.com/notes" inRange:NSMakeRange(4, 5)];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:5 effectiveRange:NULL][SNLinkKey], @"https://apple.com/notes");
+    XCTAssertEqualObjects([_storage attribute:NSLinkAttributeName atIndex:5 effectiveRange:NULL], [NSURL URLWithString:@"https://apple.com/notes"]);
+    XCTAssertEqualObjects([_binding linkAt:5], @"https://apple.com/notes");
+    /* The address typed: a link in the view only. */
+    XCTAssertEqualObjects([_storage attribute:NSLinkAttributeName atIndex:20 effectiveRange:NULL], [NSURL URLWithString:@"https://www.example.com"]);
+    XCTAssertNil([_editor.text attributesAtIndex:20 effectiveRange:NULL][SNLinkKey]);
+    /* Typing on after a link is not in it. */
+    _selection = NSMakeRange(9, 0);
+    [_binding selectionDidChange];
+    [self key:@"!"];
+    XCTAssertNil([_editor.text attributesAtIndex:9 effectiveRange:NULL][SNLinkKey]);
+    [_binding setLink:nil inRange:NSMakeRange(4, 5)];
+    XCTAssertNil([_storage attribute:NSLinkAttributeName atIndex:5 effectiveRange:NULL]);
+}
+
+- (void)testLinksFoundInText {
+    NSString *t = @"go to https://example.com/a?b=1, or (www.x.org). not:www.y.org";
+    NSMutableArray *found = [NSMutableArray array];
+    for (NSValue *v in SNLinkRangesInText(t)) [found addObject:[t substringWithRange:v.rangeValue]];
+    XCTAssertEqualObjects(found, (@[ @"https://example.com/a?b=1", @"www.x.org" ]));
+    NSURL *link = SNLinkToNote(@"ABC-123");
+    XCTAssertEqualObjects(SNNoteIDInLink(link), @"ABC-123");
+    XCTAssertNil(SNNoteIDInLink([NSURL URLWithString:@"https://example.com"]));
+    XCTAssertEqualObjects(SNURLOfLink(@" example.com "), [NSURL URLWithString:@"https://example.com"]);
+}
+
+#pragma mark checked to the bottom
+
+- (NSString *)checksOf:(NSString *)string {
+    NSMutableString *marks = [NSMutableString string];
+    for (NSValue *v in _editor.text.paragraphRanges) {
+        NSDictionary *p = [self paragraphAt:v.rangeValue.location];
+        [marks appendString:![p[SNListKey] isEqual:SNListCheck] ? @"-" : [p[SNCheckedKey] boolValue] ? @"x" : @"o"];
+    }
+    return marks;
+}
+
+- (void)testCheckedItemsMoveToTheBottom {
+    [self start:@"Milk\nEggs\nBread"];
+    [_binding toggleList:SNListCheck forParagraphsInRange:NSMakeRange(0, 14)];
+    [_binding toggleCheckedForParagraphsInRange:NSMakeRange(0, 0)];
+    XCTAssertEqualObjects([self checksOf:nil], @"xoo");
+    XCTAssertTrue([_binding moveCheckedToBottomOfChecklistAt:6]);
+    XCTAssertEqualObjects(_editor.text.string, @"Eggs\nBread\nMilk");
+    XCTAssertEqualObjects(_storage.string, _editor.text.string);
+    XCTAssertEqualObjects([self checksOf:nil], @"oox", @"Milk still ticked, at the bottom");
+    XCTAssertFalse([_binding moveCheckedToBottomOfChecklistAt:0], @"nothing out of place");
+}
+
+- (void)testOnlyTheChecklistMoves {
+    [self start:@"Title\nA\nB\nC\nafter"];
+    [_binding toggleList:SNListCheck forParagraphsInRange:NSMakeRange(6, 5)];
+    [_binding toggleCheckedForParagraphsInRange:NSMakeRange(6, 0)];
+    [_binding toggleCheckedForParagraphsInRange:NSMakeRange(10, 0)];
+    XCTAssertEqualObjects([self checksOf:nil], @"-xox-");
+    XCTAssertTrue([_binding moveCheckedToBottomOfChecklistAt:8]);
+    XCTAssertEqualObjects(_editor.text.string, @"Title\nB\nA\nC\nafter");
+    XCTAssertEqualObjects([self checksOf:nil], @"-oxx-");
+}
+
 @end

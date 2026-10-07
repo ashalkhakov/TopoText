@@ -422,6 +422,14 @@ NSString *SNDateText(NSDate *date) {
     [self say:_status synced:NO];
 }
 
+- (BOOL)movesCheckedToBottom {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SNMoveCheckedToBottom"];
+}
+
+- (void)setMovesCheckedToBottom:(BOOL)moves {
+    [[NSUserDefaults standardUserDefaults] setBool:moves forKey:@"SNMoveCheckedToBottom"];
+}
+
 - (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes {
     return SNGroupNotes(notes, self.sortOrder, self.groupsByDate, [NSDate date]);
 }
@@ -435,6 +443,11 @@ NSString *SNDateText(NSDate *date) {
 
 - (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
     return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
+}
+
+- (SNNote *)noteWithID:(NSString *)noteID {
+    if (!noteID.length) return nil;
+    return [self fetch:SNNoteEntity where:[NSPredicate predicateWithFormat:@"id == %@", noteID] sortedBy:nil].firstObject;
 }
 
 - (NSArray<SNNote *> *)deletedNotesMatching:(NSString *)text {

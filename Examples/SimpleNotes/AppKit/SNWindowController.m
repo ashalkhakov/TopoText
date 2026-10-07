@@ -1,5 +1,6 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
+#import "SNModel.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -458,6 +459,23 @@ static const NSInteger SNMoveToMenuTag = 7001;
     return YES;
 }
 
+- (BOOL)showNote:(SNNote *)note {
+    if (note.deletedAt) [self showRecentlyDeleted];
+    else if (_shownTag || [self showsDeleted] || (note.folder != [self selectedFolder] && [self selectedFolder])) [self showAllNotes];
+    for (NSUInteger pass = 0; pass < 2; pass++) {
+        for (NSUInteger i = 0; i < _rows.count; i++)
+            if (_rows[i] == note) {
+                [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:i] byExtendingSelection:NO];
+                [_noteTable scrollRowToVisible:(NSInteger)i];
+                return YES;
+            }
+        /* Not listed: a search hides it. */
+        _searchField.stringValue = @"";
+        [self reloadNotes];
+    }
+    return NO;
+}
+
 - (BOOL)selectNoteTitled:(NSString *)title {
     for (NSUInteger i = 0; i < _rows.count; i++)
         if ([_rows[i] isKindOfClass:[SNNote class]] && [[_rows[i] title] isEqual:title]) {
@@ -510,11 +528,36 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark the text view's delegate
 
+/* A link to a note opens it here; any other, in its own application. */
+- (BOOL)textView:(NSTextView *)tv clickedOnLink:(id)link atIndex:(NSUInteger)index {
+    NSURL *url = [link isKindOfClass:[NSURL class]] ? link : [link isKindOfClass:[NSString class]] ? SNURLOfLink(link) : nil;
+    if (!url) return NO;
+    NSString *noteID = SNNoteIDInLink(url);
+    if (noteID) {
+        SNNote *note = [_notes noteWithID:noteID];
+        if (!note || ![self showNote:note]) NSBeep();
+        return YES;
+    }
+    return [[NSWorkspace sharedWorkspace] openURL:url];
+}
+
 - (void)textView:(SNTextView *)tv clickedCheckboxAtIndex:(NSUInteger)index {
     NSRange r = NSMakeRange(index, 0);
     if (![self beginFormattingAt:r]) return;
     [_binding toggleCheckedForParagraphsInRange:r];
     [self endFormatting];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:index];
+}
+
+/* Undoably: a move keeps the list's length, so the text view's undo of
+   "this range, replaced" puts the old order back. */
+- (void)moveCheckedToBottomAt:(NSUInteger)index {
+    NSRange list = [_binding checklistRangeAt:index];
+    if (list.location == NSNotFound || !_textView.isEditable) return;
+    NSRange sel = _textView.selectedRange;
+    if (![_textView shouldChangeTextInRange:list replacementString:[_textView.string substringWithRange:list]]) return;
+    if ([_binding moveCheckedToBottomOfChecklistAt:index]) [_textView didChangeText];
+    _textView.selectedRange = sel;
 }
 
 /* Typing in lists, as Apple Notes has it (SNTextBinding). */
@@ -632,6 +675,39 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [self.window makeFirstResponder:_searchField];
 }
 
+#pragma mark links
+
+/* On the selection; with none, on the link the insertion point is in. */
+- (IBAction)addLink:(id)sender {
+    if (!_binding || !_textView.isEditable) return;
+    NSRange range = _textView.selectedRange;
+    NSString *current = [_binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    if (!range.length && current) {
+        NSRange whole;
+        [_textView.textStorage attribute:SNLinkAttributeName atIndex:range.location ? range.location - 1 : 0
+                   longestEffectiveRange:&whole inRange:NSMakeRange(0, _textView.textStorage.length)];
+        range = whole;
+    }
+    if (!range.length) {
+        NSBeep();
+        return;
+    }
+    NSString *link = SNAskForText(@"Add Link", @"Link (a web address, or a link to a note; empty: none):", current ?: @"https://");
+    if (!link) return;
+    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
+    [_binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:range];
+    [_textView didChangeText];
+}
+
+- (IBAction)copyNoteLink:(id)sender {
+    SNNote *note = [self selectedNote];
+    if (!note.id) return;
+    NSString *link = SNLinkToNote(note.id).absoluteString;
+    NSPasteboard *pb = [NSPasteboard generalPasteboard];
+    [pb declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+    [pb setString:link forType:NSPasteboardTypeString];
+}
+
 #pragma mark sorting and grouping
 
 /* The device's choice; every list follows it (SNNotes says so). */
@@ -655,6 +731,14 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
+    if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(moveCheckedToBottom:))
+        return _binding != nil && _textView.isEditable && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
+    if (a == @selector(toggleKeepCheckedAtBottom:)) {
+        item.state = _notes.movesCheckedToBottom ? NSControlStateValueOn : NSControlStateValueOff;
+        return YES;
+    }
     SNSortOrder order = _notes.sortOrder;
     if (a == @selector(sortByDateEdited:)) item.state = order == SNSortByDateEdited ? NSControlStateValueOn : NSControlStateValueOff;
     if (a == @selector(sortByDateCreated:)) item.state = order == SNSortByDateCreated ? NSControlStateValueOn : NSControlStateValueOff;
@@ -733,6 +817,16 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (![self beginFormattingAt:r]) return;
     [_binding toggleCheckedForParagraphsInRange:r];
     [self endFormatting];
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:r.location];
+}
+
+- (IBAction)moveCheckedToBottom:(id)sender {
+    [self moveCheckedToBottomAt:_textView.selectedRange.location];
+}
+
+- (IBAction)toggleKeepCheckedAtBottom:(id)sender {
+    _notes.movesCheckedToBottom = !_notes.movesCheckedToBottom;
+    if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:_textView.selectedRange.location];
 }
 - (IBAction)increaseIndentation:(id)sender { [self indentBy:1]; }
 - (IBAction)decreaseIndentation:(id)sender { [self indentBy:-1]; }

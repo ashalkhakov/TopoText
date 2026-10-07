@@ -48,6 +48,17 @@ FOUNDATION_EXPORT NSDictionary<NSString *, id> *SNUpgradeBody(NSDictionary<NSStr
 // (letters, digits, - and _, at least one letter), at the start or after a
 // space. Where they are in text, each range its # included.
 FOUNDATION_EXPORT NSArray<NSValue *> *SNTagRangesInText(NSString *text);
+// Web addresses in text, as Apple Notes links them while one types:
+// http:// and https:// ones, and www. ones; a trailing full stop, comma or
+// closing bracket not theirs.
+FOUNDATION_EXPORT NSArray<NSValue *> *SNLinkRangesInText(NSString *text);
+// A link to a note (simplenotes://note/<id>), and the note's id in one
+// (nil: not a link to a note).
+FOUNDATION_EXPORT NSURL *SNLinkToNote(NSString *noteID);
+FOUNDATION_EXPORT NSString *_Nullable SNNoteIDInLink(NSURL *_Nullable link);
+// What a link typed or detected opens: as given when it has a scheme, else
+// https:// (www.example.com).
+FOUNDATION_EXPORT NSURL *_Nullable SNURLOfLink(NSString *text);
 // The tags in text, lowercase (one tag whatever its case), each once, in
 // order, without their #.
 FOUNDATION_EXPORT NSArray<NSString *> *SNTagsInText(NSString *text);

@@ -53,8 +53,13 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)dashList:(nullable id)sender;
 - (IBAction)numberList:(nullable id)sender;
 - (IBAction)checklist:(nullable id)sender;
+// A link on the selection (or the one at the insertion point changed).
+- (IBAction)addLink:(nullable id)sender;
 // Mark as Checked: the checklist items selected ticked (or unticked).
 - (IBAction)toggleChecked:(nullable id)sender;
+// Move Checked to Bottom, and Keep Checked at Bottom (every tick).
+- (IBAction)moveCheckedToBottom:(nullable id)sender;
+- (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)indent:(nullable id)sender;
 - (IBAction)outdent:(nullable id)sender;
 // A note in Recently Deleted, recovered (the button over it).

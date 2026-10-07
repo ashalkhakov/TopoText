@@ -71,6 +71,11 @@
                         <action selector="strikethrough:" destination="-1" id="SNe-ac-008"/>
                     </connections>
                 </barButtonItem>
+                <barButtonItem image="link" catalog="system" id="SNe-bi-009">
+                    <connections>
+                        <action selector="addLink:" destination="-1" id="SNe-ac-009"/>
+                    </connections>
+                </barButtonItem>
             </items>
             <point key="canvasLocation" x="0.0" y="500"/>
         </toolbar>
@@ -79,6 +84,7 @@
         <image name="bold" catalog="system" width="12" height="16"/>
         <image name="checklist" catalog="system" width="16" height="16"/>
         <image name="list.bullet" catalog="system" width="16" height="16"/>
+        <image name="link" catalog="system" width="16" height="16"/>
         <image name="italic" catalog="system" width="10" height="16"/>
         <image name="strikethrough" catalog="system" width="16" height="16"/>
         <image name="underline" catalog="system" width="12" height="16"/>

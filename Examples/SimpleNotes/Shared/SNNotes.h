@@ -80,6 +80,8 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // folders', as Apple Notes lists them.
 - (NSArray<SNNote *> *)notesInFolder:(nullable SNFolder *)folder matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesInFolder:(nullable SNFolder *)folder;
+// The note of that id (SNLinkToNote's), deleted or not; nil: none here.
+- (nullable SNNote *)noteWithID:(NSString *)noteID;
 // Recently Deleted: the notes deleted, and not yet for good, the latest
 // deleted first.
 - (NSArray<SNNote *> *)deletedNotesMatching:(nullable NSString *)text;
@@ -116,6 +118,9 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // every list: by date edited and grouped by date unless set otherwise.
 @property (nonatomic) SNSortOrder sortOrder;
 @property (nonatomic) BOOL groupsByDate;
+// A checklist item ticked goes to the bottom of its list at once (user
+// defaults SNMoveCheckedToBottom; off, as Apple Notes' "Manually").
+@property (nonatomic) BOOL movesCheckedToBottom;
 // A sorted list in the groups a list shows: Pinned first; then, grouped by
 // date, Today, Yesterday, Previous 7 Days, Previous 30 Days, the months of
 // this year, and the years before (by the date sorted by); else the rest,

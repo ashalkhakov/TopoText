@@ -3,6 +3,7 @@
 // made from the other. AppKit's (macOS, GNUstep) and UIKit's.
 //
 //   Of a character:  bold, italic, underline, strike: YES
+//                    link: a URL's text (simplenotes://note/<id>: a note)
 //   Of a paragraph:  style: title, heading, subheading or mono (else body)
 //                    list: bullet, dash, number or check
 //                    checked: YES (a checklist item ticked)
@@ -38,6 +39,7 @@ FOUNDATION_EXPORT NSString * const SNBoldKey;        // @"bold"
 FOUNDATION_EXPORT NSString * const SNItalicKey;      // @"italic"
 FOUNDATION_EXPORT NSString * const SNUnderlineKey;   // @"underline"
 FOUNDATION_EXPORT NSString * const SNStrikeKey;      // @"strike"
+FOUNDATION_EXPORT NSString * const SNLinkKey;        // @"link"
 FOUNDATION_EXPORT NSString * const SNStyleKey;       // @"style"
 FOUNDATION_EXPORT NSString * const SNStyleTitle;     // @"title"
 FOUNDATION_EXPORT NSString * const SNStyleHeading;   // @"heading"
@@ -57,6 +59,10 @@ FOUNDATION_EXPORT NSString * const SNStyleAttributeName;    // @"SNStyle"
 FOUNDATION_EXPORT NSString * const SNListAttributeName;     // @"SNList"
 FOUNDATION_EXPORT NSString * const SNCheckedAttributeName;  // @"SNChecked"
 FOUNDATION_EXPORT NSString * const SNIndentAttributeName;   // @"SNIndent"
+// A link given (SNLinkKey), beside NSLinkAttributeName: one only detected
+// (an address typed, linked as Apple Notes does) has NSLinkAttributeName
+// alone, and is the view's, not the text's.
+FOUNDATION_EXPORT NSString * const SNLinkAttributeName;     // @"SNLink"
 
 // The text view's attributes for TopoText's (a character's and its
 // paragraph's together), and TopoText's for the view's.
@@ -107,6 +113,9 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // On the range's characters; with none selected, on what is typed next.
 - (BOOL)range:(NSRange)range has:(NSString *)key;
 - (void)toggle:(NSString *)key inRange:(NSRange)range;
+// A link on the range's characters (nil: taken off), and the one at a place.
+- (void)setLink:(nullable NSString *)link inRange:(NSRange)range;
+- (nullable NSString *)linkAt:(NSUInteger)index;
 // The rest on every paragraph the range touches.
 // A style (nil: body), the paragraphs' list taken off.
 - (void)setStyle:(nullable NSString *)style forParagraphsInRange:(NSRange)range;
@@ -115,6 +124,14 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 - (void)toggleList:(NSString *)list forParagraphsInRange:(NSRange)range;
 // Checklist items ticked, or unticked when the first is ticked.
 - (void)toggleCheckedForParagraphsInRange:(NSRange)range;
+// The checklist a place is in (its items one after another), its ticked
+// items moved after the others, as Apple Notes' Move Checked to Bottom;
+// NO when nothing moved. Only the ticked ones out of place move, each a
+// deletion and an insertion: typing another device does in one at the same
+// time stays where the item was.
+- (BOOL)moveCheckedToBottomOfChecklistAt:(NSUInteger)index;
+// The checklist's range a place is in (NSNotFound: none), for an undo.
+- (NSRange)checklistRangeAt:(NSUInteger)index;
 // Indented one more (by > 0) or one less, from none to 8.
 - (void)indentParagraphsInRange:(NSRange)range by:(NSInteger)by;
 // The paragraph at index's formatting (TopoText's keys), as the view shows it.

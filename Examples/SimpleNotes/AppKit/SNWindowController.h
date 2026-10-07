@@ -66,8 +66,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)toggleChecklist:(nullable id)sender;
 - (IBAction)toggleChecked:(nullable id)sender;
 - (IBAction)increaseIndentation:(nullable id)sender;
+// Format > Move Checked to Bottom, and Keep Checked at Bottom (every tick).
+- (IBAction)moveCheckedToBottom:(nullable id)sender;
+- (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
 - (IBAction)findNote:(nullable id)sender;
+// Format > Add Link… (a link on the selection, or the one at the insertion
+// point changed), and File > Copy Link to Note (simplenotes://note/<id>,
+// pasted as a link it opens the note).
+- (IBAction)addLink:(nullable id)sender;
+- (IBAction)copyNoteLink:(nullable id)sender;
+// The note shown and chosen, as a link to it opens it (NO: not here).
+- (BOOL)showNote:(SNNote *)note;
 // View > Sort By, and Group By Date.
 - (IBAction)sortByDateEdited:(nullable id)sender;
 - (IBAction)sortByDateCreated:(nullable id)sender;
