@@ -194,13 +194,25 @@ static NSString *TTTableKeyAt(TopoText *order, NSUInteger index) {
 }
 
 - (void)mergeTable:(TTTable *)other {
+    [self mergeTableReportingCellEdits:other];
+}
+
+- (NSMapTable<TopoText *, NSArray<TTEdit *> *> *)mergeTableReportingCellEdits:(TTTable *)other {
+    /* Keyed by the cell itself (its identity), not by its text's equality. */
+    NSMapTable *edits = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsStrongMemory | NSPointerFunctionsObjectPointerPersonality
+                                              valueOptions:NSPointerFunctionsStrongMemory];
     [_rows mergeText:other->_rows];
     [_columns mergeText:other->_columns];
     for (NSString *key in other->_cells) {
         TopoText *mine = _cells[key];
-        if (mine) [mine mergeText:other->_cells[key]];
-        else _cells[key] = [other->_cells[key] copyWithReplica:_replica];
+        if (!mine) {
+            _cells[key] = [other->_cells[key] copyWithReplica:_replica];
+            continue;
+        }
+        NSArray<TTEdit *> *done = [mine mergeText:other->_cells[key]];
+        if (done.count) [edits setObject:done forKey:mine];
     }
+    return edits;
 }
 
 - (TTTable *)mergedWith:(TTTable *)other {

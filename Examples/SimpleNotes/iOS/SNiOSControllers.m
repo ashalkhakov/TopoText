@@ -737,11 +737,23 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [_grids update];
 }
 
+/* What character formatting and links go on: a table's cell typed in, or
+   else the note's text; and its binding. */
+- (UITextView *)formattedTextView:(SNTextBinding **)binding {
+    UITextView *cell = [_grids cellTypedIn];
+    SNTextBinding *b = cell ? [_grids bindingOfCell:cell] : nil;
+    *binding = b ?: _binding;
+    return b ? cell : _textView;
+}
+
 /* On the selection; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
-    NSRange r = _textView.selectedRange;
-    [_binding toggle:key inRange:r];
-    if (r.length) _textView.selectedRange = r;
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSRange r = tv.selectedRange;
+    [binding toggle:key inRange:r];
+    if (r.length) tv.selectedRange = r;
 }
 
 - (void)style:(NSString *)style {
@@ -830,17 +842,20 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 /* On the selection; with none, on the link the insertion point is in. */
 - (IBAction)addLink:(id)sender {
-    if (!_textView.editable) return;
-    NSRange range = _textView.selectedRange;
-    NSString *current = [_binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSRange range = tv.selectedRange;
+    NSString *current = [binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
     if (!range.length && current && range.location)
-        [_textView.textStorage attribute:SNLinkAttributeName atIndex:range.location - 1 longestEffectiveRange:&range
-                                 inRange:NSMakeRange(0, _textView.textStorage.length)];
+        [tv.textStorage attribute:SNLinkAttributeName atIndex:range.location - 1 longestEffectiveRange:&range
+                          inRange:NSMakeRange(0, tv.textStorage.length)];
     if (!range.length) return;
     NSRange chosen = range;
     SNAsk(self, @"Add Link", @"A web address, or a link to a note; empty: none.", current ?: @"https://", ^(NSString *link) {
-        [self->_binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:chosen];
-        [self formatted:chosen];
+        [binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:chosen];
+        if (tv == self->_textView) [self formatted:chosen];
+        else tv.selectedRange = chosen;
     });
 }
 

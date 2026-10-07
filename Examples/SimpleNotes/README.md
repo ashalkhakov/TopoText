@@ -126,7 +126,11 @@ cell. Tables are edited where they are in the note, as in Apple Notes:
   Column** are in Format > Table and in a cell's context menu. On iOS
   they're on the table button in the bar over the keyboard, and in a cell's
   edit menu.
-- Cells are plain text for now. In Apple Notes they can be formatted.
+- **Bold, italic, underline, strikethrough and links** work in a cell as in
+  the note: from the Format menu and its shortcuts, or on iOS from the
+  format button in the bar over the keyboard. Styles and lists don't, as in
+  Apple Notes. Each cell has a text binding of its own (`SNTextBinding`,
+  over the cell's TopoText).
 
 Each table is a grid of text views (`SNTableGrid`) laid over its place in
 the note. That place is the table's character, which keeps the grid's room.
@@ -439,6 +443,6 @@ stays where the item was.
   server (an `ODataSyncSetHandler` that filters by the signed-in user).
 - **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
   ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Formatting in table cells, files other than images, smart
+- Files other than images, smart
   folders, a sort order per folder, and undo across a merge (the undo stack
   is cleared when a sync changes the open note).

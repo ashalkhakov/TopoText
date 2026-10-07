@@ -16,9 +16,9 @@
     return YES;
 }
 
-- (SNGridTextView *)makeCell:(NSString *)string {
+- (SNGridTextView *)makeCell {
     NSTextView *tv = [[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, _column ?: 100, 30)];
-    tv.richText = NO;
+    tv.richText = YES;
     tv.importsGraphics = NO;
     tv.drawsBackground = NO;
     tv.allowsUndo = YES;
@@ -28,20 +28,8 @@
     tv.horizontallyResizable = NO;
     tv.verticallyResizable = NO;
     tv.textContainer.widthTracksTextView = YES;
-    tv.string = string;
     tv.delegate = self;
     return tv;
-}
-
-- (NSString *)stringOfCell:(SNGridTextView *)cell {
-    return cell.string ?: @"";
-}
-
-- (void)setString:(NSString *)string ofCell:(SNGridTextView *)cell {
-    NSRange sel = cell.selectedRange;
-    cell.string = string;
-    NSUInteger at = MIN(sel.location, string.length);
-    cell.selectedRange = NSMakeRange(at, MIN(sel.length, string.length - at));
 }
 
 - (CGFloat)heightOfCell:(SNGridTextView *)cell {
@@ -84,8 +72,23 @@
     return NO;
 }
 
+/* Typing as in a note's text (SNTextBinding); Tab is the grid's. */
+- (BOOL)textView:(NSTextView *)tv shouldChangeTextInRange:(NSRange)range replacementString:(NSString *)string {
+    SNTextBinding *b = [self bindingOfCell:tv];
+    return b ? [b shouldChangeTextInRange:range replacementString:string] : YES;
+}
+
 - (void)textDidChange:(NSNotification *)n {
+    [[self bindingOfCell:n.object] textDidChange];
     [self cellChanged:n.object];
+}
+
+/* A link in a cell followed as one in the note: its window's controller. */
+- (BOOL)textView:(NSTextView *)tv clickedOnLink:(id)link atIndex:(NSUInteger)index {
+    id controller = self.window.delegate;
+    if ([controller respondsToSelector:@selector(textView:clickedOnLink:atIndex:)])
+        return [controller textView:tv clickedOnLink:link atIndex:index];
+    return NO;
 }
 
 - (void)textDidEndEditing:(NSNotification *)n {
@@ -93,6 +96,7 @@
 }
 
 - (void)textViewDidChangeSelection:(NSNotification *)n {
+    [[self bindingOfCell:n.object] selectionDidChange];
     [self noteCell:n.object];
 }
 

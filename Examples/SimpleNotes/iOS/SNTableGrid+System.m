@@ -31,38 +31,36 @@
     UIToolbar *bar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
     UIBarButtonItem *table = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"tablecells"] menu:[self tableMenu]];
     table.accessibilityLabel = @"Table";
+    /* A cell's characters formatted: the editor's actions, which format the
+       text typed in, a cell's too. */
+    UIMenu *format = [UIMenu menuWithTitle:@"" children:@[
+        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
+        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
+        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
+        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil],
+        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
+    UIBarButtonItem *formatItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"textformat"] menu:format];
+    formatItem.accessibilityLabel = @"Format";
     UIBarButtonItem *space = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
     UIBarButtonItem *next = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"arrow.right.to.line"]
                                                              style:UIBarButtonItemStylePlain target:self action:@selector(nextCell:)];
     next.accessibilityLabel = @"Next Cell";
     UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(endTyping:)];
-    bar.items = @[ table, space, next, done ];
+    bar.items = @[ formatItem, table, space, next, done ];
     [bar sizeToFit];
     _systemState = bar;
 }
 
-- (SNGridTextView *)makeCell:(NSString *)string {
+- (SNGridTextView *)makeCell {
     UITextView *tv = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, _column ?: 100, 30)];
     tv.scrollEnabled = NO;
     tv.backgroundColor = [UIColor clearColor];
     tv.font = SNFontFor(nil, NO, NO);
     tv.textColor = SNSystemTextColor();
     tv.textContainerInset = UIEdgeInsetsMake(6, 4, 6, 4);
-    tv.text = string;
     tv.inputAccessoryView = _systemState;
     tv.delegate = self;
     return tv;
-}
-
-- (NSString *)stringOfCell:(SNGridTextView *)cell {
-    return cell.text ?: @"";
-}
-
-- (void)setString:(NSString *)string ofCell:(SNGridTextView *)cell {
-    NSRange sel = cell.selectedRange;
-    cell.text = string;
-    NSUInteger at = MIN(sel.location, string.length);
-    cell.selectedRange = NSMakeRange(at, MIN(sel.length, string.length - at));
 }
 
 - (CGFloat)heightOfCell:(SNGridTextView *)cell {
@@ -115,11 +113,17 @@
         [self moveFrom:tv by:1];
         return NO;
     }
-    return YES;
+    SNTextBinding *b = [self bindingOfCell:tv];
+    return b ? [b shouldChangeTextInRange:range replacementString:text] : YES;
 }
 
 - (void)textViewDidChange:(UITextView *)tv {
+    [[self bindingOfCell:tv] textDidChange];
     [self cellChanged:tv];
+}
+
+- (void)textViewDidChangeSelection:(UITextView *)tv {
+    [[self bindingOfCell:tv] selectionDidChange];
 }
 
 - (void)textViewDidEndEditing:(UITextView *)tv {

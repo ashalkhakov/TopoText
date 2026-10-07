@@ -156,6 +156,16 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([tv.window.firstResponder tryToPerform:@selector(deleteRow:) with:nil] && grid.table.rowCount == 2,
               @"Delete Row from the menu");
         SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed (%@)", grid.table.strings]);
+        /* A cell's characters formatted, as the note's: Bold from the menu,
+           on what is selected in the cell; a cell's paragraphs not. */
+        NSTextView *bike = (NSTextView *)[grid textViewAtRow:0 column:0];
+        [tv.window makeFirstResponder:bike];
+        bike.selectedRange = NSMakeRange(0, 4);
+        SNSay([bike tryToPerform:@selector(toggleBold:) with:nil] &&
+              [[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"Bold in a cell, from the menu: the cell's text bold");
+        NSMenuItem *titleItem = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(styleTitle:) keyEquivalent:@""];
+        SNSay(![window validateMenuItem:titleItem], @"no Title in a cell");
         /* Over its place in the text, which keeps its room. */
         NSLayoutManager *tlm = tv.layoutManager;
         NSUInteger tg = [tlm glyphRangeForCharacterRange:NSMakeRange(tv.string.length - 1, 1) actualCharacterRange:NULL].location;
@@ -181,6 +191,8 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNAttachment *tableThere = tableThereID ? [other attachmentWithID:tableThereID] : nil;
         SNSay([[other tableOfAttachment:tableThere].strings isEqual:cells],
               [NSString stringWithFormat:@"and the table (%@)", [other tableOfAttachment:tableThere].strings]);
+        SNSay([[[[other tableOfAttachment:tableThere] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"its cell's bold too");
         SNNote *groceries = nil;
         for (SNNote *n in [notes notesInFolder:nil matching:@"Groceries"]) groceries = n;
         [window textView:window.textView clickedOnLink:SNLinkToNote(groceries.id) atIndex:0];

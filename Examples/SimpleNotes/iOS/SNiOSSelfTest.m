@@ -139,6 +139,14 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
               @"Delete Row in the cell's menu");
         [[UIApplication sharedApplication] sendAction:@selector(deleteRow:) to:nil from:nil forEvent:nil];
         SNSay([grid.table.strings isEqual:cells], [NSString stringWithFormat:@"the cells typed, the row deleted (%@)", grid.table.strings]);
+        /* A cell's characters formatted, as the note's: Bold from the bar
+           over the keyboard (up the responder chain, to the editor). */
+        UITextView *bike = [grid textViewAtRow:0 column:0];
+        [bike becomeFirstResponder];
+        bike.selectedRange = NSMakeRange(0, 4);
+        [[UIApplication sharedApplication] sendAction:@selector(bold:) to:nil from:nil forEvent:nil];
+        SNSay([[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"Bold in a cell: the cell's text bold");
         NSLayoutManager *tlm = wtv.layoutManager;
         CGRect room = [tlm boundingRectForGlyphRange:[tlm glyphRangeForCharacterRange:NSMakeRange(wtv.text.length - 1, 1) actualCharacterRange:NULL]
                                      inTextContainer:wtv.textContainer];
@@ -170,6 +178,8 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
         NSString *tableThere = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
         SNSay([[other tableOfAttachment:[other attachmentWithID:tableThere]].strings isEqual:cells], @"and the table");
+        SNSay([[[[other tableOfAttachment:[other attachmentWithID:tableThere]] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
+              @"its cell's bold too");
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

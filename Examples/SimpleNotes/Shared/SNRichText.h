@@ -34,8 +34,7 @@ typedef NSPoint SNPoint;
 typedef NSSize SNSize;
 #endif
 #import <TopoText/TopoText.h>
-
-@class SNNoteEditor;
+#import "SNTextSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -114,13 +113,14 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 #endif
 
 @interface SNTextBinding : NSObject
-// The view's storage set to the editor's text, and kept so. The view's
-// controller is the editor's delegate, and hands its merges to -applyEdits:.
-- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor NS_DESIGNATED_INITIALIZER;
+// The view's storage set to the editor's text, and kept so: a note's
+// (SNNoteEditor), whose delegate hands its merges to -applyEdits:, or a
+// table cell's. A cell has no attachments: none is put in it.
+- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 @property (nonatomic, readonly, weak) id<SNTextViewing> view;
 @property (nonatomic, readonly) NSTextStorage *storage;
-@property (nonatomic, readonly) SNNoteEditor *editor;
+@property (nonatomic, readonly) id<SNTextSource> editor;
 // What a sync merged into the editor's text (SNNoteEditorDelegate's
 // -noteEditor:didMergeEdits:), done to the storage; the selection moved
 // along.

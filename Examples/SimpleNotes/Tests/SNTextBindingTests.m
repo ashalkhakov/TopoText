@@ -433,6 +433,7 @@
     SNAttachment *a = [_notes attachmentWithID:tableID];
     TTTable *elsewhere = [_notes tableOfAttachment:a];
     [[elsewhere textAtRow:1 column:1] setString:@"Sunday"];
+    [[elsewhere textAtRow:1 column:1] addAttributes:@{ SNBoldKey: @YES } range:NSMakeRange(0, 3)];
     [elsewhere insertRowAtIndex:2];
     [[elsewhere textAtRow:2 column:0] setString:@"Grandma"];
     [_notes saveTable:elsewhere toAttachment:a];
@@ -440,8 +441,31 @@
     NSArray *both = @[ @[ @"Bike", @"" ], @[ @"", @"Sunday" ], @[ @"Grandma", @"" ] ];
     XCTAssertEqualObjects(grid.table.strings, both);
     XCTAssertEqualObjects([grid textViewAtRow:2 column:0].string, @"Grandma", @"a row come is shown");
+    NSFont *font = [[grid textViewAtRow:1 column:1].textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSBoldFontMask, @"bold come, shown bold");
     [grid save];
     XCTAssertEqualObjects([_notes tableOfAttachment:a].strings, both);
+}
+
+/* Typed into elsewhere, the same cell: what came done to the cell's view
+   as edits, the selection moved along with the text it was in. */
+- (void)testACellTypedIntoElsewhereKeepsTheSelection {
+    NSString *tableID = [_binding insertTableWithRows:1 columns:1 inRange:NSMakeRange(0, 0)];
+    SNTableGrid *grid = [[SNTableGrid alloc] initWithNotes:_notes attachmentID:tableID];
+    [grid layoutForWidth:300];
+    [grid setString:@"tea" atRow:0 column:0];
+    [grid save];
+    NSTextView *cell = (NSTextView *)[grid textViewAtRow:0 column:0];
+    cell.selectedRange = NSMakeRange(3, 0);
+    SNAttachment *a = [_notes attachmentWithID:tableID];
+    TTTable *elsewhere = [_notes tableOfAttachment:a];
+    [[elsewhere textAtRow:0 column:0] insertString:@"green " atIndex:0 attributes:@{ SNItalicKey: @YES }];
+    [_notes saveTable:elsewhere toAttachment:a];
+    [grid reloadFromStore];
+    XCTAssertEqualObjects(cell.string, @"green tea");
+    XCTAssertEqual(cell.selectedRange.location, 9u, @"still after tea");
+    NSFont *font = [cell.textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSItalicFontMask);
 }
 
 @end

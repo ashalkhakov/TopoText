@@ -220,6 +220,11 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
    one. */
 - (void)mergeTable:(TTTable *)other;
 - (TTTable *)mergedWith:(TTTable *)other;
+/* Merged as -mergeTable:, and what it did to each cell already here (as
+   -textAtRow:column: gave it, the same object), for a view of the cell to
+   follow: its edits, as TopoText's -mergeText: says them. A cell with no
+   edits is not in it; nor is one new here (it was not here to be shown). */
+- (NSMapTable<TopoText *, NSArray<TTEdit *> *> *)mergeTableReportingCellEdits:(TTTable *)other;
 
 @end
 

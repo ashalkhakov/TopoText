@@ -10,7 +10,10 @@
 //   Format > Table, a cell's menu (iOS: the bar over the keyboard):
 //                 rows and columns added and deleted
 //
-// A cell's text is plain, for now (Apple Notes' can be formatted).
+// A cell's text is formatted as a note's characters are (bold, italic,
+// underline, strikethrough, links), by a binding of its own
+// (SNTextBinding); not its paragraphs (no styles, no lists), as in Apple
+// Notes.
 //
 // The grid's logic is here (SNTableGrid.m); its cells, their events and
 // menus are each system's (SNTableGrid+System.m in AppKit/ and iOS/).
@@ -57,8 +60,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)reloadFromStore;
 // What was typed, merged into what is stored and saved (now, not later).
 - (void)save;
+// Saved, its cells no longer bound to the table (taken out of the note).
+- (void)close;
 // A cell's view; a cell's text set as typing it would (tests, self-tests).
 - (nullable SNGridTextView *)textViewAtRow:(NSUInteger)row column:(NSUInteger)column;
+// A cell's binding (to format what is selected in it); the cell typed in
+// (nil: none).
+- (nullable SNTextBinding *)bindingOfCell:(SNGridTextView *)cell;
+- (nullable SNGridTextView *)cellTypedIn;
 - (void)setString:(NSString *)string atRow:(NSUInteger)row column:(NSUInteger)column;
 
 // The cell typed in's row and column (to the responder chain, from a cell).
@@ -83,6 +92,10 @@ NS_ASSUME_NONNULL_BEGIN
 // Saved and taken away (the note closed).
 - (void)removeAll;
 - (nullable SNTableGrid *)gridForAttachmentID:(NSString *)attachmentID;
+// The cell typed in, in any of them, and its binding (nil: none; the
+// note's text is).
+- (nullable SNGridTextView *)cellTypedIn;
+- (nullable SNTextBinding *)bindingOfCell:(SNGridTextView *)cell;
 @property (nonatomic, readonly) NSArray<SNTableGrid *> *grids;
 @end
 

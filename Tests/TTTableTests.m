@@ -63,6 +63,21 @@
     XCTAssertEqualObjects(a.strings, @[ @[ @"green tea and milk" ] ]);
 }
 
+/* What a merge did to each cell, for a view of it to follow. */
+- (void)testAMergeSaysEachCellsEdits {
+    TTTable *a = [TTTable tableWithRows:1 columns:2 replica:1];
+    [self type:@"tea" into:a row:0 column:0];
+    TTTable *b = [a copyWithReplica:2];
+    [self type:@" and milk" into:b row:0 column:0];
+    TopoText *cell = [a textAtRow:0 column:0], *other = [a textAtRow:0 column:1];
+    NSMutableAttributedString *shown = [cell.attributedString mutableCopy];
+    NSMapTable *edits = [a mergeTableReportingCellEdits:b];
+    XCTAssertNil([edits objectForKey:other], @"unchanged: not in it");
+    for (TTEdit *e in [edits objectForKey:cell]) [e applyToAttributedString:shown];
+    XCTAssertEqualObjects(shown.string, @"tea and milk");
+    XCTAssertEqualObjects([a textAtRow:0 column:0].string, @"tea and milk");
+}
+
 - (void)testAColumnRemovedTakesWhatWasTypedIntoIt {
     TTTable *a = [TTTable tableWithRows:1 columns:2 replica:1];
     [self type:@"Milk" into:a row:0 column:0];

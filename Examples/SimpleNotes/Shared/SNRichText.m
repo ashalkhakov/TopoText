@@ -337,7 +337,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     NSMutableDictionary<NSString *, NSValue *> *_rooms;
 }
 
-- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(SNNoteEditor *)editor {
+- (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor {
     if (!(self = [super init])) return nil;
     _view = view;
     _storage = view.textStorage;
@@ -559,6 +559,19 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 
 #pragma mark attachments
 
+/* What the editor has of attachments: a note's; a cell's none. */
+- (SNAttachment *)attachmentWithID:(NSString *)attachmentID {
+    return [_editor respondsToSelector:@selector(attachmentWithID:)] ? [_editor attachmentWithID:attachmentID] : nil;
+}
+
+- (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)w height:(double)h {
+    return [_editor respondsToSelector:@selector(addImageData:type:width:height:)] ? [_editor addImageData:data type:type width:w height:h] : nil;
+}
+
+- (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
+    return [_editor respondsToSelector:@selector(addTableWithRows:columns:)] ? [_editor addTableWithRows:rows columns:columns] : nil;
+}
+
 /* How wide an image may be shown: the text's width. */
 - (CGFloat)attachmentWidth {
     NSLayoutManager *lm = _storage.layoutManagers.firstObject;   /* typed: gnustep-gui's array is not */
@@ -577,7 +590,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         NSString *attachmentID = [target attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL];
         if (!attachmentID) continue;
         SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
-        SNAttachment *attachment = [_editor attachmentWithID:attachmentID];
+        SNAttachment *attachment = [self attachmentWithID:attachmentID];
         NSValue *room = [attachment.kind isEqual:SNAttachmentKindTable] ? _rooms[attachmentID] : nil;
         if ([shown isKindOfClass:[SNTextAttachment class]] && [shown.attachmentID isEqual:attachmentID]) {
             SNSize size = { 0, 0 };
@@ -621,7 +634,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     double w = 0, h = 0;
     NSData *data = SNImageDataForAttachment(SNSystemDataOfAttachment(pasted), &type, &w, &h);
     if (!data) return nil;
-    made = [_editor addImageData:data type:type width:w height:h];
+    made = [self addImageData:data type:type width:w height:h];
     if (!made) return nil;
     [_pendingAttachments setObject:made forKey:pasted];
     [self performSelector:@selector(idsForPastedAttachments) withObject:nil afterDelay:0];
@@ -640,7 +653,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         NSString *made = a ? [_pendingAttachments objectForKey:a] : nil;
         if (!made) continue;
         [_storage addAttribute:SNAttachmentAttributeName value:made range:NSMakeRange(i, 1)];
-        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [_editor attachmentWithID:made], [self attachmentWidth], _rooms[made])
+        [_storage addAttribute:NSAttachmentAttributeName value:SNShowAttachment(made, [self attachmentWithID:made], [self attachmentWidth], _rooms[made])
                          range:NSMakeRange(i, 1)];
     }
     [_storage endEditing];
@@ -649,7 +662,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 }
 
 - (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range {
-    NSString *made = [_editor addTableWithRows:rows columns:columns];
+    NSString *made = [self addTableWithRows:rows columns:columns];
     if (!made) return nil;
     [self insertAttachment:made inRange:range];
     return made;
@@ -664,7 +677,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     NSMutableDictionary *t = [SNTextAttributes([self typingAttributesAt:range.location]) mutableCopy];
     t[SNAttachmentKey] = attachmentID;
     NSMutableDictionary *view = [SNViewAttributes(t) mutableCopy];
-    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [_editor attachmentWithID:attachmentID], [self attachmentWidth], _rooms[attachmentID]);
+    view[NSAttachmentAttributeName] = SNShowAttachment(attachmentID, [self attachmentWithID:attachmentID], [self attachmentWidth], _rooms[attachmentID]);
     unichar c = SNAttachmentCharacter;
     [_storage replaceCharactersInRange:range
                   withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
@@ -675,7 +688,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     double w = 0, h = 0;
     NSData *image = SNImageDataForAttachment(data, &type, &w, &h);
     if (!image) return NO;
-    NSString *made = [_editor addImageData:image type:type width:w height:h];
+    NSString *made = [self addImageData:image type:type width:w height:h];
     if (!made) return NO;
     [self insertAttachment:made inRange:range];
     return YES;

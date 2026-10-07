@@ -10,8 +10,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SNTableGrid () {
   @package
     SNNotes *_notes;
-    /* Each row's cells' views, top down, each left to right. */
+    /* Each row's cells' views, top down, each left to right; each one's
+       binding to its text, the same. */
     NSMutableArray<NSMutableArray<SNGridTextView *> *> *_cells;
+    NSMutableArray<NSMutableArray<SNTextBinding *> *> *_bindings;
     NSMutableArray<NSNumber *> *_rowHeights;
     CGFloat _width, _column;
     /* The cell last typed in, for an action from a menu not the cell's. */
@@ -22,7 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
     id _systemState;
 }
 #pragma mark shared, for the system's part
-// A cell typed in: its text the table's.
+// A cell typed in (its binding has written it): laid out again.
 - (void)cellChanged:(SNGridTextView *)cell;
 // The cell typed in now (to act on).
 - (void)noteCell:(SNGridTextView *)cell;
@@ -37,10 +39,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface SNTableGrid (System)
 // Set up as the system's views are (once).
 - (void)systemSetUp;
-- (SNGridTextView *)makeCell:(NSString *)string;
-- (NSString *)stringOfCell:(SNGridTextView *)cell;
-// Set, not typed: its selection kept where it can be.
-- (void)setString:(NSString *)string ofCell:(SNGridTextView *)cell;
+// A cell's view, empty (its binding fills it).
+- (SNGridTextView *)makeCell;
 // Its height, as wide as it is, its text wrapped.
 - (CGFloat)heightOfCell:(SNGridTextView *)cell;
 - (BOOL)cellIsTypedIn:(SNGridTextView *)cell;

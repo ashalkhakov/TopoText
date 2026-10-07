@@ -10,20 +10,36 @@ static SNRect SNGridRect(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
     return r;
 }
 
-/* The text, as typed into a view, made a TopoText's: what changed between
-   the two (what they begin and end with alike left), replaced. */
-static BOOL SNTypeInto(TopoText *text, NSString *now) {
-    NSString *was = text.string;
-    if ([was isEqualToString:now]) return NO;
-    NSUInteger a = was.length, b = now.length, start = 0;
-    while (start < a && start < b && [was characterAtIndex:start] == [now characterAtIndex:start]) start++;
-    NSUInteger end = 0;
-    while (end < a - start && end < b - start && [was characterAtIndex:a - 1 - end] == [now characterAtIndex:b - 1 - end]) end++;
-    [text replaceCharactersInRange:NSMakeRange(start, a - start - end)
-                        withString:[now substringWithRange:NSMakeRange(start, b - start - end)]
-                        attributes:nil];
-    return YES;
+/* A cell's text, as its binding sees it: the table's TopoText; typed
+   into, the grid saves soon. */
+@interface SNCellSource : NSObject <SNTextSource>
+- (instancetype)initWithText:(TopoText *)text grid:(SNTableGrid *)grid;
+@end
+
+@interface SNTableGrid ()
+- (void)changed;
+@end
+
+@implementation SNCellSource {
+    __weak SNTableGrid *_grid;
 }
+@synthesize text = _text;
+
+- (instancetype)initWithText:(TopoText *)text grid:(SNTableGrid *)grid {
+    if ((self = [super init])) {
+        _text = text;
+        _grid = grid;
+    }
+    return self;
+}
+
+/* While the storage is still processing the edit: saved later, laid out
+   once the view is done (-cellChanged:). */
+- (void)textDidChange {
+    [_grid changed];
+}
+
+@end
 
 @implementation SNTableGrid
 
@@ -58,23 +74,49 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
 - (void)makeCells {
     /* The old ones let go of first: one typed in, taken away, ends its
        editing, which would save, and a save's notice reload the grid. */
-    NSArray *old = _cells;
+    NSArray *old = _cells, *oldBindings = _bindings;
     _cells = [NSMutableArray array];
+    _bindings = [NSMutableArray array];
+    for (NSArray<SNTextBinding *> *row in oldBindings)
+        for (SNTextBinding *b in row) [b unbind];
     for (NSArray *row in old)
         for (SNGridTextView *tv in row) {
             tv.delegate = nil;
             [tv removeFromSuperview];
         }
-    for (NSArray<NSString *> *row in _table.strings) {
-        NSMutableArray *views = [NSMutableArray array];
-        for (NSString *s in row) {
-            SNGridTextView *tv = [self makeCell:s];
+    for (NSUInteger r = 0; r < _table.rowCount; r++) {
+        NSMutableArray *views = [NSMutableArray array], *bindings = [NSMutableArray array];
+        for (NSUInteger c = 0; c < _table.columnCount; c++) {
+            SNGridTextView *tv = [self makeCell];
+            SNCellSource *source = [[SNCellSource alloc] initWithText:[_table textAtRow:r column:c] grid:self];
+            [bindings addObject:[[SNTextBinding alloc] initWithTextView:tv editor:source]];
             tv.editable = _editable;
             [self addSubview:tv];
             [views addObject:tv];
         }
         [_cells addObject:views];
+        [_bindings addObject:bindings];
     }
+}
+
+- (void)close {
+    [self save];
+    for (NSArray<SNTextBinding *> *row in _bindings)
+        for (SNTextBinding *b in row) [b unbind];
+    _bindings = nil;
+    [self removeFromSuperview];
+}
+
+- (SNTextBinding *)bindingOfCell:(SNGridTextView *)cell {
+    NSUInteger r, c;
+    return [self findCell:cell row:&r column:&c] ? _bindings[r][c] : nil;
+}
+
+- (SNGridTextView *)cellTypedIn {
+    for (NSArray *row in _cells)
+        for (SNGridTextView *tv in row)
+            if ([self cellIsTypedIn:tv]) return tv;
+    return nil;
 }
 
 - (SNGridTextView *)textViewAtRow:(NSUInteger)row column:(NSUInteger)column {
@@ -127,7 +169,7 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
     _row = row;
     _col = column;
     [self typeInCell:tv];
-    tv.selectedRange = NSMakeRange([self stringOfCell:tv].length, 0);
+    tv.selectedRange = NSMakeRange(tv.textStorage.length, 0);
 }
 
 - (void)beginEditing {
@@ -193,15 +235,13 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
 
 #pragma mark typing
 
-/* A cell typed in: its text the table's, the grid as tall as it now needs,
-   saved a moment later. */
+/* A cell typed in (its binding wrote it into the table, which is saved a
+   moment later): the grid as tall as it now needs. */
 - (void)cellChanged:(SNGridTextView *)tv {
     NSUInteger r, c;
     if (_loading || ![self findCell:tv row:&r column:&c]) return;
     _row = r;
     _col = c;
-    if (!SNTypeInto([_table textAtRow:r column:c], [self stringOfCell:tv])) return;
-    [self changed];
     [self relayout];
 }
 
@@ -214,7 +254,9 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
 - (void)setString:(NSString *)string atRow:(NSUInteger)row column:(NSUInteger)column {
     SNGridTextView *tv = [self textViewAtRow:row column:column];
     if (!tv) return;
-    [self setString:string ofCell:tv];
+    NSTextStorage *storage = tv.textStorage;
+    [storage replaceCharactersInRange:NSMakeRange(0, storage.length) withString:string];
+    [[self bindingOfCell:tv] textDidChange];
     [self cellChanged:tv];
 }
 
@@ -253,7 +295,7 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
     TTTable *stored = a ? [_notes tableOfAttachment:a] : nil;
     if (!stored) return;
     NSUInteger rows = _table.rowCount, columns = _table.columnCount;
-    [_table mergeTable:stored];
+    NSMapTable<TopoText *, NSArray<TTEdit *> *> *edits = [_table mergeTableReportingCellEdits:stored];
     _loading = YES;
     if (rows != _table.rowCount || columns != _table.columnCount) {
         /* Rows or columns came or went: the cells made again, the one typed
@@ -263,11 +305,11 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
         [self makeCells];
         if (typing) [self focusRow:MIN(r, _table.rowCount - 1) column:MIN(c, _table.columnCount - 1)];
     } else {
-        for (NSUInteger r = 0; r < _cells.count; r++)
-            for (NSUInteger c = 0; c < _cells[r].count; c++) {
-                SNGridTextView *tv = _cells[r][c];
-                NSString *now = [_table textAtRow:r column:c].string;
-                if (![[self stringOfCell:tv] isEqualToString:now]) [self setString:now ofCell:tv];
+        /* Each cell's edits done to its view, the selection moved along. */
+        for (NSArray<SNTextBinding *> *row in _bindings)
+            for (SNTextBinding *b in row) {
+                NSArray<TTEdit *> *done = [edits objectForKey:b.editor.text];
+                if (done.count) [b applyEdits:done];
             }
     }
     _loading = NO;
@@ -427,9 +469,7 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
     }
     for (NSString *gone in _byID.allKeys) {
         if ([ids containsObject:gone]) continue;
-        SNTableGrid *grid = _byID[gone];
-        [grid save];
-        [grid removeFromSuperview];
+        [_byID[gone] close];
         [_byID removeObjectForKey:gone];
     }
     CGFloat width = [self availableWidth];
@@ -481,11 +521,24 @@ static BOOL SNTypeInto(TopoText *text, NSString *now) {
 
 - (void)removeAll {
     [NSObject cancelPreviousPerformRequestsWithTarget:self];
-    for (SNTableGrid *grid in _byID.allValues) {
-        [grid save];
-        [grid removeFromSuperview];
-    }
+    for (SNTableGrid *grid in _byID.allValues) [grid close];
     [_byID removeAllObjects];
+}
+
+- (SNGridTextView *)cellTypedIn {
+    for (SNTableGrid *grid in _byID.allValues) {
+        SNGridTextView *cell = grid.cellTypedIn;
+        if (cell) return cell;
+    }
+    return nil;
+}
+
+- (SNTextBinding *)bindingOfCell:(SNGridTextView *)cell {
+    for (SNTableGrid *grid in _byID.allValues) {
+        SNTextBinding *b = [grid bindingOfCell:cell];
+        if (b) return b;
+    }
+    return nil;
 }
 
 @end

@@ -697,13 +697,15 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 /* On the selection; with none, on the link the insertion point is in. */
 - (IBAction)addLink:(id)sender {
-    if (!_binding || !_textView.isEditable) return;
-    NSRange range = _textView.selectedRange;
-    NSString *current = [_binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSRange range = tv.selectedRange;
+    NSString *current = [binding linkAt:range.length ? range.location : (range.location ? range.location - 1 : 0)];
     if (!range.length && current) {
         NSRange whole;
-        [_textView.textStorage attribute:SNLinkAttributeName atIndex:range.location ? range.location - 1 : 0
-                   longestEffectiveRange:&whole inRange:NSMakeRange(0, _textView.textStorage.length)];
+        [tv.textStorage attribute:SNLinkAttributeName atIndex:range.location ? range.location - 1 : 0
+            longestEffectiveRange:&whole inRange:NSMakeRange(0, tv.textStorage.length)];
         range = whole;
     }
     if (!range.length) {
@@ -712,9 +714,9 @@ static const NSInteger SNMoveToMenuTag = 7001;
     }
     NSString *link = SNAskForText(@"Add Link", @"Link (a web address, or a link to a note; empty: none):", current ?: @"https://");
     if (!link) return;
-    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
-    [_binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:range];
-    [_textView didChangeText];
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding setLink:[link isEqualToString:@"https://"] ? nil : link inRange:range];
+    [tv didChangeText];
 }
 
 - (IBAction)attachFile:(id)sender {
@@ -742,7 +744,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
 }
 
 - (NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
-    if (!_binding || !_textView.isEditable) return nil;
+    if (!_binding || !_textView.isEditable || [self typingInTable]) return nil;
     NSRange r = _textView.selectedRange;
     if (![_textView shouldChangeTextInRange:r replacementString:@"\uFFFC"]) return nil;
     NSString *made = [_binding insertTableWithRows:rows columns:columns inRange:r];
@@ -795,9 +797,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
-    if (a == @selector(addLink:) || a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
+    if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
     if (a == @selector(moveCheckedToBottom:))
-        return _binding != nil && _textView.isEditable && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
+        return _binding != nil && _textView.isEditable && ![self typingInTable] && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
     if (a == @selector(toggleKeepCheckedAtBottom:)) {
         item.state = _notes.movesCheckedToBottom ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;
@@ -817,10 +820,25 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark formatting
 
+/* What character formatting and links go on: a table's cell typed in, or
+   else the note's text; and its binding. */
+- (NSTextView *)formattedTextView:(SNTextBinding **)binding {
+    NSTextView *cell = (NSTextView *)[_grids cellTypedIn];
+    SNTextBinding *b = cell ? [_grids bindingOfCell:cell] : nil;
+    *binding = b ?: _binding;
+    return b ? cell : _textView;
+}
+
+/* A table's cell typed in: its paragraphs are not formatted (no styles, no
+   lists, as Apple Notes' cells), and nothing is put in it but text. */
+- (BOOL)typingInTable {
+    return [_grids cellTypedIn] != nil;
+}
+
 /* Paragraph formatting, undoably: begun over the paragraphs a range
    touches, ended once the binding has changed them. */
 - (BOOL)beginFormattingAt:(NSRange)range {
-    if (!_binding || !_textView.isEditable) return NO;
+    if (!_binding || !_textView.isEditable || [self typingInTable]) return NO;
     return [_textView shouldChangeTextInRange:[_binding paragraphsRangeForRange:range] replacementString:nil];
 }
 
@@ -830,15 +848,17 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 /* On the selection, undoably; with none, on what is typed next. */
 - (void)toggle:(NSString *)key {
-    if (!_binding) return;
-    NSRange range = _textView.selectedRange;
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSRange range = tv.selectedRange;
     if (!range.length) {
-        [_binding toggle:key inRange:range];
+        [binding toggle:key inRange:range];
         return;
     }
-    if (![_textView shouldChangeTextInRange:range replacementString:nil]) return;
-    [_binding toggle:key inRange:range];
-    [_textView didChangeText];
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding toggle:key inRange:range];
+    [tv didChangeText];
 }
 
 - (void)style:(NSString *)style {
@@ -912,11 +932,18 @@ static const NSInteger SNMoveToMenuTag = 7001;
     BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:);
     if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
     BOOL enabled = _binding != nil && _textView.isEditable;
+    if (inline_[name]) {
+        SNTextBinding *binding;
+        NSTextView *tv = [self formattedTextView:&binding];
+        item.state = enabled && [binding range:tv.selectedRange has:inline_[name]] ? NSControlStateValueOn : NSControlStateValueOff;
+        *enabledOut = enabled;
+        return YES;
+    }
+    if ([self typingInTable]) enabled = NO;
     NSDictionary *p = enabled ? [_binding paragraphAttributesAt:_textView.selectedRange.location] : @{};
     BOOL on = NO;
     if (styles[name]) on = [styles[name] length] ? [p[SNStyleKey] isEqual:styles[name]] : (!p[SNStyleKey] && !p[SNListKey]);
     else if (lists[name]) on = [p[SNListKey] isEqual:lists[name]];
-    else if (inline_[name]) on = enabled && [_binding range:_textView.selectedRange has:inline_[name]];
     else if (a == @selector(toggleChecked:)) {
         on = [p[SNCheckedKey] boolValue];
         enabled = enabled && [p[SNListKey] isEqual:SNListCheck];

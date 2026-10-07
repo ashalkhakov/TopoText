@@ -15,6 +15,7 @@
 #import "SNNote.h"
 #import "SNFolder.h"
 #import "SNAttachment.h"
+#import "SNTextSource.h"
 
 @class SNNoteEditor, SNNoteGroup;
 
@@ -197,7 +198,7 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (void)noteEditorDidVanish:(SNNoteEditor *)editor;
 @end
 
-@interface SNNoteEditor : NSObject
+@interface SNNoteEditor : NSObject <SNTextSource>
 @property (nonatomic, readonly) NSManagedObjectID *noteID;
 @property (nonatomic, readonly) TopoText *text;
 // Whoever shows the text: told of merges, and of the note going.
