@@ -21,6 +21,12 @@
         <attribute name="modified" optional="YES" attributeType="String"/>
         <attribute name="versions" optional="YES" attributeType="String"/>
         <relationship name="note" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Note" inverseName="attachments" inverseEntity="Note"/>
+        <fetchIndex name="byId">
+            <fetchIndexElement property="id" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byOwner">
+            <fetchIndexElement property="owner" type="Binary" order="ascending"/>
+        </fetchIndex>
         <userInfo>
             <entry key="OData.entitySet" value="Attachments"/>
             <entry key="ODataSync.direction" value="both"/>
@@ -48,6 +54,12 @@
         <relationship name="children" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Folder" inverseName="parent" inverseEntity="Folder"/>
         <relationship name="notes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="Note" inverseName="folder" inverseEntity="Note"/>
         <relationship name="parent" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Folder" inverseName="children" inverseEntity="Folder"/>
+        <fetchIndex name="byId">
+            <fetchIndexElement property="id" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byOwner">
+            <fetchIndexElement property="owner" type="Binary" order="ascending"/>
+        </fetchIndex>
         <userInfo>
             <entry key="OData.entitySet" value="Folders"/>
             <entry key="ODataSync.direction" value="both"/>
@@ -82,6 +94,12 @@
         <attribute name="versions" optional="YES" attributeType="String"/>
         <relationship name="attachments" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="Attachment" inverseName="note" inverseEntity="Attachment"/>
         <relationship name="folder" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Folder" inverseName="notes" inverseEntity="Folder"/>
+        <fetchIndex name="byId">
+            <fetchIndexElement property="id" type="Binary" order="ascending"/>
+        </fetchIndex>
+        <fetchIndex name="byOwner">
+            <fetchIndexElement property="owner" type="Binary" order="ascending"/>
+        </fetchIndex>
         <userInfo>
             <entry key="OData.entitySet" value="Notes"/>
             <entry key="ODataSync.direction" value="both"/>

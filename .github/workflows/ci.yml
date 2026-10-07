@@ -136,9 +136,11 @@ jobs:
       # through a migration as the same store, metadata and history (a
       # migrated device keeps its replica ID, and what it had not sent); an
       # inferred mapping follows Renaming IDs (SimpleNotes' updated, now
-      # edited).
-      GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
-      FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
+      # edited). gnustep-patches c03ea57 and FreeCoreData 5b83123 (#68):
+      # fetch indexes, which the model and ODataSync's bookkeeping declare;
+      # a nil constant in a predicate prints, and parses back, as nil.
+      GNUSTEP_PATCHES_REF: c03ea57fed32203e4e431666116e7e38714e25d9
+      FREECOREDATA_REF: 5b83123deb3ed227f506cee22e997e10bf679c03
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
