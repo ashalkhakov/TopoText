@@ -140,8 +140,9 @@ jobs:
       # fetch indexes, which the model and ODataSync's bookkeeping declare;
       # a nil constant in a predicate prints, and parses back, as nil.
       # gnustep-patches edc2289: a nil argument for %@ compares with nil.
+      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes.
       GNUSTEP_PATCHES_REF: edc228953dc67ce419b72007b3ece650bf99bd26
-      FREECOREDATA_REF: 5b83123deb3ed227f506cee22e997e10bf679c03
+      FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
