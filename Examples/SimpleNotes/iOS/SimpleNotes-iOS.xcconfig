@@ -17,6 +17,8 @@ INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES
 INFOPLIST_KEY_NSLocalNetworkUsageDescription = SimpleNotes syncs with your notes server, which may be on the local network.
 INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
 INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+// zlib: SNZip (export and import).
+OTHER_LDFLAGS = $(inherited) -lz
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
 HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/iOS
 

@@ -4,6 +4,7 @@
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
 #import "SNModel.h"
+#import "SNTransfer.h"
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -91,7 +92,15 @@ static NSString *SNDaysLeftText(SNNote *note) {
         }],
         [UIAction actionWithTitle:@"New Smart Folder" image:[UIImage systemImageNamed:@"gearshape"] identifier:nil handler:^(UIAction *a) {
             [self newSmartFolder:nil];
-        }] ]];
+        }],
+        /* Notes in and out as Markdown (SNTransfer.h). */
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UIAction actionWithTitle:@"Import Notes" image:[UIImage systemImageNamed:@"square.and.arrow.down"] identifier:nil handler:^(UIAction *a) {
+                [self importNotes:nil];
+            }],
+            [UIAction actionWithTitle:@"Export All Notes" image:[UIImage systemImageNamed:@"square.and.arrow.up"] identifier:nil handler:^(UIAction *a) {
+                [self exportAllNotes:nil];
+            }] ]] ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItems = @[
         [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
@@ -127,6 +136,49 @@ static NSString *SNDaysLeftText(SNNote *note) {
         return;
     }
     [_notes sync];
+}
+
+/* A folder, a zip or Markdown files, from Files. */
+- (void)importNotes:(id)sender {
+    NSArray *types = @[ UTTypeFolder, UTTypeZIP, UTTypeText, UTTypeHTML ];
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:NO];
+    picker.allowsMultipleSelection = YES;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)picker didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    if (picker.documentPickerMode == UIDocumentPickerModeExportToService) return;
+    NSMutableArray *failed = [NSMutableArray array];
+    for (NSURL *url in urls) {
+        BOOL scoped = [url startAccessingSecurityScopedResource];
+        NSError *error = nil;
+        if (![_notes importFromURL:url intoFolder:nil error:&error])
+            [failed addObject:error.localizedDescription ?: url.lastPathComponent];
+        if (scoped) [url stopAccessingSecurityScopedResource];
+    }
+    [self reload];
+    if (!failed.count) return;
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Not Imported" message:[failed componentsJoinedByString:@"\n"]
+                                                        preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+
+/* Every note as Markdown, in a zip saved to Files. */
+- (void)exportAllNotes:(id)sender {
+    NSURL *zip = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:@"Notes.zip"];
+    NSError *error = nil;
+    if (![_notes exportMarkdownToURL:zip error:&error]) {
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Not Exported" message:error.localizedDescription
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+        [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:a animated:YES completion:nil];
+        return;
+    }
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ zip ] asCopy:YES];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
 }
 
 - (void)newFolder:(id)sender {

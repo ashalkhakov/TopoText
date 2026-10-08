@@ -215,6 +215,53 @@ rule by rule (`SNResolver`), rather than keeping one device's whole set:
 - Tags merge as a set: a tag added on either device is added, and a tag
   removed on either device is removed.
 
+## Export and import
+
+**File > Export All Notes…** (on iOS, **Export All Notes** in the folder
+list's + menu, saved to Files) writes every note as Markdown, in a zip. On
+the Mac and GNUstep, a name given without `.zip` writes a folder instead.
+The layout:
+
+- **Folders** become folders. Notes in no folder sit at the top. Smart
+  folders and Recently Deleted are left out.
+- **Each note** is `<title>.md`, dated when it was last edited.
+- **Images and files** are written to `_attachments/<title>/` beside the
+  note, and linked from it.
+- **Tables** become GFM tables.
+- **Formatting** maps both ways (`SNMarkdown.h`):
+
+| In the note | In Markdown |
+|---|---|
+| Title, heading, subheading | `#`, `##`, `###` |
+| Monospaced | a fenced code block |
+| Bulleted, dashed, numbered list | `*`, `-`, `1.` |
+| Checklist | `- [ ]`, `- [x]` |
+| Indent | four spaces per level |
+| Bold, italic, strikethrough | `**`, `*`, `~~` |
+| Underline | `<u>` |
+
+**File > Import Notes…** reads such an export back. It also reads other
+apps' exports:
+
+- **A folder of Markdown**, or a zip of one (Obsidian's vault, Joplin's or
+  Bear's Markdown export). Each `.md`, `.txt` or `.html` file becomes a
+  note, and folders with notes in them become folders.
+- **Trilium's export**, Markdown or HTML (its default). Trilium's
+  `!!!meta.json` gives each note's title and type. A note with notes under
+  it becomes a folder, and its own text becomes a note in that folder.
+  Code notes become monospaced notes; image and file notes become notes
+  holding them. Clones are imported once. Canvases, relation maps and
+  other note types are skipped.
+
+What import also does:
+
+- **Images and files** a note links to are attached to it, if they're in
+  the export.
+- **GFM tables** become tables.
+- **Where notes go:** everything goes into a new folder named after what
+  was imported. A single Markdown file goes straight into the chosen
+  folder instead.
+
 ## Model versions
 
 `SimpleNotes.xcdatamodeld` holds every version of the model:
@@ -447,7 +494,8 @@ This runs four things:
   apart, a deletion against an edit, an open editor merged while its own
   typing is kept, folders moved into each other apart, tags, sorting and
   grouping, migrations from each older version, and the text view's
-  binding both ways.
+  binding both ways. Notes are exported as Markdown and imported back with
+  their folders and attachments, and a Trilium export is imported.
 - **Two devices through the server, over HTTP**
   (`Tests/serve-and-check.sh`, `SimpleNotes --check`). With `SN_STORE_ARGS`,
   the server stores in PostgreSQL or MariaDB instead.

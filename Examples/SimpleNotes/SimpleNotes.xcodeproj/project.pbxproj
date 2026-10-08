@@ -61,6 +61,10 @@
 			isa = PBXBuildFile;
 			fileRef = 7EE0BBC99032BF20C4EA757C;
 		};
+		1A945E05E70FCA2A80B9CF90 /* SNMarkdown.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E8A487FEE677133CCEA9137F;
+		};
 		1AEA465EF57405F1763F16F7 /* SNTableGrid.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
@@ -106,6 +110,10 @@
 		330A0C62A452B44EBD481FEA /* SNUndoTextView.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E24E63BBA2A66A746F957E15;
+		};
+		336FCFFAB7D77D6C156362E2 /* SNZip.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E9880EC90FE418E43DB29348;
 		};
 		34D439D972927301D70C87E5 /* ODataSync.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
@@ -177,6 +185,14 @@
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
 		};
+		4F515619848A8383B89CB03C /* SNZip.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E9880EC90FE418E43DB29348;
+		};
+		4FB387F64E35FE5A9574C4DA /* SNTransfer.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 8CA44378B789F5979E110A09;
+		};
 		556FA39ACD65B0E3991FDA0D /* OTelKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = F6D896F11584BB5C77EEEA7A;
@@ -239,6 +255,10 @@
 			isa = PBXBuildFile;
 			fileRef = 6E9D5B559DEB6B7E294A4AB3;
 		};
+		72B3436E6EC6EFA8DB119B6B /* SNTransfer.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 8CA44378B789F5979E110A09;
+		};
 		76292A09FD10E76A4A52224B /* ODataKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = B74881DD4B1A684D8FBFF1A2;
@@ -274,6 +294,10 @@
 		878158D5F3C0953E9F6C553A /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
+		};
+		9150902D96BD108E39F1894E /* SNMarkdown.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = E8A487FEE677133CCEA9137F;
 		};
 		96CBB5008C014E9938A9678B /* TopoText.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -889,6 +913,13 @@
 			sourceTree = "<group>";
 			name = SNSmartFolderPanel.h;
 		};
+		25D6F772F348C3C08A9FEC21 /* SNTransfer.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNTransfer.h;
+			sourceTree = "<group>";
+			name = SNTransfer.h;
+		};
 		2725B1B9F5ED2F0BA4FFB0F3 /* SNFolder.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1018,6 +1049,13 @@
 			path = AppKit/Info.plist;
 			sourceTree = "<group>";
 			name = Info.plist;
+		};
+		59016759D68A7B5A61C2890F /* SNZip.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNZip.h;
+			sourceTree = "<group>";
+			name = SNZip.h;
 		};
 		5BBA950260DFEA12CACE775C /* SNModel.h */ = {
 			isa = PBXFileReference;
@@ -1151,6 +1189,20 @@
 			path = iOS/SNPeersViewController.h;
 			sourceTree = "<group>";
 			name = SNPeersViewController.h;
+		};
+		8CA44378B789F5979E110A09 /* SNTransfer.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNTransfer.m;
+			sourceTree = "<group>";
+			name = SNTransfer.m;
+		};
+		8E239D91B6A6D6F0829B3B2B /* SNMarkdown.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNMarkdown.h;
+			sourceTree = "<group>";
+			name = SNMarkdown.h;
 		};
 		93905B50397F393A04D89B2C /* MainMenu.xib */ = {
 			isa = PBXFileReference;
@@ -1354,12 +1406,26 @@
 			sourceTree = "<group>";
 			name = SNSignIn.m;
 		};
+		E8A487FEE677133CCEA9137F /* SNMarkdown.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNMarkdown.m;
+			sourceTree = "<group>";
+			name = SNMarkdown.m;
+		};
 		E92F4F34642FF032BAA53F88 /* SNNote.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
 			path = Shared/SNNote.m;
 			sourceTree = "<group>";
 			name = SNNote.m;
+		};
+		E9880EC90FE418E43DB29348 /* SNZip.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNZip.m;
+			sourceTree = "<group>";
+			name = SNZip.m;
 		};
 		EAA6D90405A32298355B9AF5 /* SimpleNotes 5.xcdatamodel */ = {
 			isa = PBXFileReference;
@@ -1555,6 +1621,12 @@
 				848C622D1A0C34A6F10D548E,
 				47029EC1BB7F394FB43D846A,
 				5E12708819DD87E9D16589AF,
+				8E239D91B6A6D6F0829B3B2B,
+				E8A487FEE677133CCEA9137F,
+				59016759D68A7B5A61C2890F,
+				E9880EC90FE418E43DB29348,
+				25D6F772F348C3C08A9FEC21,
+				8CA44378B789F5979E110A09,
 				571D7F2A670DB7D88A910D92,
 			);
 			sourceTree = "<group>";
@@ -1864,6 +1936,9 @@
 				25879058FDC79CC840CE424F,
 				CC4B057F37426811B1569081,
 				AC28625FEB238C24115CFE5A,
+				9150902D96BD108E39F1894E,
+				336FCFFAB7D77D6C156362E2,
+				72B3436E6EC6EFA8DB119B6B,
 				5C0532B74F67EA76B21EA1B7,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1911,6 +1986,9 @@
 				62A2E8AABDEEBB81A24162A0,
 				08F47A52C6068AE0E8AC7B10,
 				029C0375BBB48CBAAD4B77F8,
+				1A945E05E70FCA2A80B9CF90,
+				4F515619848A8383B89CB03C,
+				4FB387F64E35FE5A9574C4DA,
 				ED73A187727B64A1E926DC28,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -3,6 +3,7 @@
 #import "SNModel.h"
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
+#import "SNTransfer.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -677,6 +678,41 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (![panel runModal]) return;
     [_notes renameFolder:f to:panel.name];
     [_notes setFilter:panel.filter ofFolder:f];
+}
+
+- (IBAction)importNotes:(id)sender {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseDirectories = YES;
+    panel.canChooseFiles = YES;
+    panel.allowsMultipleSelection = YES;
+    panel.message = @"A folder of Markdown files, a zip of one (Trilium's export, say), or Markdown files.";
+    panel.prompt = @"Import";
+    if ([panel runModal] != NSModalResponseOK) return;
+    SNFolder *into = [_notes isSmartFolder:[self selectedFolder]] ? nil : [self selectedFolder];
+    for (NSURL *url in panel.URLs) {
+        NSError *error = nil;
+        if ([_notes importFromURL:url intoFolder:into error:&error]) continue;
+        NSAlert *alert = [[NSAlert alloc] init];
+        alert.messageText = [NSString stringWithFormat:@"“%@” was not imported.", url.lastPathComponent];
+        alert.informativeText = error.localizedDescription ?: @"";
+        [alert runModal];
+    }
+    [self reloadFolders];
+    [self reloadNotes];
+}
+
+- (IBAction)exportAllNotes:(id)sender {
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    panel.nameFieldStringValue = @"Notes.zip";
+    panel.message = @"Every note as Markdown, in a zip (or, the name without .zip, a folder).";
+    panel.prompt = @"Export";
+    if ([panel runModal] != NSModalResponseOK || !panel.URL) return;
+    NSError *error = nil;
+    if ([_notes exportMarkdownToURL:panel.URL error:&error]) return;
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.messageText = @"The notes were not exported.";
+    alert.informativeText = error.localizedDescription ?: @"";
+    [alert runModal];
 }
 
 - (IBAction)renameFolder:(id)sender {

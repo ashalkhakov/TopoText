@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate>
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate, UIDocumentPickerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The smart folder form, for a new one (folder nil) or one to edit.
 - (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;

@@ -54,6 +54,11 @@ NS_ASSUME_NONNULL_BEGIN
 // File > New Smart Folder…, Edit Smart Folder… (SNSmartFolderPanel).
 - (IBAction)newSmartFolder:(nullable id)sender;
 - (IBAction)editSmartFolder:(nullable id)sender;
+// File > Import Notes…: a folder, a zip or a Markdown file (SNTransfer.h),
+// into the folder chosen; File > Export All Notes…: as Markdown, a zip
+// (or a folder: the name given without .zip).
+- (IBAction)importNotes:(nullable id)sender;
+- (IBAction)exportAllNotes:(nullable id)sender;
 // View > Sort Folder By: the folder shown, sorted its own way (Default:
 // as View > Sort By says for all).
 - (IBAction)sortFolderByDefault:(nullable id)sender;
