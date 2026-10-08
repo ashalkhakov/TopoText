@@ -19,23 +19,31 @@
     return [dir stringByAppendingPathComponent:@"SignIn.plist"];
 }
 
+/* Read by NSPropertyListSerialization, not +dictionaryWithContentsOfFile:,
+   which on GNUstep takes a binary property list for text and gives nil:
+   the tokens were written, and never read back. */
+- (NSDictionary *)all {
+    NSData *data = [NSData dataWithContentsOfFile:[self path]];
+    id all = data.length ? [NSPropertyListSerialization propertyListWithData:data options:NSPropertyListImmutable format:NULL error:NULL] : nil;
+    return [all isKindOfClass:[NSDictionary class]] ? all : @{};
+}
+
 - (NSDictionary *)secretsForAccount:(NSString *)account {
-    NSDictionary *all = [NSDictionary dictionaryWithContentsOfFile:[self path]];
-    id mine = all[account];
+    id mine = [self all][account];
     return [mine isKindOfClass:[NSDictionary class]] ? mine : nil;
 }
 
 - (BOOL)setSecrets:(NSDictionary *)secrets forAccount:(NSString *)account {
     NSString *path = [self path];
-    NSMutableDictionary *all = [[NSDictionary dictionaryWithContentsOfFile:path] mutableCopy] ?: [NSMutableDictionary dictionary];
+    NSMutableDictionary *all = [[self all] mutableCopy];
     if (secrets) all[account] = secrets;
     else [all removeObjectForKey:account];
     /* Made unreadable to others before anything is written into it. */
     if (![[NSFileManager defaultManager] fileExistsAtPath:path])
         [[NSFileManager defaultManager] createFileAtPath:path contents:[NSData data] attributes:@{ NSFilePosixPermissions: @0600 }];
     [[NSFileManager defaultManager] setAttributes:@{ NSFilePosixPermissions: @0600 } ofItemAtPath:path error:NULL];
-    NSData *data = [NSPropertyListSerialization dataWithPropertyList:all format:NSPropertyListBinaryFormat_v1_0 options:0 error:NULL];
-    return [data writeToFile:path options:0 error:NULL];
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:all format:NSPropertyListXMLFormat_v1_0 options:0 error:NULL];
+    return data && [data writeToFile:path options:0 error:NULL];
 }
 
 #else
