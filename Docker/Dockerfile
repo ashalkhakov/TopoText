@@ -28,7 +28,7 @@ COPY --from=freecoredata-git /src /
 # Foundation again, at this pin, which may be ahead of the sdk's.
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GNUSTEP_PATCHES_REF=edc228953dc67ce419b72007b3ece650bf99bd26
+ARG GNUSTEP_PATCHES_REF=40a2bc8ebb5f6847ad34591cbf5f388cf10f96d5
 RUN apt-get update && apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
       libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev libfreetype-dev libfontconfig1-dev \
       libxrender-dev libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \

@@ -139,9 +139,10 @@ jobs:
       # edited). gnustep-patches c03ea57 and FreeCoreData 5b83123 (#68):
       # fetch indexes, which the model and ODataSync's bookkeeping declare;
       # a nil constant in a predicate prints, and parses back, as nil.
-      # gnustep-patches edc2289: a nil argument for %@ compares with nil.
+      # gnustep-patches edc2289: a nil argument for %@ compares with nil;
+      # 40a2bc8: keep-nib-textfield-bezel retired, merged into Eau's dev.
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes.
-      GNUSTEP_PATCHES_REF: edc228953dc67ce419b72007b3ece650bf99bd26
+      GNUSTEP_PATCHES_REF: 40a2bc8ebb5f6847ad34591cbf5f388cf10f96d5
       FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
     defaults:
       run:
