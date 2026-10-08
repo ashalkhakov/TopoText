@@ -32,9 +32,19 @@
 @property (nonatomic, strong) ODataService *service;
 @property (nonatomic, copy) NSDictionary *key;
 @property (nonatomic) NSInteger polls, refreshes;
+@property (nonatomic, copy) NSString *challenge;
 @end
 
 @implementation SNFakeSignIn
+
+/* A form's value (application/x-www-form-urlencoded). */
+static NSString *SNFormValue(NSString *form, NSString *name) {
+    for (NSString *pair in [form componentsSeparatedByString:@"&"]) {
+        NSArray *kv = [pair componentsSeparatedByString:@"="];
+        if (kv.count == 2 && [kv[0] isEqual:name]) return [kv[1] stringByRemovingPercentEncoding];
+    }
+    return nil;
+}
 
 - (NSString *)tokenFor:(NSString *)user {
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
@@ -52,14 +62,26 @@
     } else if ([url hasSuffix:@"/.well-known/openid-configuration"]) {
         body = [NSJSONSerialization dataWithJSONObject:@{ @"issuer": @"https://id.test", @"device_authorization_endpoint": @"https://id.test/device",
                                                           @"token_endpoint": @"https://id.test/token" } options:0 error:NULL];
+    } else if ([url hasSuffix:@"/device"] && ![SNFormValue(form, @"code_challenge_method") isEqual:@"S256"]) {
+        /* As Keycloak answers with PKCE set on the client. */
+        status = 400;
+        body = [NSJSONSerialization dataWithJSONObject:@{ @"error": @"invalid_request", @"error_description": @"Missing parameter: code_challenge_method" }
+                                               options:0 error:NULL];
     } else if ([url hasSuffix:@"/device"]) {
+        _challenge = SNFormValue(form, @"code_challenge");
         body = [NSJSONSerialization dataWithJSONObject:@{ @"device_code": @"dc-1", @"user_code": @"WDJB-MJHT",
                                                           @"verification_uri": @"https://id.test/activate",
                                                           @"verification_uri_complete": @"https://id.test/activate?user_code=WDJB-MJHT",
                                                           @"interval": @0.05, @"expires_in": @60 } options:0 error:NULL];
     } else if ([url hasSuffix:@"/token"] && [form containsString:@"device_code"]) {
-        /* Pending once (the user still signing in), then the tokens. */
-        if (_polls++ == 0) {
+        /* Pending once (the user still signing in), then the tokens; for
+           the verifier of the challenge only. */
+        NSString *verifier = SNFormValue(form, @"code_verifier");
+        if (!verifier || ![SNChallengeOfVerifier(verifier) isEqual:_challenge]) {
+            status = 400;
+            body = [NSJSONSerialization dataWithJSONObject:@{ @"error": @"invalid_grant", @"error_description": @"PKCE verification failed" }
+                                                   options:0 error:NULL];
+        } else if (_polls++ == 0) {
             status = 400;
             body = [NSJSONSerialization dataWithJSONObject:@{ @"error": @"authorization_pending" } options:0 error:NULL];
         } else {
@@ -142,6 +164,11 @@
     s.key = _key;
     s.delegate = self;
     return s;
+}
+
+/* RFC 7636's own example: the challenge of its verifier. */
+- (void)testPKCEChallenge {
+    XCTAssertEqualObjects(SNChallengeOfVerifier(@"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), @"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
 }
 
 - (void)testTheServerSaysHowToSignIn {

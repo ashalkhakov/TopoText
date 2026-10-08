@@ -1,5 +1,7 @@
 #import "SNSignIn.h"
 #import <ODataKit/ODataSchema.h>
+#import <ODataSync/ODataSyncPeerIdentity.h>
+#include <stdlib.h>
 
 NSString * const SNSignInErrorDomain = @"SNSignIn";
 
@@ -30,11 +32,28 @@ static NSDictionary *SNClaimsOfJWT(NSString *jwt) {
     return [claims isKindOfClass:[NSDictionary class]] ? claims : nil;
 }
 
+/* PKCE (RFC 7636): a verifier of 32 random bytes, base64url; its S256
+   challenge, base64url of its SHA-256 (a certificate's thumbprint is the
+   same function). Sent though the device flow does not ask for it: some
+   providers do (Keycloak, with the client's PKCE method set), the others
+   ignore it. */
+static NSString *SNNewVerifier(void) {
+    uint8_t bytes[32];
+    arc4random_buf(bytes, sizeof bytes);
+    NSString *base64 = [[NSData dataWithBytes:bytes length:sizeof bytes] base64EncodedStringWithOptions:0];
+    base64 = [[base64 stringByReplacingOccurrencesOfString:@"+" withString:@"-"] stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+    return [base64 stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"="]];
+}
+
+NSString *SNChallengeOfVerifier(NSString *verifier) {
+    return [ODataSyncPeerIdentity thumbprintOfCertificateData:[verifier dataUsingEncoding:NSASCIIStringEncoding]];
+}
+
 @implementation SNSignIn {
     id<SNSecretStoring> _secrets;
     NSURL *_deviceEndpoint, *_tokenEndpoint;
-    /* The device flow under way. */
-    NSString *_deviceCode;
+    /* The device flow under way, and its PKCE verifier. */
+    NSString *_deviceCode, *_verifier;
     NSTimeInterval _interval;
     NSDate *_deadline;
     NSTimer *_poll;
@@ -203,7 +222,9 @@ static NSDictionary *SNJSON(NSData *data) {
 }
 
 - (void)askForCode {
-    NSURLRequest *r = [self post:_deviceEndpoint form:@{ @"client_id": _clientID, @"scope": @"openid profile offline_access" }];
+    _verifier = SNNewVerifier();
+    NSURLRequest *r = [self post:_deviceEndpoint form:@{ @"client_id": _clientID, @"scope": @"openid profile offline_access",
+                                                        @"code_challenge": SNChallengeOfVerifier(_verifier), @"code_challenge_method": @"S256" }];
     [self send:r done:^(NSData *data, NSHTTPURLResponse *response, NSError *error) {
         NSDictionary *d = SNJSON(data);
         NSString *code = d[@"user_code"], *device = d[@"device_code"], *page = d[@"verification_uri"];
@@ -242,7 +263,7 @@ static NSDictionary *SNJSON(NSData *data) {
         return;
     }
     NSURLRequest *r = [self post:_tokenEndpoint form:@{ @"grant_type": @"urn:ietf:params:oauth:grant-type:device_code",
-                                                        @"device_code": _deviceCode, @"client_id": _clientID }];
+                                                        @"device_code": _deviceCode, @"client_id": _clientID, @"code_verifier": _verifier }];
     [self send:r done:^(NSData *data, NSHTTPURLResponse *response, NSError *error) {
         NSDictionary *d = SNJSON(data);
         dispatch_async(dispatch_get_main_queue(), ^{

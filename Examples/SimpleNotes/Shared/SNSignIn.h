@@ -80,4 +80,8 @@ typedef NS_ENUM(NSInteger, SNSignInKind) {
 
 FOUNDATION_EXPORT NSString * const SNSignInErrorDomain;
 
+// PKCE's S256 challenge of a verifier (RFC 7636): sent with the device
+// flow, which some providers ask for (Keycloak, with PKCE set on the client).
+FOUNDATION_EXPORT NSString *SNChallengeOfVerifier(NSString *verifier);
+
 NS_ASSUME_NONNULL_END
