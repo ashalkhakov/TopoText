@@ -1,7 +1,11 @@
 #import "SNSignIn.h"
 #import <ODataKit/ODataSchema.h>
 #import <ODataSync/ODataSyncPeerIdentity.h>
-#include <stdlib.h>
+#if defined(__APPLE__)
+#import <Security/SecRandom.h>
+#else
+#include <sys/random.h>
+#endif
 
 NSString * const SNSignInErrorDomain = @"SNSignIn";
 
@@ -39,7 +43,13 @@ static NSDictionary *SNClaimsOfJWT(NSString *jwt) {
    ignore it. */
 static NSString *SNNewVerifier(void) {
     uint8_t bytes[32];
-    arc4random_buf(bytes, sizeof bytes);
+    /* The system's own: iOS declares no getentropy, and the AppImage's
+       glibc (2.35) no arc4random_buf. */
+#if defined(__APPLE__)
+    if (SecRandomCopyBytes(kSecRandomDefault, sizeof bytes, bytes) != errSecSuccess) return nil;
+#else
+    if (getentropy(bytes, sizeof bytes) != 0) return nil;
+#endif
     NSString *base64 = [[NSData dataWithBytes:bytes length:sizeof bytes] base64EncodedStringWithOptions:0];
     base64 = [[base64 stringByReplacingOccurrencesOfString:@"+" withString:@"-"] stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
     return [base64 stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"="]];
@@ -223,6 +233,10 @@ static NSDictionary *SNJSON(NSData *data) {
 
 - (void)askForCode {
     _verifier = SNNewVerifier();
+    if (!_verifier) {
+        [self fail:SNSignInError(@"The system gave no random bytes to sign in with.")];
+        return;
+    }
     NSURLRequest *r = [self post:_deviceEndpoint form:@{ @"client_id": _clientID, @"scope": @"openid profile offline_access",
                                                         @"code_challenge": SNChallengeOfVerifier(_verifier), @"code_challenge_method": @"S256" }];
     [self send:r done:^(NSData *data, NSHTTPURLResponse *response, NSError *error) {
