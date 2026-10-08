@@ -67,11 +67,14 @@
     BOOL serve = _serveButton.state == NSControlStateValueOn;
     [[NSUserDefaults standardUserDefaults] setBool:serve forKey:SNServePeersDefaultsKey];
     if (!serve) {
+        _peers.automatic = NO;
         [_peers stopServing];
         return;
     }
     NSError *error = nil;
-    if (![_peers startServing:&error]) {
+    if ([_peers startServing:&error]) {
+        _peers.automatic = YES;
+    } else {
         [[NSUserDefaults standardUserDefaults] setBool:NO forKey:SNServePeersDefaultsKey];
         [self refresh];
         NSAlert *alert = [[NSAlert alloc] init];

@@ -70,9 +70,9 @@ typedef NS_ENUM(NSInteger, SNPeersSection) {
     switch (section) {
         case SNPeersSectionThisDevice:
             return _peers.status.length ? _peers.status
-                                        : @"Your other devices signed in to the same server sync with this one by its peer token, even offline. "
-                                          @"Served while SimpleNotes is open.";
-        case SNPeersSectionFound: return @"Tap a device to sync with it.";
+                                        : @"Syncs by itself with your other devices nearby: those signed in to the same server (by its "
+                                          @"peer token), even offline, and those paired. While SimpleNotes is open.";
+        case SNPeersSectionFound: return @"Tap a device to sync with it now.";
         default: return @"A device on no server of yours: pair with it once.";
     }
 }
@@ -80,7 +80,7 @@ typedef NS_ENUM(NSInteger, SNPeersSection) {
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     UITableViewCell *cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:nil];
     if (indexPath.section == SNPeersSectionThisDevice && indexPath.row == 0) {
-        cell.textLabel.text = @"Serve My Notes";
+        cell.textLabel.text = @"Sync with Devices Nearby";
         _serveSwitch.on = _peers.serving;
         cell.accessoryView = _serveSwitch;
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -147,11 +147,14 @@ typedef NS_ENUM(NSInteger, SNPeersSection) {
     BOOL serve = _serveSwitch.on;
     [[NSUserDefaults standardUserDefaults] setBool:serve forKey:SNServePeersDefaultsKey];
     if (!serve) {
+        _peers.automatic = NO;
         [_peers stopServing];
         return;
     }
     NSError *error = nil;
-    if (![_peers startServing:&error]) {
+    if ([_peers startServing:&error]) {
+        _peers.automatic = YES;
+    } else {
         [[NSUserDefaults standardUserDefaults] setBool:NO forKey:SNServePeersDefaultsKey];
         _serveSwitch.on = NO;
         [self tell:@"Your notes cannot be served to devices nearby." message:error.localizedDescription];

@@ -21,8 +21,9 @@ FOUNDATION_EXPORT NSNotificationName const SNPeersDidChangeNotification;
 // Where peers reach this device.
 FOUNDATION_EXPORT const NSUInteger SNPeersPort;
 
-// Whether the notes are served to devices nearby (kept: served again at the
-// next launch).
+// Whether this device syncs with devices nearby by itself: its notes served
+// to them, and synced with them (automatic). Kept: so again at the next
+// launch.
 FOUNDATION_EXPORT NSString * const SNServePeersDefaultsKey;   // @"SNServePeers"
 
 @protocol SNPeersDelegate <NSObject>
@@ -79,7 +80,19 @@ FOUNDATION_EXPORT NSString * const SNServePeersDefaultsKey;   // @"SNServePeers"
 - (nullable ODataSyncPeerPairing *)pairingOfPeer:(ODataSyncPeerAnnouncement *)peer;
 - (BOOL)forgetPairing:(ODataSyncPeerPairing *)pairing error:(NSError **)error;
 
-// Not serving, not browsing.
+// Syncs by itself: looks for devices nearby, and syncs with each one that
+// takes this one (by the peer token, or a pairing): as it is found, a
+// little after a change saved here (changeDelay), and every syncInterval.
+// One at a time, between the server's syncs. A device that refused is
+// tried again after refusalPause only. The peer token is asked for when
+// there is none or it runs out within a day, the server known (hourly at
+// most). The apps turn it on with serving.
+@property (nonatomic, getter=isAutomatic) BOOL automatic;
+@property (nonatomic) NSTimeInterval syncInterval;   // 300 s
+@property (nonatomic) NSTimeInterval changeDelay;    // 10 s
+@property (nonatomic) NSTimeInterval refusalPause;   // 30 minutes
+
+// Not serving, not browsing, not automatic.
 - (void)stop;
 @end
 

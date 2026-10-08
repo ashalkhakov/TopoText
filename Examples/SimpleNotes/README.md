@@ -625,9 +625,16 @@ folder list on iOS, sync your notes directly with your other devices on
 the same network, without the server (ODataSync's peer sync). On iOS
 the notes are served while SimpleNotes is open.
 
-- **Serve my notes to devices nearby** makes this computer one the others
-  can reach. It's advertised over Bonjour (Avahi on Linux), served over TLS,
-  and stays on across launches.
+- **Sync with my devices nearby** (on iOS, **Sync with Devices Nearby**)
+  makes this device one the others can reach: advertised over Bonjour
+  (Avahi on Linux) and served over TLS. It also syncs by itself with each
+  device found that takes this one: when the device appears, about ten
+  seconds after you change something, and every five minutes. Devices
+  sync one at a time, between server syncs. A device that refuses is tried
+  again after half an hour. The setting stays on across launches.
+- **Sync** in the list syncs with a device right away.
+- The peer token renews by itself while the server is reachable, when it's
+  missing or runs out within a day.
 - A device syncs with another by one of two things. A **peer token** comes
   from your server while you're signed in, and lasts a day; your devices
   then trust each other even offline. **Pairing** is for a device that

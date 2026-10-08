@@ -35,8 +35,12 @@
     else _notes.syncInterval = 30;
     SNFoldersViewController *folders = [[SNFoldersViewController alloc] initWithNotes:_notes];
     folders.peersDirectory = [store.URLByDeletingLastPathComponent URLByAppendingPathComponent:@"Peers" isDirectory:YES];
-    /* Served again if it was (while the app is open). */
-    if (!SNSelfTestRoot && [[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey]) [[folders peers] startServing:NULL];
+    /* Synced with devices nearby again if it was (served, and syncing by
+       itself, while the app is open). */
+    if (!SNSelfTestRoot && [[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey]) {
+        [[folders peers] startServing:NULL];
+        [folders peers].automatic = YES;
+    }
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:folders];
     nav.navigationBar.prefersLargeTitles = YES;
     _window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];

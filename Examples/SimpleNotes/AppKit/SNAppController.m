@@ -64,9 +64,13 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     }
     [_notes sync];
     _store = store;
-    /* Served again if it was; else made when Devices Nearby opens (its
-       identity is a key in the keychain: none made for nothing). */
-    if ([[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey] && [self makePeers]) [_peers startServing:NULL];
+    /* Synced with devices nearby again if it was (served, and syncing by
+       itself); else made when Devices Nearby opens (its identity is a key
+       in the keychain: none made for nothing). */
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey] && [self makePeers]) {
+        [_peers startServing:NULL];
+        _peers.automatic = YES;
+    }
     /* The first time: where to keep the notes, chosen. */
     if (![[NSUserDefaults standardUserDefaults] boolForKey:SNSyncChosenDefaultsKey] && !root) [self chooseServer:nil];
 }
