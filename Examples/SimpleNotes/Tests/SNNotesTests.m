@@ -716,6 +716,8 @@
     XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"only hers");
     XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"on each of her devices");
     XCTAssertEqualObjects([[aliceAgain folders] valueForKey:@"name"], @[ @"Alice's" ]);
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil].firstObject body], @"Alice's secret", @"the body, not only the title");
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil].firstObject text].string, @"Alice's secret");
     XCTAssertEqualObjects([[bob notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Bob's list" ], @"only his");
     XCTAssertEqual(bob.folders.count, 0u, @"none of her folders");
     /* A deletion is told to its owner only. */
