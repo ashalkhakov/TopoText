@@ -161,9 +161,12 @@ jobs:
       # 40a2bc8: keep-nib-textfield-bezel retired, merged into Eau's dev;
       # 4593e60: Eau built at a pinned commit of dev (01be00b); 239a625:
       # NSDictionary and NSArray read a binary property list from a file.
-      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes.
+      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
+      # 4226790 (branch migrate-persistent-store, until it is merged):
+      # -migratePersistentStore:, which moves a server's notes to another
+      # store (MoveFrom).
       GNUSTEP_PATCHES_REF: 239a625bcbfe90818f5ff08d4dbeb2fa47c9ff38
-      FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
+      FREECOREDATA_REF: 422679044f1aaca4ab3a2bbf992a303b75ebcbf3
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
@@ -328,6 +331,15 @@ jobs:
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
           SN_STORE_ARGS="-StoreType MariaDB -StoreURL mysql://root:notes@127.0.0.1:3306/notes" SN_CHECK_PORT=18081 \
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+
+      # A server's notes moved from SQLite to PostgreSQL (MoveFrom), into a
+      # database of their own.
+      - name: SimpleNotes' server moved from SQLite to PostgreSQL
+        working-directory: ${{ github.workspace }}/source/Examples/SimpleNotes
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          docker exec ${{ job.services.postgres.id }} psql -U postgres -c 'CREATE DATABASE moved'
+          Tests/move-and-check.sh ./obj/simplenotes-server -StoreType PostgreSQL -StoreURL postgresql://postgres:notes@127.0.0.1:5432/moved
 
       # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
       # always a build to try: named for the commit, kept two weeks. Built on

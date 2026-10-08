@@ -32,4 +32,16 @@ FOUNDATION_EXPORT NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdUR
 // model has: NO, with the error. The store before is kept beside it (.old).
 FOUNDATION_EXPORT BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error);
 
+// A store moved to another: a server's storage changed (SQLite to
+// PostgreSQL, say). Everything in the store at from (its type fromType,
+// opened with fromOptions) is copied into the one at to, when that one
+// has nothing in it yet: every row of model (its bookkeeping too, and the
+// store's metadata), by Core Data's -migratePersistentStore:. History is
+// not copied: it begins again with the copy. The store at from is left as
+// it was. *moved: whether it was copied (NO: the one at to has rows
+// already, and is left alone). NO, and the error, when either does not
+// open, or the copy is not saved.
+FOUNDATION_EXPORT BOOL SNMoveStore(NSManagedObjectModel *model, NSString *fromType, NSURL *from, NSDictionary *_Nullable fromOptions,
+                                   NSString *toType, NSURL *to, NSDictionary *_Nullable toOptions, BOOL *moved, NSError **error);
+
 NS_ASSUME_NONNULL_END

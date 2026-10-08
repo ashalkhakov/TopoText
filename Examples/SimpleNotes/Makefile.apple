@@ -66,6 +66,7 @@ test: $(BUILD)/SimpleNotesTests.xctest
 
 check: test all $(BUILD)/sn-check
 	Tests/serve-and-check.sh $(BUILD)/simplenotes-server sh -c '$(BUILD)/sn-check "$$0" $(BUILD)/SimpleNotes.momd'
+	Tests/move-and-check.sh $(BUILD)/simplenotes-server
 
 
 clean:

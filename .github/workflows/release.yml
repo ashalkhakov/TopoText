@@ -32,7 +32,7 @@ env:
   # ci.yml's pins: the release is built from what CI tested.
   ODATAKIT_REF: e3962cd392d8e4e47d7a03bc8533d10713f3bb00
   GNUSTEP_PATCHES_REF: 239a625bcbfe90818f5ff08d4dbeb2fa47c9ff38
-  FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
+  FREECOREDATA_REF: 422679044f1aaca4ab3a2bbf992a303b75ebcbf3
   TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
 
 jobs:

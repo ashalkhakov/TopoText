@@ -75,6 +75,7 @@ after-all::
 check:: all
 	$(MAKE) -C Tests run-tests
 	Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+	Tests/move-and-check.sh ./obj/simplenotes-server
 	Tests/self-test.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes
 
 endif

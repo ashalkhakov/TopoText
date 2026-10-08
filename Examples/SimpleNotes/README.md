@@ -333,6 +333,11 @@ addition:
   Delta links need persistent history. FreeCoreData's SQL stores keep it on
   GNUstep, but not on Apple's Core Data, so a server on macOS uses SQLite.
 - `StoreURL Temporary` is a throwaway store, for trying things out.
+- `MoveFrom` moves the notes from another store into this one: a SQLite
+  file, or a database's URL as `StoreURL` takes it (its type comes from the
+  scheme, or from `MoveFromType`). It copies only while this store is
+  still empty, so the setting can stay in place afterwards. See [Moving to
+  another database](#moving-to-another-database).
 - `AllowAnonymous NO` refuses requests that don't say who they're from,
   once a sign-in is set.
 - `AllowAnonymousMetadata NO` refuses `$metadata` too. By default anyone may
@@ -382,6 +387,36 @@ docker run -p 8080:8080 \
   -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://notes:secret@db:5432/notes \
   ghcr.io/ashalkhakov/simplenotes-server
 ```
+
+### Moving to another database
+
+A server can start on SQLite and move to PostgreSQL or MariaDB later. Make
+an empty database, then start the server on it with `MoveFrom` naming the
+old store:
+
+```sh
+docker run -p 8080:8080 -v notes:/data \
+  -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://notes:secret@db:5432/notes \
+  -e SN_MOVE_FROM=/data/notes.sqlite \
+  ghcr.io/ashalkhakov/simplenotes-server
+```
+
+At start, while the new database has nothing in it, the server copies
+everything into it: notes, folders, attachments, owners, and ODataSync's
+records of deletions and of what each device has seen. The log says
+`the notes moved here from …`. The old store is left as it was, so you can
+go back to it.
+
+Persistent history isn't copied. Instead, it begins again with the copy,
+and every delta link given before the move answers 410. Each device then
+reads its notes again at its next sync, and sends whatever it hadn't sent
+yet. Peer tokens keep working: the peer key beside the SQLite file comes
+along, unless `PeerKey` names one.
+
+Once the database has notes, `MoveFrom` does nothing (the log says
+`nothing moved`), so it's safe to leave it set or to remove it. A move
+between other types works the same way, for example `MoveFrom
+postgresql://…` with `StoreType MariaDB`.
 
 Behind a reverse proxy (Nginx Proxy Manager, Caddy, Traefik), forward a
 host to the container's port 8080, and give the address users reach as
@@ -498,7 +533,10 @@ This runs four things:
   their folders and attachments, and a Trilium export is imported.
 - **Two devices through the server, over HTTP**
   (`Tests/serve-and-check.sh`, `SimpleNotes --check`). With `SN_STORE_ARGS`,
-  the server stores in PostgreSQL or MariaDB instead.
+  the server stores in PostgreSQL or MariaDB instead. Then the server's
+  notes move to another store (`Tests/move-and-check.sh`): it must serve the
+  same notes and folders, answer 410 to a delta link from before, and not
+  move them twice. CI moves them from SQLite to PostgreSQL.
 - **The AppKit app driven from within** (`SimpleNotes --self-test`, under
   `xvfb-run` where there's no display). A note is chosen in the list, text
   is typed into the window's text view, and Bold is sent up the responder

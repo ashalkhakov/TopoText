@@ -196,4 +196,70 @@
     XCTAssertEqualObjects(titles, @[ @"Kept" ]);
 }
 
+/* What a store has: each entity's rows' ids, by entity. */
+- (NSDictionary *)rowsOf:(NSURL *)url model:(NSManagedObjectModel *)model {
+    NSPersistentStoreCoordinator *c = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
+    NSError *error = nil;
+    XCTAssertNotNil([c addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:url
+                                          options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
+    NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    context.persistentStoreCoordinator = c;
+    NSMutableDictionary *rows = [NSMutableDictionary dictionary];
+    [context performBlockAndWait:^{
+        for (NSString *entity in @[ SNNoteEntity, SNFolderEntity ]) {
+            NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:entity];
+            fetch.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"id" ascending:YES] ];
+            rows[entity] = [[context executeFetchRequest:fetch error:NULL] valueForKey:@"id"];
+        }
+        NSFetchRequest *notes = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
+        notes.predicate = [NSPredicate predicateWithFormat:@"folder.id == %@", @"f1"];
+        notes.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"id" ascending:YES] ];
+        rows[@"in f1"] = [[context executeFetchRequest:notes error:NULL] valueForKey:@"id"];
+    }];
+    for (NSPersistentStore *s in [c.persistentStores copy]) [c removePersistentStore:s error:NULL];
+    return rows;
+}
+
+- (void)testAServerStoreIsMovedToAnotherWhenThatOneIsEmpty {
+    NSManagedObjectModel *model = SNModelAt(_momd);
+    [ODataSyncService addBookkeepingToModel:model configuration:nil];
+    NSURL *from = [self temporaryStore], *to = [self temporaryStore];
+    NSDictionary *options = @{ NSPersistentHistoryTrackingKey: @YES };
+    @autoreleasepool {
+        NSPersistentStoreCoordinator *c = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
+        NSError *error = nil;
+        XCTAssertNotNil([c addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:from options:options error:&error], @"%@", error);
+        NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        context.persistentStoreCoordinator = c;
+        [context performBlockAndWait:^{
+            NSManagedObject *folder = [NSEntityDescription insertNewObjectForEntityForName:SNFolderEntity inManagedObjectContext:context];
+            [folder setValue:@"f1" forKey:@"id"];
+            [folder setValue:@"Work" forKey:@"name"];
+            for (NSString *noteID in @[ @"n1", @"n2", @"n3" ]) {
+                NSManagedObject *note = [NSEntityDescription insertNewObjectForEntityForName:SNNoteEntity inManagedObjectContext:context];
+                [note setValue:noteID forKey:@"id"];
+                [note setValue:noteID forKey:@"title"];
+                if (![noteID isEqual:@"n3"]) [note setValue:folder forKey:@"folder"];
+            }
+            [context save:NULL];
+        }];
+        for (NSPersistentStore *s in [c.persistentStores copy]) [c removePersistentStore:s error:NULL];
+    }
+    NSDictionary *before = [self rowsOf:from model:model];
+    XCTAssertEqualObjects(before[SNNoteEntity], (@[ @"n1", @"n2", @"n3" ]));
+
+    BOOL moved = NO;
+    NSError *error = nil;
+    XCTAssertTrue(SNMoveStore(model, NSSQLiteStoreType, from, options, NSSQLiteStoreType, to, options, &moved, &error), @"%@", error);
+    XCTAssertTrue(moved);
+    XCTAssertEqualObjects([self rowsOf:to model:model], before);
+    XCTAssertEqualObjects(before[@"in f1"], (@[ @"n1", @"n2" ]));
+    XCTAssertEqualObjects([self rowsOf:from model:model], before, @"the store moved from is left as it was");
+
+    /* Again (the setting left in place): the store has rows now, and is left alone. */
+    XCTAssertTrue(SNMoveStore(model, NSSQLiteStoreType, from, options, NSSQLiteStoreType, to, options, &moved, &error), @"%@", error);
+    XCTAssertFalse(moved);
+    XCTAssertEqualObjects([self rowsOf:to model:model], before);
+}
+
 @end

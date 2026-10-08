@@ -21,6 +21,13 @@
 //                server stops, for a demo or a test), or the database's
 //                URL (postgresql://user:password@host/notes,
 //                mysql://user:password@host:3306/notes)
+//   MoveFrom     a store to move the notes from, as StoreURL names one (a
+//                SQLite file, postgresql://…, mysql://…): its type from
+//                its scheme, or MoveFromType. At start, when the store
+//                (StoreType, StoreURL) has nothing in it yet, everything is
+//                copied into it from there, which is left as it was;
+//                devices read their notes again at their next sync. Once
+//                moved, the setting does nothing, and can go
 //   ServiceRoot  the public URL the service is reached at, its links
 //                begin with (default http://<host>:<Port>/odata/)
 //   Port, Localhost, AccessLog, and every other HTTPServerKit setting
@@ -57,7 +64,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"MoveFrom", @"MoveFromType", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -75,6 +82,14 @@ static NSString *SNTemporaryStore;
 static void SNRemoveTemporaryStore(void) {
     for (NSString *suffix in @[ @"", @"-wal", @"-shm" ])
         [[NSFileManager defaultManager] removeItemAtPath:[SNTemporaryStore stringByAppendingString:suffix] error:NULL];
+}
+
+/* A URL as a log may show it: no password. */
+static NSString *SNShown(NSURL *url) {
+    if (url.isFileURL) return url.path;
+    if (!url.password.length) return url.absoluteString;
+    return [url.absoluteString stringByReplacingOccurrencesOfString:[@":" stringByAppendingString:url.password]
+                                                         withString:@":***"];
 }
 
 /* A store type by its short name; one nothing registered, its library
@@ -142,6 +157,44 @@ static NSURL *SNURL(id value) {
         options[@"CDSQLStoreMigrateSchema"] = @YES;
         options[NSIgnorePersistentStoreVersioningOption] = @YES;
     }
+    /* The notes moved here from another store (MoveFrom), while this one
+       has none: SNMoveStore (SNMigration.h). */
+    BOOL moved = NO;
+    NSURL *from = SNURL([c setting:@"MoveFrom"]);
+    if (from) {
+        NSString *scheme = from.scheme.lowercaseString;
+        NSString *fromName = [c setting:@"MoveFromType"]
+            ?: [scheme hasPrefix:@"postgres"] ? @"PostgreSQL" : [scheme isEqual:@"mysql"] || [scheme isEqual:@"mariadb"] ? @"MySQL" : @"SQLite";
+        NSString *fromType = SNStoreType(fromName);
+        NSMutableDictionary *fromOptions = [@{ NSPersistentHistoryTrackingKey: @YES } mutableCopy];
+        if ([fromType isEqual:NSSQLiteStoreType]) {
+            if (![[NSFileManager defaultManager] fileExistsAtPath:from.path]) {
+                if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoSuchFileError
+                                                    userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"no store to move from at %@ (-MoveFrom)", from.path] }];
+                return NO;
+            }
+            if ([modelURL.pathExtension isEqual:@"momd"] && !SNMigrateStore(from, modelURL, [ODataSyncService class], &failure)) {
+                if (error) *error = failure;
+                return NO;
+            }
+        } else {
+            fromOptions[@"CDSQLStoreMigrateSchema"] = @YES;
+            fromOptions[NSIgnorePersistentStoreVersioningOption] = @YES;
+        }
+        if ([from isEqual:url]) {
+            if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreOperationError
+                                                userInfo:@{ NSLocalizedDescriptionKey: @"MoveFrom names the store itself" }];
+            return NO;
+        }
+        if (!SNMoveStore(model, fromType, from, fromOptions, type, url, options, &moved, &failure)) {
+            if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreOperationError
+                                                userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"the notes were not moved from %@: %@",
+                                                                                        SNShown(from), failure.localizedDescription] }];
+            return NO;
+        }
+        if (moved) NSLog(@"the notes moved here from %@ (%@)", SNShown(from), fromName);
+        else NSLog(@"MoveFrom: the store has notes already; nothing moved from %@", SNShown(from));
+    }
     /* History: delta links are read from it. */
     if (![coordinator addPersistentStoreWithType:type configuration:nil URL:url options:options error:&failure]) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreOpenError
@@ -154,6 +207,12 @@ static NSURL *SNURL(id value) {
                                                             (unsigned long)c.port]];
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
+    /* Moved: the history began again with the copy, so every delta link
+       given before answers 410, and each device reads its notes again. */
+    if (moved && ![_service pruneHistoryBeforeDate:[NSDate date] error:&failure]) {
+        if (error) *error = failure;
+        return NO;
+    }
     /* How to sign in ($metadata's Authorization), to a device not signed
        in yet: SNSignIn reads it there. AllowAnonymousMetadata NO turns it
        off (ODataServiceModule reads it). */
@@ -187,6 +246,12 @@ static NSURL *SNURL(id value) {
         NSURL *file = peerKey.length ? [NSURL fileURLWithPath:peerKey]
             : [NSURL fileURLWithPath:@"SimpleNotes-peer-key.json"
                        relativeToURL:url.isFileURL && SNTemporaryStore == nil ? url.URLByDeletingLastPathComponent : nil];
+        /* Moved from a SQLite file: its key comes along, so the peer
+           tokens given before still hold. */
+        NSURL *old = moved && from.isFileURL ? [from.URLByDeletingLastPathComponent URLByAppendingPathComponent:@"SimpleNotes-peer-key.json"] : nil;
+        NSFileManager *fm = [NSFileManager defaultManager];
+        if (old && !peerKey.length && ![fm fileExistsAtPath:file.path] && [fm fileExistsAtPath:old.path])
+            [fm copyItemAtPath:old.path toPath:file.path error:NULL];
         NSDictionary *key = SNPeerSigningKeyAt(file, &failure);
         if (!key) {
             if (error) *error = failure;

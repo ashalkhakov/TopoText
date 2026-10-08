@@ -80,3 +80,40 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
         if ([fm fileExistsAtPath:from[i]] && ![fm moveItemAtPath:from[i] toPath:to[i] error:error]) return NO;
     return YES;
 }
+
+BOOL SNMoveStore(NSManagedObjectModel *model, NSString *fromType, NSURL *from, NSDictionary *fromOptions,
+                 NSString *toType, NSURL *to, NSDictionary *toOptions, BOOL *moved, NSError **error) {
+    *moved = NO;
+    NSPersistentStoreCoordinator *coordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
+    /* Is there anything at to (made empty, if nothing was there)? */
+    NSPersistentStore *target = [coordinator addPersistentStoreWithType:toType configuration:nil URL:to options:toOptions error:error];
+    if (!target) return NO;
+    NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    context.persistentStoreCoordinator = coordinator;
+    __block BOOL empty = YES;
+    [context performBlockAndWait:^{
+        for (NSEntityDescription *entity in model.entities) {
+            if (entity.isAbstract) continue;
+            NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:entity.name];
+            fetch.includesSubentities = NO;
+            if ([context countForFetchRequest:fetch error:NULL] > 0) {
+                empty = NO;
+                break;
+            }
+        }
+        [context reset];
+    }];
+    context = nil;
+    if (![coordinator removePersistentStore:target error:error]) return NO;
+    if (!empty) return YES;
+    NSPersistentStore *source = [coordinator addPersistentStoreWithType:fromType configuration:nil URL:from options:fromOptions error:error];
+    if (!source) return NO;
+    NSPersistentStore *made = [coordinator migratePersistentStore:source toURL:to options:toOptions withType:toType error:error];
+    if (!made) {
+        [coordinator removePersistentStore:source error:NULL];
+        return NO;
+    }
+    [coordinator removePersistentStore:made error:NULL];
+    *moved = YES;
+    return YES;
+}
