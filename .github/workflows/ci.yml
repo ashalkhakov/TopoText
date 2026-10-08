@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: e3962cd392d8e4e47d7a03bc8533d10713f3bb00
+  ODATAKIT_REF: 20a35cba201571f12096c3b448f2b193c25ce925
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -162,11 +162,11 @@ jobs:
       # 4593e60: Eau built at a pinned commit of dev (01be00b); 239a625:
       # NSDictionary and NSArray read a binary property list from a file.
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
-      # 4226790 (branch migrate-persistent-store, until it is merged):
+      # 33163f4 (branch migrate-persistent-store, until it is merged):
       # -migratePersistentStore:, which moves a server's notes to another
       # store (MoveFrom).
       GNUSTEP_PATCHES_REF: 239a625bcbfe90818f5ff08d4dbeb2fa47c9ff38
-      FREECOREDATA_REF: 422679044f1aaca4ab3a2bbf992a303b75ebcbf3
+      FREECOREDATA_REF: 33163f4b7c9fd2e8d48875ae1e333a5ab957ec72
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source

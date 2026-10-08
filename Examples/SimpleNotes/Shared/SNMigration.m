@@ -81,31 +81,43 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     return YES;
 }
 
-BOOL SNMoveStore(NSManagedObjectModel *model, NSString *fromType, NSURL *from, NSDictionary *fromOptions,
-                 NSString *toType, NSURL *to, NSDictionary *toOptions, BOOL *moved, NSError **error) {
-    *moved = NO;
-    NSPersistentStoreCoordinator *coordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
-    /* Is there anything at to (made empty, if nothing was there)? */
-    NSPersistentStore *target = [coordinator addPersistentStoreWithType:toType configuration:nil URL:to options:toOptions error:error];
-    if (!target) return NO;
+/* Whether the store at url has no rows of model's (opened, then closed). */
+static BOOL SNStoreIsEmpty(NSPersistentStoreCoordinator *coordinator, NSManagedObjectModel *model, NSString *type, NSURL *url,
+                           NSDictionary *options, BOOL *empty, NSError **error) {
+    NSPersistentStore *store = [coordinator addPersistentStoreWithType:type configuration:nil URL:url options:options error:error];
+    if (!store) return NO;
     NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
     context.persistentStoreCoordinator = coordinator;
-    __block BOOL empty = YES;
+    __block BOOL none = YES;
     [context performBlockAndWait:^{
         for (NSEntityDescription *entity in model.entities) {
             if (entity.isAbstract) continue;
             NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:entity.name];
             fetch.includesSubentities = NO;
             if ([context countForFetchRequest:fetch error:NULL] > 0) {
-                empty = NO;
+                none = NO;
                 break;
             }
         }
         [context reset];
     }];
-    context = nil;
-    if (![coordinator removePersistentStore:target error:error]) return NO;
-    if (!empty) return YES;
+    *empty = none;
+    return [coordinator removePersistentStore:store error:error];
+}
+
+BOOL SNMoveStore(NSManagedObjectModel *model, NSString *fromType, NSURL *from, NSDictionary *fromOptions,
+                 NSString *toType, NSURL *to, NSDictionary *toOptions, BOOL *moved, NSError **error) {
+    *moved = NO;
+    NSPersistentStoreCoordinator *coordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
+    /* No store at to yet: moved into a new one (which FreeCoreData fills a
+       batch at a time, and destroys again if the copy fails). One there
+       already is opened to see whether it has anything in it. */
+    BOOL there = [NSPersistentStoreCoordinator metadataForPersistentStoreOfType:toType URL:to options:toOptions error:NULL] != nil;
+    if (there) {
+        BOOL empty = NO;
+        if (!SNStoreIsEmpty(coordinator, model, toType, to, toOptions, &empty, error)) return NO;
+        if (!empty) return YES;
+    }
     NSPersistentStore *source = [coordinator addPersistentStoreWithType:fromType configuration:nil URL:from options:fromOptions error:error];
     if (!source) return NO;
     NSPersistentStore *made = [coordinator migratePersistentStore:source toURL:to options:toOptions withType:toType error:error];
