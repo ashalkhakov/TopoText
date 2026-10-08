@@ -344,6 +344,9 @@ HTTPServerKit's proxy settings work as `SN_` variables too:
   accepts only requests that carry the proxy's secret.
 - `SN_CORS_ORIGINS` sets the allowed origins.
 
+On Proxmox VE, as a container made from the image, signed in with
+Keycloak: [docs/Proxmox.md](docs/Proxmox.md), from the image to updating.
+
 #### Signing in with Keycloak (or another OpenID Connect provider)
 
 1. In the realm, add a client with Client ID `simplenotes`: public (no
