@@ -166,6 +166,26 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     return s;
 }
 
+#ifdef GNUSTEP
+/* GNUstep keeps the tokens in a file of its own (SNSecretStore): what is
+   kept is read back, on this launch and the next. (Apple's is the
+   Keychain, left alone by the tests.) */
+- (void)testTheTokensAreReadBackFromTheFile {
+    SNSecretStore *store = [[SNSecretStore alloc] init];
+    NSString *account = [@"https://test.invalid/" stringByAppendingString:[NSProcessInfo processInfo].globallyUniqueString];
+    NSDictionary *tokens = @{ @"access": @"a.b.c", @"refresh": @"r", @"expires": @(1791451581.5), @"name": @"alice",
+                              @"kind": @(SNSignInOpenID), @"issuer": @"https://id.test/realms/home" };
+    XCTAssertTrue([store setSecrets:tokens forAccount:account]);
+    XCTAssertEqualObjects([store secretsForAccount:account], tokens, @"read back by this store");
+    XCTAssertEqualObjects([[[SNSecretStore alloc] init] secretsForAccount:account], tokens, @"and by the next launch's");
+    SNSignIn *s = [[SNSignIn alloc] initWithServiceRoot:[NSURL URLWithString:account] secrets:store];
+    XCTAssertTrue(s.signedIn, @"signed in by what was kept");
+    XCTAssertEqualObjects(s.userName, @"alice");
+    [store setSecrets:nil forAccount:account];
+    XCTAssertNil([store secretsForAccount:account]);
+}
+#endif
+
 /* RFC 7636's own example: the challenge of its verifier. */
 - (void)testPKCEChallenge {
     XCTAssertEqualObjects(SNChallengeOfVerifier(@"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), @"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
