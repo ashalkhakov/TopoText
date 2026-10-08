@@ -24,6 +24,9 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
 
 @implementation SNWindowController {
     SNNotes *_notes;
+    /* Move To being filled: GNUstep's -[NSMenu update] asks its delegate
+       again for each item added (through -menuChanged). */
+    BOOL _fillingMoveTo;
     /* The sidebar, as last read: the folders at the top, each folder's
        (by object ID), and the tags. */
     NSArray<SNFolder *> *_topFolders;
@@ -408,24 +411,41 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 #pragma mark the Move To menu
 
-/* The folders, indented as in the sidebar. */
-- (void)menuNeedsUpdate:(NSMenu *)menu {
-    [menu removeAllItems];
+/* The folders, indented as in the sidebar: what each item says, the folder
+   it moves the note to (NSNull: none), and whether it is the note's. */
+- (NSArray<NSArray *> *)moveToItems {
     SNNote *note = [self selectedNote];
-    NSMenuItem *none = (NSMenuItem *)[menu addItemWithTitle:@"No Folder" action:@selector(moveNoteToFolder:) keyEquivalent:@""];
-    none.target = self;
-    if (note && !note.folder && !note.deletedAt) none.state = NSControlStateValueOn;
-    NSArray *tree = _notes.folderTree;
-    if (tree.count) [menu addItem:[NSMenuItem separatorItem]];
-    for (SNFolder *f in tree) {
+    NSMutableArray *items = [NSMutableArray array];
+    [items addObject:@[ @"No Folder", [NSNull null], @(note && !note.folder && !note.deletedAt) ]];
+    for (SNFolder *f in _notes.folderTree) {
         if ([_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
-        NSString *title = [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"];
-        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:title action:@selector(moveNoteToFolder:) keyEquivalent:@""];
-        item.target = self;
-        item.representedObject = f;
-        if (note.folder == f && !note.deletedAt) item.state = NSControlStateValueOn;
+        [items addObject:@[ [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"], f, @(note.folder == f && !note.deletedAt) ]];
     }
+    return items;
+}
+
+/* Filled only when what it says changes: GNUstep updates menus often,
+   and Eau's menu bar is told of every change. */
+- (void)menuNeedsUpdate:(NSMenu *)menu {
+    if (_fillingMoveTo) return;
+    NSArray<NSArray *> *items = [self moveToItems];
+    NSMutableArray *shown = [NSMutableArray array];
+    for (NSMenuItem *item in menu.itemArray) {
+        if (item.isSeparatorItem) continue;
+        [shown addObject:@[ item.title, item.representedObject ?: [NSNull null], @(item.state == NSControlStateValueOn) ]];
+    }
+    if ([shown isEqual:items]) return;
+    _fillingMoveTo = YES;
+    [menu removeAllItems];
+    for (NSArray *i in items) {
+        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:i[0] action:@selector(moveNoteToFolder:) keyEquivalent:@""];
+        item.target = self;
+        if (i[1] != [NSNull null]) item.representedObject = i[1];
+        if ([i[2] boolValue]) item.state = NSControlStateValueOn;
+        if (i == items.firstObject && items.count > 1) [menu addItem:[NSMenuItem separatorItem]];
+    }
+    _fillingMoveTo = NO;
 }
 
 - (IBAction)moveNoteToFolder:(id)sender {

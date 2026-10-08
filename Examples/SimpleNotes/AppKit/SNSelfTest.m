@@ -322,6 +322,24 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         [peers stop];
         [peers.trust.identity removeWithError:NULL];
         [[NSFileManager defaultManager] removeItemAtURL:peersDir error:NULL];
+        /* Move To, filled from the folders: an update that changes nothing
+           adds nothing (GNUstep's -update asked its delegate again for
+           each item added, without end, and froze the app). */
+        NSMenu *moveTo = nil;
+        for (NSMenuItem *top in [NSApp mainMenu].itemArray)
+            if ((moveTo = [top.submenu itemWithTag:7001].submenu)) break;
+        __block NSUInteger added = 0;
+        id observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSMenuDidAddItemNotification object:moveTo queue:nil
+                                                                    usingBlock:^(NSNotification *n) { added++; }];
+        /* As opening it does (Apple's AppKit), and as -update does (GNUstep's). */
+        [window menuNeedsUpdate:moveTo];
+        NSUInteger first = added, filled = moveTo.numberOfItems;
+        [moveTo update];
+        [window menuNeedsUpdate:moveTo];
+        [[NSNotificationCenter defaultCenter] removeObserver:observer];
+        SNSay(moveTo.delegate == window && filled > 1 && first <= filled && added == first,
+              [NSString stringWithFormat:@"Move To is filled once (%lu items; %lu added, then %lu)", (unsigned long)filled,
+                                         (unsigned long)first, (unsigned long)(added - first)]);
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
         SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
         [notes sync];
