@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
+  ODATAKIT_REF: 2ab40da93163805aa77057f05b0336fc230b23c0
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -107,6 +107,24 @@ jobs:
           Examples/SimpleNotes/Tests/ios-self-test.sh "$RUNNER_TEMP/DerivedData/Build/Products/Debug/simplenotes-server" \
             "$RUNNER_TEMP/DerivedData-iOS/Build/Products/Debug-iphonesimulator/SimpleNotes.app"
 
+      # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
+      # always a build to try: unsigned, named for the commit, and kept two
+      # weeks. Signed releases are release.yml's.
+      - name: Package the apps
+        run: |
+          ditto -c -k --keepParent "$RUNNER_TEMP/DerivedData/Build/Products/Debug/SimpleNotes.app" \
+            "$RUNNER_TEMP/SimpleNotes-macOS-unsigned.zip"
+          ditto -c -k --keepParent "$RUNNER_TEMP/DerivedData-iOS/Build/Products/Debug-iphonesimulator/SimpleNotes.app" \
+            "$RUNNER_TEMP/SimpleNotes-iOS-Simulator.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-macOS-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/SimpleNotes-macOS-unsigned.zip
+            ${{ runner.temp }}/SimpleNotes-iOS-Simulator.zip
+          retention-days: 14
+
   ########################### GNUstep / Linux ###########################
   # A patched stack built by gnustep-patches, FreeCoreData as the Core Data
   # underneath, ODataKit installed into it: as ODataKit's own CI.
@@ -136,9 +154,15 @@ jobs:
       # through a migration as the same store, metadata and history (a
       # migrated device keeps its replica ID, and what it had not sent); an
       # inferred mapping follows Renaming IDs (SimpleNotes' updated, now
-      # edited).
-      GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
-      FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
+      # edited). gnustep-patches c03ea57 and FreeCoreData 5b83123 (#68):
+      # fetch indexes, which the model and ODataSync's bookkeeping declare;
+      # a nil constant in a predicate prints, and parses back, as nil.
+      # gnustep-patches edc2289: a nil argument for %@ compares with nil;
+      # 40a2bc8: keep-nib-textfield-bezel retired, merged into Eau's dev;
+      # 4593e60: Eau built at a pinned commit of dev (01be00b).
+      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes.
+      GNUSTEP_PATCHES_REF: 4593e606f92910c520a1c48472708b9d2934eef9
+      FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
@@ -303,3 +327,44 @@ jobs:
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
           SN_STORE_ARGS="-StoreType MariaDB -StoreURL mysql://root:notes@127.0.0.1:3306/notes" SN_CHECK_PORT=18081 \
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+
+      # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
+      # always a build to try: named for the commit, kept two weeks. Built on
+      # this job's Ubuntu, so it needs a glibc as new; release.yml's, built on
+      # an older one, runs on more.
+      - name: Fetch linuxdeploy and the AppImage runtime
+        run: ./Scripts/install-linuxdeploy.sh
+
+      - name: Package the AppImage
+        env:
+          APP_VERSION: 0.0.0-${{ github.run_number }}-${{ github.sha }}
+        run: |
+          sudo apt-get -q -y install file desktop-file-utils fonts-liberation
+          ./Scripts/stamp-version.sh "$APP_VERSION"
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/prepare-appdir.sh
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+
+      # As release.yml's: a plain Ubuntu (this job's) with no GNUstep, the
+      # image's own server, and the app's self-test against it.
+      - name: Smoke-test the AppImage on a clean system
+        run: |
+          image=$(ls SimpleNotes-*.AppImage)
+          chmod +x "$image"
+          docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash -c '
+            export DEBIAN_FRONTEND=noninteractive APPIMAGE_EXTRACT_AND_RUN=1
+            for i in 1 2 3; do
+              apt-get update -qq && apt-get install -y -qq --fix-missing xvfb xauth ca-certificates python3 \
+                libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libgl1 libharfbuzz0b > /dev/null && break
+              sleep 10
+            done
+            rm -rf /usr/share/fonts
+            ./'"$image"' --server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &
+            for i in $(seq 1 60); do python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:18090/odata/\")" 2>/dev/null && break; sleep 1; done
+            python3 Examples/SimpleNotes/Tests/seed.py http://127.0.0.1:18090/odata/ || { cat /tmp/server.log; exit 1; }
+            timeout 300 xvfb-run -a ./'"$image"' --self-test http://127.0.0.1:18090/odata/'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-AppImage-${{ github.sha }}
+          path: ${{ env.SRC_PATH }}/SimpleNotes-*.AppImage
+          retention-days: 14

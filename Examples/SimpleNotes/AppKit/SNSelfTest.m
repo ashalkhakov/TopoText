@@ -3,8 +3,40 @@
 #import "SNModel.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
+#import "SNSmartFolderPanel.h"
+#import "SNSyncPanel.h"
+#import "SNPeersWindow.h"
 
 NSURL *SNSelfTestRoot;
+
+/* What the Sync window chose. */
+/* A sign-in's secrets kept in memory: the self-test leaves the keychain
+   alone (a rebuilt app is another app to it, and is asked about). */
+@interface SNSelfTestSecrets : NSObject <SNSecretStoring>
+@end
+
+@implementation SNSelfTestSecrets {
+    NSMutableDictionary *_all;
+}
+- (NSDictionary *)secretsForAccount:(NSString *)account { return _all[account]; }
+- (BOOL)setSecrets:(NSDictionary *)secrets forAccount:(NSString *)account {
+    if (!_all) _all = [NSMutableDictionary dictionary];
+    _all[account] = secrets;
+    return YES;
+}
+@end
+
+@interface SNSyncChoice : NSObject <SNSyncPanelDelegate>
+@property (nonatomic, strong) NSURL *root;
+@property (nonatomic) BOOL chosen;
+@end
+
+@implementation SNSyncChoice
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+    _root = root;
+    _chosen = YES;
+}
+@end
 
 static int SNFailed;
 
@@ -164,6 +196,18 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([bike tryToPerform:@selector(toggleBold:) with:nil] &&
               [[[grid.table textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
               @"Bold in a cell, from the menu: the cell's text bold");
+        /* Undo in a cell: its typing undone, as the note's is. (Here all of
+           the test is one event of the run loop, one undo group: begun
+           afresh, so Undo has only this.) */
+        SNWait(0.3, ^BOOL { return NO; });
+        [tv.window.undoManager removeAllActions];
+        bike.selectedRange = NSMakeRange(4, 0);
+        [bike insertText:@"s"];
+        SNWait(0.3, ^BOOL { return NO; });
+        BOOL typedS = [[grid.table textAtRow:0 column:0].string isEqual:@"Bikes"];
+        SNSay(typedS && [bike tryToPerform:@selector(undo:) with:nil] && [[grid.table textAtRow:0 column:0].string isEqual:@"Bike"] &&
+              [bike.string isEqual:@"Bike"], [NSString stringWithFormat:@"Undo in a cell (%@)", [grid.table textAtRow:0 column:0].string]);
+        SNWait(0.3, ^BOOL { return NO; });
         NSMenuItem *titleItem = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(styleTitle:) keyEquivalent:@""];
         SNSay(![window validateMenuItem:titleItem], @"no Title in a cell");
         /* Over its place in the text, which keeps its room. */
@@ -227,6 +271,126 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         notes.groupsByDate = grouped;
         [window showAllNotes];
         [window selectNoteTitled:@"Weekend"];
+        /* A folder sorted its own way, from View > Sort Folder By; synced. */
+        SNFolder *work = nil;
+        for (SNFolder *f in notes.folders) if ([f.name isEqual:@"Work"]) work = f;
+        [window showFolderNamed:@"Work"];
+        NSMenuItem *byTitle = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(sortFolderByTitle:) keyEquivalent:@""];
+        SNSay([tv tryToPerform:@selector(sortFolderByTitle:) with:nil] && [[notes sortOrderOfFolder:work] isEqual:@(SNSortByTitle)] &&
+              [window validateMenuItem:byTitle] && byTitle.state == NSControlStateValueOn,
+              @"Sort Folder By Title from the menu, ticked");
+        [window showAllNotes];
+        NSMenuItem *byTitleHere = [[NSMenuItem alloc] initWithTitle:@"Title" action:@selector(sortFolderByTitle:) keyEquivalent:@""];
+        SNSay(![window validateMenuItem:byTitleHere], @"not for All Notes");
+        /* A smart folder: every note tagged #work, from any folder. */
+        SNSmartFilter *workTagged = [[SNSmartFilter alloc] init];
+        workTagged.tags = @[ @"work" ];
+        [notes addSmartFolderNamed:@"Work Things" filter:workTagged inFolder:nil];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay([[window sidebarRows] containsObject:@"Work Things"] && [window showFolderNamed:@"Work Things"] &&
+              [[window shownRows] containsObject:@"Standup notes"] && [[window shownRows] containsObject:@"Ideas"] &&
+              ![[window shownRows] containsObject:@"Weekend"],
+              [NSString stringWithFormat:@"a smart folder lists the notes its rules take (%@)", [[window shownRows] componentsJoinedByString:@" | "]]);
+        /* Its panel (SmartFolderPanel.xib) loads, and shows the rules. */
+        SNSmartFolderPanel *panel = [[SNSmartFolderPanel alloc] initWithName:@"Work Things" filter:workTagged];
+        SNSay(panel.window && panel.nameField && panel.tagsField && panel.editedPopUp.numberOfItems == 6 &&
+              panel.checklistsPopUp.numberOfItems == 4 && panel.pinnedBox, @"the smart folder panel loads");
+        /* The Sync window: this computer only warned of; a server that asks
+           for no sign-in chosen as it is (learnt from its $metadata). */
+        SNSyncPanel *sync = [[SNSyncPanel alloc] initWithServer:nil];
+        sync.secrets = [[SNSelfTestSecrets alloc] init];
+        SNSyncChoice *choice = [[SNSyncChoice alloc] init];
+        sync.delegate = choice;
+        SNSay(sync.window && sync.serverField && sync.codeLabel && sync.localButton.state == NSControlStateValueOn && !sync.warningLabel.isHidden,
+              @"the Sync window loads, this computer only warned of");
+        [sync syncWithServer:nil];
+        sync.serverField.stringValue = notes.serviceRoot.absoluteString;
+        [sync ok:nil];
+        SNWait(10, ^BOOL { return choice.chosen; });
+        SNSay(choice.chosen && [choice.root isEqual:notes.serviceRoot] && sync.warningLabel.isHidden && sync.signIn.kind == SNSignInNone,
+              [NSString stringWithFormat:@"a server with no sign-in chosen (%@)", choice.root]);
+        /* Devices Nearby: its window, and the peer token the server (no
+           sign-in: none to give) does not give. */
+        NSURL *peersDir = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                     [NSString stringWithFormat:@"sn-selftest-peers-%@", [NSProcessInfo processInfo].globallyUniqueString]]];
+        NSError *peersError = nil;
+        SNPeers *peers = [[SNPeers alloc] initWithNotes:notes directory:peersDir error:&peersError];
+        SNPeersWindow *nearby = peers ? [[SNPeersWindow alloc] initWithPeers:peers] : nil;
+        SNSay(nearby.window && nearby.devicesTable.dataSource == nearby && nearby.serveButton.state == NSControlStateValueOff && nearby.tokenButton.isEnabled,
+              [NSString stringWithFormat:@"the Devices Nearby window loads (%@)", peersError.localizedDescription ?: @"an identity made"]);
+        [nearby close];
+        [peers stop];
+        [peers.trust.identity removeWithError:NULL];
+        [[NSFileManager defaultManager] removeItemAtURL:peersDir error:NULL];
+        /* Move To, filled from the folders: an update that changes nothing
+           adds nothing (GNUstep's -update asked its delegate again for
+           each item added, without end, and froze the app). */
+        NSMenu *moveTo = nil;
+        for (NSMenuItem *top in [NSApp mainMenu].itemArray)
+            if ((moveTo = [top.submenu itemWithTag:7001].submenu)) break;
+        __block NSUInteger added = 0;
+        id observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSMenuDidAddItemNotification object:moveTo queue:nil
+                                                                    usingBlock:^(NSNotification *n) { added++; }];
+        /* As opening it does (Apple's AppKit), and as -update does (GNUstep's). */
+        [window menuNeedsUpdate:moveTo];
+        NSUInteger first = added, filled = moveTo.numberOfItems;
+        [moveTo update];
+        [window menuNeedsUpdate:moveTo];
+        [[NSNotificationCenter defaultCenter] removeObserver:observer];
+        SNSay(moveTo.delegate == window && filled > 1 && first <= filled && added == first,
+              [NSString stringWithFormat:@"Move To is filled once (%lu items; %lu added, then %lu)", (unsigned long)filled,
+                                         (unsigned long)first, (unsigned long)(added - first)]);
+        NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
+        SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNFolder *workThere = nil, *smartThere = nil;
+        for (SNFolder *f in other.folders) {
+            if ([f.name isEqual:@"Work"]) workThere = f;
+            if ([f.name isEqual:@"Work Things"]) smartThere = f;
+        }
+        SNSay([[other sortOrderOfFolder:workThere] isEqual:@(SNSortByTitle)] && [other countOfNotesInFolder:smartThere] == 2,
+              @"the folder's order and the smart folder on the second device");
+        /* Undo after a sync changed the note: what was typed here undone,
+           what came from the other device kept. */
+        [window showAllNotes];
+        [window selectNoteTitled:@"Standup notes"];
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertText:@" undo me"];
+        SNWait(0.3, ^BOOL { return NO; });
+        [notes saveAll];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        [other syncAndWait:NULL];
+        SNNote *standupThere = [other notesInFolder:nil matching:@"Standup"].firstObject;
+        SNNoteEditor *elsewhere = [other editorForNote:standupThere];
+        /* In its second line: the title stays. */
+        [elsewhere.text insertString:@"(Monday) " atIndex:[elsewhere.text.string rangeOfString:@"\n"].location + 1 attributes:nil];
+        [elsewhere textDidChange];
+        [elsewhere close];
+        [other syncAndWait:NULL];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing && [tv.string containsString:@"(Monday) "]; });
+        SNSay([tv.string containsString:@"(Monday) "] && [tv.string hasSuffix:@" undo me"], @"the other device's edit merged into the open note");
+        SNSay([tv tryToPerform:@selector(undo:) with:nil] && [tv.string containsString:@"\n(Monday) sync engine"] && ![tv.string containsString:@"undo me"],
+              [NSString stringWithFormat:@"Undo after the merge: the typing undone, the other's edit kept (%@)", [tv.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        SNSay([tv tryToPerform:@selector(redo:) with:nil] && [tv.string hasSuffix:@" undo me"] && [tv.string containsString:@"(Monday) "],
+              @"and Redo");
+        /* A file: a card in the note, written out to be opened. */
+        [window showAllNotes];
+        [window selectNoteTitled:@"Weekend"];
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        NSData *pdf = [@"%PDF-1.4 a lease" dataUsingEncoding:NSUTF8StringEncoding];
+        SNSay([window attachFileData:pdf name:@"Lease.pdf"], @"a file attached");
+        NSString *fileID = [tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        NSTextAttachment *card = [tv.textStorage attribute:NSAttachmentAttributeName atIndex:tv.string.length - 1 effectiveRange:NULL];
+        SNAttachment *lease = fileID ? [notes attachmentWithID:fileID] : nil;
+        NSURL *written = lease ? [notes fileURLOfAttachment:lease] : nil;
+        SNSay([lease.kind isEqual:SNAttachmentKindFile] && card.attachmentCell.cellSize.height > 40 &&
+              [written.lastPathComponent isEqual:@"Lease.pdf"] && [[NSData dataWithContentsOfURL:written] isEqual:pdf],
+              [NSString stringWithFormat:@"shown as a card, written out to be opened (%@)", written.path]);
 
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */

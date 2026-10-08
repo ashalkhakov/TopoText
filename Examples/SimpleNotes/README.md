@@ -116,6 +116,15 @@ A note's text can reach a device before its attachment does. Until the
 attachment arrives, a grey box takes its place. Deleting a note for good
 deletes its attachments.
 
+## Files
+
+Any other file (a PDF, a document, a recording) goes in the same way:
+**File > Attach File…**, paste, or drop it; on iOS, **Attach File** under
+the paperclip. It shows as a card with the file's icon, name, kind and
+size. Double-click the card to open the file in its own application; on
+iOS, tap it to see it in Quick Look. A file syncs whole with the note, so
+it can be no larger than 25 MB.
+
 ## Tables
 
 **Format > Table > Insert Table** (⌥⌘T; on iOS, the format bar's table
@@ -174,23 +183,54 @@ Today, Yesterday, Previous 7 Days, Previous 30 Days, then each month of this
 year, then each earlier year. Sorted by title, a list has just Pinned and
 Notes. The choice is the device's own (user defaults), as in Apple Notes.
 
+**View > Sort Folder By** (on iOS, the same menu in a folder) gives the
+folder shown an order of its own. That order belongs to the folder, so it
+syncs with it. **Default** goes back to the device's order.
+
+## Smart folders
+
+A smart folder lists the notes that match its rules, from any folder, as
+in Apple Notes. **File > New Smart Folder…** (⌥⇧⌘N; on iOS, **New Smart
+Folder** in the folder list's + menu) asks for its name and rules:
+
+- **Tags:** all of them, or any.
+- **Edited** or **Created** within a day, 7, 30 or 90 days, or a year.
+- **Checklists:** any, ticked items, or items not ticked.
+- **With attachments**, **Pinned**.
+
+A note is included when it matches all of the rules, or any of them, as
+you choose. Nothing is moved into a smart folder, and a note made in one is
+made in no folder. **Edit Smart Folder…** (on iOS, swipe it and choose
+**Edit**) changes its rules. It shows a gear before its name. Its rules are
+kept in the folder (`Folder.filter`, as JSON), so they sync with it.
+
+When two devices change a smart folder's rules apart, the sync merges them
+rule by rule (`SNResolver`), rather than keeping one device's whole set:
+
+- A rule changed on one device keeps that change.
+- A rule changed on both keeps the later edit.
+- Tags merge as a set: a tag added on either device is added, and a tag
+  removed on either device is removed.
+
 ## Model versions
 
 `SimpleNotes.xcdatamodeld` holds every version of the model:
 
 - **Version 2** added `Note.deletedAt` (Recently Deleted).
-- **Version 4** added `Attachment` (images and tables in notes).
 - **Version 3** added `Folder.parent` (folders in folders). It also renamed
   `Note.updated` to `edited`, with Renaming ID `updated` so migration keeps
   the dates. On Apple's Core Data, `updated` is `NSManagedObject`'s own
   (`-isUpdated`), and key-value coding gets that rather than the attribute.
   Syncing goes through key-value coding, so on macOS and iOS a note's edit
   date never reached the server.
+- **Version 4** added `Attachment` (images and tables in notes).
+- **Version 5** added `Folder.filter` (smart folders), `Folder.sortOrder`
+  (a folder's own order) and `Attachment.name` (files).
 
 To add a version:
 
 1. Add a version in Xcode (or copy the latest `.xcdatamodel` and name it
-   `SimpleNotes 4.xcdatamodel`), and give it the next
+   `SimpleNotes 6.xcdatamodel`), and give it the next
    `userDefinedModelVersionIdentifier`.
 2. Make it current in `.xccurrentversion`.
 3. Run `Scripts/xcodeproj.py`.
@@ -244,7 +284,17 @@ addition:
   GNUstep, but not on Apple's Core Data, so a server on macOS uses SQLite.
 - `StoreURL Temporary` is a throwaway store, for trying things out.
 - `AllowAnonymous NO` refuses requests that don't say who they're from,
-  once a sign-in is set. Every device syncs every note: one shared notebook.
+  once a sign-in is set.
+- `AllowAnonymousMetadata NO` refuses `$metadata` too. By default anyone may
+  read it, since that's where the apps learn how to sign in.
+- `Notebooks` is `PerUser` (the default once a sign-in is set: each user
+  has their own folders and notes) or `Shared` (every device syncs every
+  note).
+- `GiveUnownedTo <user>` gives the notes made while the notebook was shared
+  to that user (their sign-in's subject), at start.
+- `PeerKey` is the file of the key the server signs peer tokens with, which
+  let a user's devices nearby sync with each other while offline. It's made
+  the first time, beside a SQLite store; `None` turns peer tokens off.
 
 Each setting can also be an environment variable: `SN_` and the setting's
 name in capitals, words split by `_` (`SN_STORE_URL`, `SN_SERVICE_ROOT`,
@@ -294,8 +344,33 @@ HTTPServerKit's proxy settings work as `SN_` variables too:
   accepts only requests that carry the proxy's secret.
 - `SN_CORS_ORIGINS` sets the allowed origins.
 
-Sign-in with OIDC (`SN_JWT_ISSUER`, `SN_JWT_AUDIENCE`) works the same way.
-Separating each user's notes is still to come (see "Not yet").
+On Proxmox VE, as a container made from the image, signed in with
+Keycloak: [docs/Proxmox.md](docs/Proxmox.md), from the image to updating.
+
+#### Signing in with Keycloak (or another OpenID Connect provider)
+
+1. In the realm, add a client with Client ID `simplenotes`: public (no
+   client authentication), with **OAuth 2.0 Device Authorization Grant**
+   on. The apps sign in with a code entered in a browser, so they need no
+   redirect URI.
+2. Run the server with the realm as its issuer:
+
+   ```sh
+   docker run -p 8080:8080 -v notes:/data \
+     -e SN_SERVICE_ROOT=https://notes.example.com/odata/ \
+     -e SN_JWT_ISSUER=https://id.example.com/realms/<realm> \
+     -e SN_ALLOW_ANONYMOUS=NO \
+     ghcr.io/ashalkhakov/simplenotes-server
+   ```
+
+   `SN_JWT_AUDIENCE` additionally checks the tokens' audience, if your
+   realm sets one.
+3. In the app, choose Sync… (on iOS, the server button), type the server's
+   address, and Sign In. A browser opens on the provider's page with the
+   code filled in; once you sign in there, the app syncs as you.
+
+Each user has a notebook of their own. `$metadata` stays readable without
+signing in, so the app can find out where to sign in.
 
 ### On Linux, without Docker
 
@@ -389,6 +464,19 @@ This runs four things:
 CI runs all of these: macOS and iOS against Apple's Core Data, and GNUstep
 against FreeCoreData, SQLite, PostgreSQL and MariaDB.
 
+## Undo
+
+Undo and Redo work as in any text view, and keep working when a sync
+changes the open note: what you typed, deleted or formatted is undone, and
+what came from another device stays. Typing goes into one undo step until
+you move the insertion point or start a new line. Table cells undo the same
+way; adding or deleting a table's rows and columns can't be undone yet.
+
+The text view's own undo keeps positions, which a merge makes wrong, so it
+is off. `SNTextBinding` keeps the steps instead, by the characters' ids
+(`TopoText (Undo)`), in the window's undo manager (on iOS, an
+`SNUndoManager` that takes only the binding's).
+
 ## Rich text
 
 A note's text uses plain values that sync and merge the same way
@@ -441,12 +529,25 @@ are out of place move, and each move is a deletion plus an insertion. So if
 another device was typing into an item at the moment it moved, that text
 stays where the item was.
 
+## Devices nearby
+
+Sync › Devices Nearby… (on the desktop) syncs your notes directly with
+your other devices on the same network, without the server
+(ODataSync's peer sync).
+
+- **Serve my notes to devices nearby** makes this computer one the others
+  can reach. It's advertised over Bonjour (Avahi on Linux), served over TLS,
+  and stays on across launches.
+- A device syncs with another by one of two things. A **peer token** comes
+  from your server while you're signed in, and lasts a day; your devices
+  then trust each other even offline. **Pairing** is for a device that
+  shares no server with this one: Show Pairing Code on one, Pair With
+  Code… on the other (the code is good once, for two minutes).
+- Edits made apart merge as they do through the server.
+
 ## Not yet
 
-- **One shared notebook.** A notebook per user means a handler on the
-  server (an `ODataSyncSetHandler` that filters by the signed-in user).
-- **Peer sync between devices.** ODataSync can do it (`ODataSyncPeerServer`).
-  ODataKit's Device app shows how; SimpleNotes doesn't have it yet.
-- Files other than images, smart
-  folders, a sort order per folder, and undo across a merge (the undo stack
-  is cleared when a sync changes the open note).
+- **Devices nearby on iOS.** The iOS app syncs through the server only.
+- **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
+  the version every device has seen. SimpleNotes doesn't track that yet; the
+  server could, once devices send deltas rather than whole notes.

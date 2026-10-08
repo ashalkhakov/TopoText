@@ -150,6 +150,55 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 /* A new copy with both, writing as this one. */
 - (TopoText *)mergedWith:(TopoText *)other;
 
+#pragma mark Tombstones
+
+/* A deleted character keeps its id, and its place, so that edits made
+   before its deletion was seen still find where they go. Once every copy
+   has seen it deleted (its insertion and deletion both in version): if no
+   character is placed by it (text deleted at the end, say), it goes; if one
+   is (text after it in the same run), it stays, as Yjs keeps such ids too,
+   but tombstones next to each other become one record. How many
+   characters went.
+
+   version: what every copy is known to have seen, as one that hears from
+   them all can tell (the lowest of their versions). Got wrong, nothing is
+   lost: the ids that went are kept as ranges (a few numbers), in -data and
+   in deltas. One that comes back from a copy that had not seen it deleted
+   is placed again, still deleted, and that copy deletes it when it hears
+   it went; an edit placed by one is refused as missing history, and
+   -mergeText: takes the whole state, which brings it back. Copies that
+   collected differently have the same text and merge as before, though
+   their -data differs. */
+- (NSUInteger)collectTombstonesSeenBy:(TTVersion *)version;
+@property (nonatomic, readonly) NSUInteger tombstoneCount;
+
+@end
+
+/* Undo of a copy's own edits, as edits on the CRDT. What this copy edits
+   between -beginUndoStep and -endUndoStep is kept by its characters' ids,
+   not by positions. Undone later, after edits from elsewhere were merged
+   in, it does what was meant and nothing else: the text it typed is taken
+   out wherever that is now (what others typed among it stays), what it
+   deleted is put back where it was, and the attributes it set are set back
+   on the characters still there (only the keys it set; others' stay). The
+   undo is an edit of this copy's like any, merged and synced so; and it is
+   recorded in turn, as the step that redoes it. */
+@interface TTUndoStep : NSObject
+@property (nonatomic, readonly, getter=isEmpty) BOOL empty;
+@end
+
+@interface TopoText (Undo)
+/* This copy's edits from now on kept in a new step, or in step (typing that
+   goes on, kept as one), until -endUndoStep. */
+- (void)beginUndoStep;
+- (void)continueUndoStep:(TTUndoStep *)step;
+/* The step recorded (empty when nothing was edited). */
+- (TTUndoStep *)endUndoStep;
+@property (nonatomic, readonly, nullable) TTUndoStep *recordingUndoStep;
+/* step's edits undone, as one new step of this copy's: what that did to the
+   visible text, in order (TTEdit, as a merge's, for a view), and the step
+   that redoes it. */
+- (NSArray<TTEdit *> *)undoStep:(TTUndoStep *)step redoStep:(TTUndoStep *_Nullable *_Nullable)redo;
 @end
 
 /* Paragraphs. A paragraph is the text up to and including a newline (\n),

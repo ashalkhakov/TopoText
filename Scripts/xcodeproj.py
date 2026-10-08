@@ -275,18 +275,19 @@ def simplenotes(topotext_ids):
     configs = [file_ref(p, '../../Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
     F = lambda path: file_ref(p, path, os.path.basename(path))
     shared = {n: F('Shared/' + n) for n in ('SNModel.h', 'SNModel.m', 'SNNote.h', 'SNNote.m', 'SNFolder.h', 'SNFolder.m', 'SNAttachment.h', 'SNAttachment.m', 'SNNotes.h',
-                                           'SNNotes.m', 'SNResolver.h', 'SNResolver.m', 'SNRichText.h', 'SNRichText.m', 'SNTextSystem.h', 'SNTableGrid.h',
-                                           'SNTableGrid+System.h', 'SNTableGrid.m', 'SNCheck.h', 'SNCheck.m',
+                                           'SNNotes.m', 'SNSmartFilter.h', 'SNSmartFilter.m', 'SNResolver.h', 'SNResolver.m', 'SNRichText.h', 'SNRichText.m', 'SNTextSystem.h', 'SNTableGrid.h',
+                                           'SNTableGrid+System.h', 'SNTableGrid.m', 'SNSignIn.h', 'SNSignIn.m', 'SNPeers.h', 'SNPeers.m', 'SNCheck.h', 'SNCheck.m',
                                            'SNMigration.h', 'SNMigration.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
-                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'Info.plist',
+                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
+                                           'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
-    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m',
+    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNSecretStore.m',
                                      'SNEditorViewController.xib', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
     icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
-    server = {n: F('Server/' + n) for n in ('SNServer.m',)}
+    server = {n: F('Server/' + n) for n in ('SNServer.m', 'SNNotebooks.h', 'SNNotebooks.m')}
     tests = {n: F('Tests/' + n) for n in ('seed.py',)}
 
     frameworks = ['TopoText', 'TopoTextSync'] + ODATAKIT_ORDER
@@ -312,19 +313,19 @@ def simplenotes(topotext_ids):
 
     def sources_of(d, names):
         return [(d[n], n) for n in names]
-    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNResolver.m', 'SNRichText.m', 'SNTableGrid.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
+    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNSmartFilter.m', 'SNResolver.m', 'SNRichText.m', 'SNTableGrid.m', 'SNSignIn.m', 'SNPeers.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
-    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSelfTest.m'])
+    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNSecretStore.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
-                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
+                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib']) + sources_of(icons, ['SimpleNotes.icns']),
                      appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],
                                                                       appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')
     targets.append(('SimpleNotes', tid, 'SimpleNotes.app'))
 
-    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m']) + common,
+    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNUndoTextView.m', 'SNSecretStore.m']) + common,
                      sources_of(ios, ['SNEditorViewController.xib']), ios['SimpleNotes-iOS.xcconfig'])
     tid, ios_product = native_target(p, 'SimpleNotes-iOS', 'com.apple.product-type.application', 'SimpleNotes-iOS', '.app', ios_phases,
                                      deps('SimpleNotes-iOS'), config_list(p, 'SimpleNotes-iOS', {}, {}, ios['SimpleNotes-iOS.xcconfig'],
@@ -335,7 +336,7 @@ def simplenotes(topotext_ids):
     # The server: a tool; Xcode compiles its model beside it, where it looks.
     src = phase(p, 'simplenotes-server', 'PBXSourcesBuildPhase', 'Sources',
                 [build_file(p, 'simplenotes-server', 'Sources', ref, c) for ref, c in
-                 sources_of(server, ['SNServer.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
+                 sources_of(server, ['SNServer.m', 'SNNotebooks.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
     fw = phase(p, 'simplenotes-server', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
     s = {'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'PRODUCT_NAME': 'simplenotes-server', 'SKIP_INSTALL': 'YES',

@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24127" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -10,12 +11,12 @@
     <objects>
         <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="SNEditorViewController">
             <connections>
-                <outlet property="view" destination="SNe-vw-001" id="SNe-cn-001"/>
-                <outlet property="textView" destination="SNe-tx-001" id="SNe-cn-002"/>
-                <outlet property="formatBar" destination="SNe-tb-001" id="SNe-cn-003"/>
-                <outlet property="styleItem" destination="SNe-bi-001" id="SNe-cn-004"/>
-                <outlet property="listItem" destination="SNe-bi-002" id="SNe-cn-005"/>
                 <outlet property="attachItem" destination="SNe-bi-010" id="SNe-cn-006"/>
+                <outlet property="formatBar" destination="SNe-tb-001" id="SNe-cn-003"/>
+                <outlet property="listItem" destination="SNe-bi-002" id="SNe-cn-005"/>
+                <outlet property="styleItem" destination="SNe-bi-001" id="SNe-cn-004"/>
+                <outlet property="textView" destination="SNe-tx-001" id="SNe-cn-002"/>
+                <outlet property="view" destination="SNe-vw-001" id="SNe-cn-001"/>
             </connections>
         </placeholder>
         <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
@@ -24,7 +25,7 @@
             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
             <subviews>
                 <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" allowsEditingTextAttributes="YES" translatesAutoresizingMaskIntoConstraints="NO" id="SNe-tx-001">
-                    <rect key="frame" x="0.0" y="59" width="393" height="759"/>
+                    <rect key="frame" x="0.0" y="118" width="393" height="666"/>
                     <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                     <fontDescription key="fontDescription" type="system" pointSize="17"/>
                     <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
@@ -68,11 +69,11 @@
         </toolbar>
     </objects>
     <resources>
-        <image name="keyboard.chevron.compact.down" catalog="system" width="16" height="16"/>
-        <image name="paperclip" catalog="system" width="16" height="16"/>
-        <image name="checklist" catalog="system" width="16" height="16"/>
-        <image name="list.bullet" catalog="system" width="16" height="16"/>
-        <image name="tablecells" catalog="system" width="16" height="16"/>
+        <image name="checklist" catalog="system" width="128" height="107"/>
+        <image name="keyboard.chevron.compact.down" catalog="system" width="128" height="100"/>
+        <image name="list.bullet" catalog="system" width="128" height="87"/>
+        <image name="paperclip" catalog="system" width="121" height="128"/>
+        <image name="tablecells" catalog="system" width="128" height="93"/>
         <systemColor name="systemBackgroundColor">
             <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
         </systemColor>

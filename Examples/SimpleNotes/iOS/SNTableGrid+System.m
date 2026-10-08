@@ -5,6 +5,7 @@
 // in, then its grid. A link tapped in a cell is followed as one in the note.
 
 #import "SNTableGrid+System.h"
+#import "SNUndoTextView.h"
 
 @interface SNTableGrid (UIKit) <UITextViewDelegate, UIGestureRecognizerDelegate>
 @end
@@ -64,7 +65,9 @@
 }
 
 - (SNGridTextView *)makeCell {
-    UITextView *tv = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, _column ?: 100, 30)];
+    /* Its undo the note's (by ids, kept by the bindings), as the note's text. */
+    SNUndoTextView *tv = [[SNUndoTextView alloc] initWithFrame:CGRectMake(0, 0, _column ?: 100, 30)];
+    tv.followsSuperview = YES;
     tv.scrollEnabled = NO;
     tv.backgroundColor = [UIColor clearColor];
     tv.font = SNFontFor(nil, NO, NO);

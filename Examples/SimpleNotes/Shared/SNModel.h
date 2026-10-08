@@ -1,18 +1,21 @@
 // SimpleNotes' model (SimpleNotes.xcdatamodeld): the same one on the
 // devices and at the server, compiled by Xcode's momc or FreeCoreData's.
 //
-//   Folder   id (key), name, created, parent (to-one: the folder it is
-//            in), children, notes, modified, versions
+//   Folder   id (key), name, sortOrder (its own: SNSortOrder), filter (a
+//            smart folder's rules: SNSmartFilter), created, parent (to-one:
+//            the folder it is in), children, notes, modified, versions
 //   Note     id (key), title, body, bodyText, created, edited, pinned,
 //            deletedAt, folder (to-one), attachments, modified, versions
-//   Attachment  id (key), kind ("image"), type (MIME), data, width,
+//   Attachment  id (key), kind ("image", "table", "file"), type (MIME),
+//            name (a file's), data, width,
 //            height, created, note (to-one), modified, versions
 //
 // Versions: 1, the first; 2 adds Note.deletedAt (Recently Deleted); 3 adds
 // Folder.parent (folders in folders), and renames Note.updated edited:
 // on Apple's Core Data, "updated" is NSManagedObject's own (-isUpdated), and
 // what key-value coding reads and writes for it (ODataKit, a sync) is that.
-// 4 adds Attachment (images in notes).
+// 4 adds Attachment (images in notes). 5 adds Folder.sortOrder,
+// Folder.filter (smart folders) and Attachment.name (files).
 //
 // Both are ODataSync both entities: either side changes them. A note's body
 // is a TopoText (bodyText), merged when two devices edited it apart; body

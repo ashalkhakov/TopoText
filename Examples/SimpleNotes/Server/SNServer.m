@@ -28,16 +28,28 @@
 //                proxy that signs users in, or JWTIssuer and JWTAudience
 //   AllowAnonymous  NO: a request that names no one is refused, once a
 //                sign-in is set (default YES, for trying it out)
-//
-// Every device syncs all of Folders and Notes: one shared notebook. A
-// notebook per user is a handler's work (an ODataSyncSetHandler subclass
-// that filters by the principal), left for later.
+//   AllowAnonymousMetadata  NO: $metadata too is refused to one not
+//                signed in (default YES: the apps read there how to sign
+//                in)
+//   Notebooks    PerUser: each signed-in user has their own folders and
+//                notes (SNNotebooks.h); Shared: every device has all of
+//                them. Default: PerUser once a sign-in is set
+//                (TrustedUserHeader, JWTIssuer, IntrospectionEndpoint),
+//                else Shared
+//   GiveUnownedTo  a user's subject: the rows no one owns (made while the
+//                notebook was shared) given to them, at start
+//   PeerKey      the file of the key peer tokens are signed with (default
+//                SimpleNotes-peer-key.json beside a SQLite store, else
+//                here; made the first time); None: no peer tokens. Issued
+//                once a sign-in is set: a user's devices nearby then sync
+//                with each other while offline
 
 #import <ODataService/ODataServer.h>
 #include <dlfcn.h>
 #import <ODataSync/ODataSyncService.h>
 #import "SNModel.h"
 #import "SNMigration.h"
+#import "SNNotebooks.h"
 
 @interface SNServerConfiguration : HSConfiguration
 @end
@@ -45,7 +57,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -142,12 +154,43 @@ static NSURL *SNURL(id value) {
                                                             (unsigned long)c.port]];
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
+    /* How to sign in ($metadata's Authorization), to a device not signed
+       in yet: SNSignIn reads it there. AllowAnonymousMetadata NO turns it
+       off (ODataServiceModule reads it). */
+    _service.allowsAnonymousMetadata = YES;
     /* Devices not yet updated write in their model's version: each version
        adds to the one before, and renames Updated Edited (SNUpgradeBody). */
     _service.upgradeBody = ^NSDictionary *(NSDictionary *body, NSString *version, NSEntityDescription *entity, ODataRequest *request, NSError **e) {
         return SNUpgradeBody(body, entity);
     };
+    /* A notebook per user: its handlers before ODataSync's, which keeps
+       them (they are ODataSync's kind). */
+    NSString *notebooks = [c setting:@"Notebooks"];
+    BOOL signIn = [c setting:@"TrustedUserHeader"] || [c setting:@"JWTIssuer"] || [c setting:@"IntrospectionEndpoint"];
+    NSString *peerKey = [c setting:@"PeerKey"];
+    BOOL peers = signIn && ![peerKey isEqual:@"None"];
+    if (notebooks ? [notebooks caseInsensitiveCompare:@"PerUser"] == NSOrderedSame : signIn) SNServeNotebookPerUser(_service);
+    NSString *heir = [c setting:@"GiveUnownedTo"];
+    if (heir.length) {
+        NSUInteger given = SNGiveUnownedRows(coordinator, heir, &failure);
+        if (failure) {
+            if (error) *error = failure;
+            return NO;
+        }
+        NSLog(@"%lu rows no one owned given to %@", (unsigned long)given, heir);
+    }
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    if (peers) {
+        NSURL *file = peerKey.length ? [NSURL fileURLWithPath:peerKey]
+            : [NSURL fileURLWithPath:@"SimpleNotes-peer-key.json"
+                       relativeToURL:url.isFileURL && SNTemporaryStore == nil ? url.URLByDeletingLastPathComponent : nil];
+        NSDictionary *key = SNPeerSigningKeyAt(file, &failure);
+        if (!key) {
+            if (error) *error = failure;
+            return NO;
+        }
+        SNIssuePeerTokens(_histories, key);
+    }
     return YES;
 }
 

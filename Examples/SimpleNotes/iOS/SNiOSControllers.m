@@ -1,8 +1,10 @@
 #import "SNiOSControllers.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
+#import "SNUndoTextView.h"
 #import "SNModel.h"
 #import <PhotosUI/PhotosUI.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 
@@ -36,6 +38,13 @@ static void SNAsk(UIViewController *c, NSString *title, NSString *message, NSStr
     [c presentViewController:a animated:YES completion:nil];
 }
 
+/* Said, and OK. */
+static void SNTell(UIViewController *c, NSString *title, NSString *message) {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [c presentViewController:a animated:YES completion:nil];
+}
+
 static void SNConfirm(UIViewController *c, NSString *title, NSString *message, NSString *action, void (^done)(void)) {
     UIAlertController *a = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
@@ -54,6 +63,8 @@ static NSString *SNDaysLeftText(SNNote *note) {
     SNNotes *_notes;
     NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
     NSArray<NSString *> *_tags;
+    /* The server being signed in to, until it is (then the notes'). */
+    SNSignIn *_signIn;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -71,8 +82,15 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"]
-                                                                              style:UIBarButtonItemStylePlain target:self action:@selector(newFolder:)];
+    /* A folder, or a smart folder (as Apple Notes' New Folder menu). */
+    UIMenu *add = [UIMenu menuWithTitle:@"" children:@[
+        [UIAction actionWithTitle:@"New Folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *a) {
+            [self newFolder:nil];
+        }],
+        [UIAction actionWithTitle:@"New Smart Folder" image:[UIImage systemImageNamed:@"gearshape"] identifier:nil handler:^(UIAction *a) {
+            [self newSmartFolder:nil];
+        }] ]];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"]
                                                                              style:UIBarButtonItemStylePlain target:self action:@selector(server:)];
     SNAddRefresh(self, @selector(refresh:));
@@ -112,17 +130,118 @@ static NSString *SNDaysLeftText(SNNote *note) {
     });
 }
 
+- (SNSmartFolderViewController *)smartFolderEditorFor:(SNFolder *)folder {
+    SNSmartFilter *filter = folder ? [_notes filterOfFolder:folder] : [[SNSmartFilter alloc] init];
+    SNSmartFolderViewController *editor = [[SNSmartFolderViewController alloc] initWithName:folder.name ?: @"Smart Folder"
+                                                                                      filter:filter ?: [[SNSmartFilter alloc] init]];
+    editor.folder = folder;
+    editor.delegate = self;
+    return editor;
+}
+
+- (void)newSmartFolder:(id)sender {
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[self smartFolderEditorFor:nil]];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)smartFolderViewControllerDidFinish:(SNSmartFolderViewController *)editor {
+    SNFolder *f = editor.folder;
+    if (f) {
+        [_notes renameFolder:f to:editor.name];
+        [_notes setFilter:editor.filter ofFolder:f];
+    } else {
+        [_notes addSmartFolderNamed:editor.name filter:editor.filter inFolder:nil];
+    }
+    [self dismissViewControllerAnimated:YES completion:nil];
+    [self reload];
+}
+
+- (void)smartFolderViewControllerDidCancel:(SNSmartFolderViewController *)editor {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
 - (void)server:(id)sender {
     SNAsk(self, @"Server", @"The SimpleNotes server's address; empty for this device only.",
           _notes.serviceRoot.absoluteString ?: @"http://", ^(NSString *typed) {
         typed = [typed stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (typed.length && ![typed hasSuffix:@"/"]) typed = [typed stringByAppendingString:@"/"];
         NSURL *root = typed.length > 7 ? [NSURL URLWithString:typed] : nil;
-        if (root.host.length) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
-        else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
-        self->_notes.serviceRoot = root.host.length ? root : nil;
-        [self->_notes sync];
+        if (!root.host.length) {
+            [self useServer:nil signIn:nil];
+            return;
+        }
+        [self signInToServer:root];
     });
+}
+
+/* Signed in as the server asks, then synced with (SNSignIn). */
+- (void)signInToServer:(NSURL *)root {
+    [_signIn cancel];
+    _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+    _signIn.delegate = self;
+    [_signIn learn];
+}
+
+- (void)useServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+    if (root) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
+    else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
+    signIn.delegate = nil;
+    _notes.configuration = signIn ? signIn.configuration : nil;
+    _notes.serviceRoot = root;
+    [_notes sync];
+}
+
+#pragma mark signing in
+
+- (void)signInDidLearn:(SNSignIn *)signIn {
+    if (signIn.signedIn) {
+        [self useServer:signIn.serviceRoot signIn:signIn];
+        return;
+    }
+    if (signIn.kind == SNSignInPassword) {
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In" message:signIn.serviceRoot.host
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+        [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
+            f.placeholder = @"User name";
+            f.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        }];
+        [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
+            f.placeholder = @"Password";
+            f.secureTextEntry = YES;
+        }];
+        [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        [a addAction:[UIAlertAction actionWithTitle:@"Sign In" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+            [signIn signInWithUser:a.textFields[0].text ?: @"" password:a.textFields[1].text ?: @""];
+        }]];
+        [self presentViewController:a animated:YES completion:nil];
+        return;
+    }
+    [signIn begin];
+}
+
+/* The code, and the provider's page to enter it on (opened in Safari). */
+- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In"
+        message:[NSString stringWithFormat:@"Open %@ and enter the code\n\n%@", page.host ?: page.absoluteString, code]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+        [signIn cancel];
+    }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"Open Page" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        [[UIApplication sharedApplication] openURL:completePage ?: page options:@{} completionHandler:nil];
+    }]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+
+- (void)signInDidFinish:(SNSignIn *)signIn {
+    if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
+    [self useServer:signIn.serviceRoot signIn:signIn];
+    if (signIn.userName.length) SNTell(self, @"Signed In", [NSString stringWithFormat:@"Signed in as %@.", signIn.userName]);
+}
+
+- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
+    if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
+    SNTell(self, @"Not Signed In", error.localizedDescription ?: @"");
 }
 
 /* All Notes; the folders, those in a folder under it; Recently Deleted,
@@ -167,7 +286,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     } else {
         SNFolder *f = ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil;
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
-        c.image = [UIImage systemImageNamed:f ? @"folder" : @"tray.full"];
+        c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
         count = [_notes countOfNotesInFolder:f];
         depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
     }
@@ -194,7 +313,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self->_notes moveFolder:folder toFolder:nil];
     }]];
     for (SNFolder *f in _notes.folderTree) {
-        if (f == folder || [_notes folder:f isInFolder:folder]) continue;
+        if (f == folder || [_notes folder:f isInFolder:folder] || [_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
         [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
                                                   style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
@@ -212,7 +331,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     SNFolder *f = _folders[(NSUInteger)ip.row];
     UIContextualAction *delete = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"Delete"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            NSString *what = [self->_notes foldersInFolder:f].count
+            NSString *what = [self->_notes isSmartFolder:f] ? @"Its notes stay where they are." : [self->_notes foldersInFolder:f].count
                 ? @"The folders in it are deleted too. Their notes go to Recently Deleted, where they can be recovered for 30 days."
                 : @"Its notes go to Recently Deleted, where they can be recovered for 30 days.";
             SNConfirm(self, [NSString stringWithFormat:@"Delete “%@”?", f.name ?: @""], what, @"Delete", ^{
@@ -220,11 +339,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
             });
             done(YES);
         }];
-    UIContextualAction *rename = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Rename"
+    BOOL smart = [_notes isSmartFolder:f];
+    UIContextualAction *rename = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:smart ? @"Edit" : @"Rename"
         handler:^(UIContextualAction *a, UIView *v, void (^done)(BOOL)) {
-            SNAsk(self, @"Rename Folder", nil, f.name ?: @"", ^(NSString *name) {
-                if (name.length) [self->_notes renameFolder:f to:name];
-            });
+            if (smart) {
+                UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[self smartFolderEditorFor:f]];
+                [self presentViewController:nav animated:YES completion:nil];
+            } else {
+                SNAsk(self, @"Rename Folder", nil, f.name ?: @"", ^(NSString *name) {
+                    if (name.length) [self->_notes renameFolder:f to:name];
+                });
+            }
             done(YES);
         }];
     UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"Move"
@@ -310,7 +435,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         _groups = deleted.count ? @[ [[SNNoteGroup alloc] initWithTitle:nil notes:deleted] ] : @[];
         self.navigationItem.rightBarButtonItem.enabled = deleted.count > 0;
     } else {
-        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]];
+        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]
+                               sortedBy:[_notes sortOrderForFolder:_tag ? nil : _folder]];
         self.navigationItem.rightBarButtonItems.lastObject.menu = [self viewMenu];
     }
     [self.tableView reloadData];
@@ -327,7 +453,15 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortByDateEdited:) on:order == SNSortByDateEdited],
         [self sortCommand:@"Date Created" action:@selector(sortByDateCreated:) on:order == SNSortByDateCreated],
         [self sortCommand:@"Title" action:@selector(sortByTitle:) on:order == SNSortByTitle] ]];
-    return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    /* The folder's own order, synced with it (Default: the device's). */
+    NSNumber *own = [_notes sortOrderOfFolder:_folder];
+    UIMenu *folderBy = [UIMenu menuWithTitle:@"Sort Folder By" image:[UIImage systemImageNamed:@"folder"] identifier:nil options:0 children:@[
+        [self sortCommand:@"Default" action:@selector(sortFolderByDefault:) on:!own],
+        [self sortCommand:@"Date Edited" action:@selector(sortFolderByDateEdited:) on:[own isEqual:@(SNSortByDateEdited)]],
+        [self sortCommand:@"Date Created" action:@selector(sortFolderByDateCreated:) on:[own isEqual:@(SNSortByDateCreated)]],
+        [self sortCommand:@"Title" action:@selector(sortFolderByTitle:) on:[own isEqual:@(SNSortByTitle)]] ]];
+    return [UIMenu menuWithTitle:@"" children:@[ folderBy, sortBy, group ]];
 }
 
 - (UICommand *)sortCommand:(NSString *)title action:(SEL)action on:(BOOL)on {
@@ -349,6 +483,10 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (IBAction)sortByDateCreated:(id)sender { _notes.sortOrder = SNSortByDateCreated; }
 - (IBAction)sortByTitle:(id)sender { _notes.sortOrder = SNSortByTitle; }
 - (IBAction)toggleGroupByDate:(id)sender { _notes.groupsByDate = !_notes.groupsByDate; }
+- (IBAction)sortFolderByDefault:(id)sender { if (_folder) [_notes setSortOrder:nil ofFolder:_folder]; }
+- (IBAction)sortFolderByDateEdited:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByDateEdited) ofFolder:_folder]; }
+- (IBAction)sortFolderByDateCreated:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByDateCreated) ofFolder:_folder]; }
+- (IBAction)sortFolderByTitle:(id)sender { if (_folder) [_notes setSortOrder:@(SNSortByTitle) ofFolder:_folder]; }
 
 - (SNNote *)noteAt:(NSIndexPath *)ip {
     return _groups[(NSUInteger)ip.section].notes[(NSUInteger)ip.row];
@@ -385,6 +523,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self->_notes moveNote:note toFolder:nil];
     }]];
     for (SNFolder *f in _notes.folderTree) {
+        if ([_notes isSmartFolder:f]) continue;
         NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
         [sheet addAction:[UIAlertAction actionWithTitle:[indent stringByAppendingString:f.name.length ? f.name : @"Untitled"]
                                                   style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
@@ -505,6 +644,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     SNTextBinding *_binding;
     /* The note's tables, each over its place in the text. */
     SNTableGrids *_grids;
+    /* The file Quick Look shows. */
+    NSURL *_previewed;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note {
@@ -526,7 +667,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     NSTextContainer *container = [[NSTextContainer alloc] initWithSize:CGSizeMake(old.bounds.size.width, CGFLOAT_MAX)];
     container.widthTracksTextView = YES;
     [lm addTextContainer:container];
-    UITextView *tv = [[UITextView alloc] initWithFrame:old.frame textContainer:container];
+    /* Undo the binding's, by ids: it survives a sync's merge (SNUndoTextView). */
+    UITextView *tv = [[SNUndoTextView alloc] initWithFrame:old.frame textContainer:container];
     tv.translatesAutoresizingMaskIntoConstraints = NO;
     tv.backgroundColor = old.backgroundColor;
     tv.font = old.font;
@@ -693,9 +835,24 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [link isKindOfClass:[NSURL class]] ? link : nil;
 }
 
-/* Only a tap on a checkbox or a link: the text view has the others. */
+/* The file's card under a tap: its attachment's id; nil for none. */
+- (NSString *)fileAt:(UIGestureRecognizer *)g {
+    NSTextStorage *ts = _textView.textStorage;
+    if (!ts.length) return nil;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    p = CGPointMake(p.x - inset.left, p.y - inset.top);
+    NSLayoutManager *lm = _textView.layoutManager;
+    NSUInteger glyph = [lm glyphIndexForPoint:p inTextContainer:_textView.textContainer];
+    CGRect box = [lm boundingRectForGlyphRange:NSMakeRange(glyph, 1) inTextContainer:_textView.textContainer];
+    if (!CGRectContainsPoint(box, p)) return nil;
+    NSString *attachmentID = [_binding attachmentIDAt:[lm characterIndexForGlyphAtIndex:glyph]];
+    return [[_notes attachmentWithID:attachmentID].kind isEqual:SNAttachmentKindFile] ? attachmentID : nil;
+}
+
+/* Only a tap on a checkbox, a link or a file: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil;
+    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
 }
 
 /* A link to a note opens its editor; any other, in its own application. */
@@ -714,6 +871,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSString *file = [self checkboxAt:g] == NSNotFound ? [self fileAt:g] : nil;
+    if (file) {
+        [self previewFileOfAttachment:file];
+        return;
+    }
     NSURL *link = [self checkboxAt:g] == NSNotFound ? [self linkAt:g] : nil;
     if (link) {
         [self openLink:link];
@@ -749,6 +911,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         traits ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
+        [UICommand commandWithTitle:@"Attach File" image:[UIImage systemImageNamed:@"doc"] action:@selector(attachFile:) propertyList:nil],
         [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
@@ -871,6 +1034,58 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
                 [self insertImageData:data];
             });
         }];
+}
+
+- (IBAction)attachFile:(id)sender {
+    if (!_textView.editable) return;
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeItem ] asCopy:YES];
+    picker.allowsMultipleSelection = YES;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)picker didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    for (NSURL *url in urls) {
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        NSRange r = _textView.selectedRange;
+        if (data && [_binding insertImageData:data inRange:r]) {
+            _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+            [_binding selectionDidChange];
+            [_grids update];
+            continue;
+        }
+        if (![self insertFileData:data name:url.lastPathComponent])
+            SNTell(self, data.length > SNAttachmentMaxFileBytes ? @"Larger than 25 MB" : @"Not read",
+                   [NSString stringWithFormat:@"“%@” was not attached.", url.lastPathComponent]);
+    }
+}
+
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name {
+    if (!data || !_textView.editable) return NO;
+    NSRange r = _textView.selectedRange;
+    if (![_binding insertFileData:data name:name inRange:r]) return NO;
+    _textView.selectedRange = NSMakeRange(r.location + 1, 0);
+    [_binding selectionDidChange];
+    [_grids update];
+    return YES;
+}
+
+- (BOOL)previewFileOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = attachmentID ? [_notes attachmentWithID:attachmentID] : nil;
+    _previewed = a ? [_notes fileURLOfAttachment:a] : nil;
+    if (!_previewed) return NO;
+    QLPreviewController *preview = [[QLPreviewController alloc] init];
+    preview.dataSource = self;
+    [self presentViewController:preview animated:YES completion:nil];
+    return YES;
+}
+
+- (NSInteger)numberOfPreviewItemsInPreviewController:(QLPreviewController *)controller {
+    return _previewed ? 1 : 0;
+}
+
+- (id<QLPreviewItem>)previewController:(QLPreviewController *)controller previewItemAtIndex:(NSInteger)index {
+    return _previewed;
 }
 
 - (void)insertImageData:(NSData *)data {

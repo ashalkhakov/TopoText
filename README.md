@@ -37,22 +37,31 @@ TopoText *theirs = [mine copyWithReplica:0];            // another device's copy
 ## How it works
 
 The shape is Apple Notes' topotext, which is RGA (a replicated growable
-array):
+array), with Fugue's ordering:
 
 - **Every UTF-16 unit ever typed has an id**, `(replica, clock)`. The replica is
   the copy that typed it; the clock is a Lamport counter that every edit ticks.
   Units typed in one go form a *run*: consecutive ids, each placed after the one
   before it. Typing on at the end of your own latest run makes it longer, so a
   typed paragraph is one run, not one object per keystroke.
-- **A character is inserted after another one**, its *origin*. The characters
-  inserted after the same origin come newest first, ordered by
-  `(clock, replica)`. So text typed at a place lands where the typist saw it,
-  and two people typing at one place each get one unbroken run that never
-  interleaves with the other's. The order is the same whichever copy heard of
-  what first.
+- **A character is placed by another one**, its *origin*: as its right
+  child (after it), or as its left child (before it), in Fugue's tree. A
+  character typed is the right child of the one before it, unless that one
+  has a right child already; then it is the left child of the node right
+  after it. The text is the tree read in order: a node's left subtree, the
+  node, its right subtree; children on one side newest first, by
+  `(clock, replica)`. So text typed at a place lands where the typist saw
+  it, and two people typing at one place, forwards or backwards, each get
+  their text unbroken, never interleaved with the other's. The order is the
+  same whichever copy heard of what first. RGA is this tree with right
+  children only, so data from before (format 1) reads in its order.
 - **Deleting a character tombstones it.** It keeps its id and its place, so it
   can still anchor what others insert next to it. Its text and attributes are
-  dropped.
+  dropped; who deleted it, and when, is kept. Once every copy has seen the
+  deletion (`collectTombstonesSeenBy:`, given the version all copies have),
+  a tombstone nothing is placed by goes entirely, and the rest that follow
+  one another become one record. What went is remembered as ranges of ids,
+  so a copy that had not seen the deletion yet cannot bring the text back.
 - **Attributes are per-character registers, one per key**, and the last writer
   wins. Bold set here and italic set there at the same time are both kept.
   Applying bold to existing characters does not spread to a run someone
@@ -73,6 +82,13 @@ array):
   takes its cells with it. A table is exchanged and merged whole, because
   its pieces' clocks are each their own. The papers behind it, and behind
   TopoText's text, are in [docs/References.md](docs/References.md).
+- **Undo** of one's own edits survives others' (`TopoText (Undo)`). Between
+  `-beginUndoStep` and `-endUndoStep` a copy keeps what it edits by the
+  characters' ids, not their positions. Undone after other edits were merged
+  in, it does what was meant: text it typed comes out wherever it is now,
+  text it deleted goes back where it was, and the attributes it set are set
+  back, only those keys. The undo is an ordinary edit, so it merges and
+  syncs. It is recorded in turn, as the step that redoes it.
 - **Values are property-list types**: strings, numbers, data, dates, and arrays
   and dictionaries of them. NSNull removes a key. An editor maps its fonts and
   colours to such values and back.
@@ -205,7 +221,7 @@ SimpleNotes' README, "Releases".
 | File | What it does |
 |---|---|
 | `Sources/TopoText/include/TopoText/TopoText.h` | The public API: `TopoText`, `TTId`, `TTVersion`, `TTEdit` |
-| `Sources/TopoText/TopoText.m` | The text: runs, local edits, integration (RGA), deltas, edits reported |
+| `Sources/TopoText/TopoText.m` | The text: runs, local edits, integration (Fugue), deltas, edits reported, undo, tombstones collected |
 | `Sources/TopoText/TTCoding.m` | The wire format: varints, WTF-8 text, attribute values, payloads, versions |
 | `Sources/TopoText/TTTable.m` | Tables that merge: row and column orders, a TopoText per cell |
 | `Sources/TopoText/TTInternal.h` | Runs, registers, payloads, shared by both |
@@ -218,21 +234,15 @@ SimpleNotes' README, "Releases".
 
 The wire format is described at the top of `TTCoding.m`. Text is WTF-8,
 because a run split by a remote insert between the two halves of a surrogate
-pair must still encode.
+pair must still encode. The format is versioned (its third byte): this
+TopoText writes format 2 (left children, deleters, the ids collected) and
+still reads format 1, so a text stored before is read and written anew.
 
 ## Not yet
 
-- **Tombstones are never collected.** A deleted character keeps its id, though
-  not its text, forever. That costs a few bytes per deleted run.
-  Collecting them safely needs every replica to have seen the deletion, which
-  ODataSync's version vectors could tell.
-- **Undo** of one's own edits, as edits on the CRDT.
 - **Deltas over the wire.** ODataSync sends the whole state of a changed note.
   Exchanging `-deltaSinceVersion:` instead would need an OData action of its
   own, or a peer route.
-- **Typing backwards** (each keystroke inserted before the last one) can
-  interleave with another writer at the same place. This is RGA's known case;
-  Fugue's ordering fixes it at the cost of a second origin per run.
 - **Every operation is O(runs).** That is fine for notes: in a worst-case
   document of 20k one-character runs, an edit takes 15 µs, and merging 2000
   concurrent edits takes 0.16 s. A book-length text would want a tree.

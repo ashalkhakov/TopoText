@@ -100,7 +100,8 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // (a checklist item begun on the last line, say).
 - (NSDictionary<NSString *, id> *)typingAttributes;
 - (void)setTypingAttributes:(NSDictionary<NSString *, id> *)attributes;
-// Cleared when remote edits come in: what it remembers no longer fits.
+// Where undo goes (SNSystemUndoManager says which, by system): the
+// binding's steps, by the characters' ids, which a merge leaves right.
 - (nullable NSUndoManager *)undoManager;
 @end
 
@@ -136,6 +137,10 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // An image in place of the range, made one of the note's attachments
 // (re-encoded, saved, synced); NO: not an image.
 - (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range;
+// A file (any other: a PDF, a document) in place of the range, named so,
+// made one of the note's attachments; NO: a cell's text (no attachments),
+// or larger than SNAttachmentMaxFileBytes.
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name inRange:(NSRange)range;
 // A table in place of the range (rows x columns, empty), made one of the
 // note's attachments; its id.
 - (nullable NSString *)insertTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns inRange:(NSRange)range;

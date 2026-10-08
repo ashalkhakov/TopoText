@@ -6,12 +6,14 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// The server's root, as the user set it (Server…).
+// The server's root, as the user set it (Sync…); none: this computer only.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
 @interface SNAppController : NSObject <NSApplicationDelegate>
 - (IBAction)chooseServer:(nullable id)sender;
 - (IBAction)showNotes:(nullable id)sender;
+// Devices Nearby… (SNPeersWindow).
+- (IBAction)showDevicesNearby:(nullable id)sender;
 @end
 
 NS_ASSUME_NONNULL_END

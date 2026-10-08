@@ -51,6 +51,15 @@ NS_ASSUME_NONNULL_BEGIN
 // The Move To menu's items: the note into the folder an item names.
 - (IBAction)moveNoteToFolder:(nullable id)sender;
 - (IBAction)renameFolder:(nullable id)sender;
+// File > New Smart Folder…, Edit Smart Folder… (SNSmartFolderPanel).
+- (IBAction)newSmartFolder:(nullable id)sender;
+- (IBAction)editSmartFolder:(nullable id)sender;
+// View > Sort Folder By: the folder shown, sorted its own way (Default:
+// as View > Sort By says for all).
+- (IBAction)sortFolderByDefault:(nullable id)sender;
+- (IBAction)sortFolderByDateEdited:(nullable id)sender;
+- (IBAction)sortFolderByDateCreated:(nullable id)sender;
+- (IBAction)sortFolderByTitle:(nullable id)sender;
 - (IBAction)togglePinned:(nullable id)sender;
 - (IBAction)sync:(nullable id)sender;
 - (IBAction)toggleBold:(nullable id)sender;
@@ -78,12 +87,18 @@ NS_ASSUME_NONNULL_BEGIN
 // pasted as a link it opens the note).
 - (IBAction)addLink:(nullable id)sender;
 - (IBAction)copyNoteLink:(nullable id)sender;
-// File > Attach File…: an image into the note, at the insertion point (one
-// pasted or dropped is one too).
+// File > Attach File…: files into the note, at the insertion point: an
+// image shown as one, any other file as a card (one pasted or dropped is
+// one too).
 - (IBAction)attachFile:(nullable id)sender;
 // An image's data into the note at the insertion point, undoably (NO: not
 // an image, or no note open).
 - (BOOL)attachImageData:(NSData *)data;
+// Any other file, as a card (a PDF, a document), undoably; NO: none open,
+// or larger than 25 MB.
+- (BOOL)attachFileData:(NSData *)data name:(NSString *)name;
+// A file attachment opened in its own application (a card double-clicked).
+- (BOOL)openFileOfAttachment:(NSString *)attachmentID;
 // Format > Table > Insert Table: a table in the note at the insertion
 // point, its first cell typed in. (Not -insertTable:, NSTextView's own,
 // which the note's text view, first in the responder chain, would take.) A table is edited where it is, its grid

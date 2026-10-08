@@ -18,10 +18,12 @@ static inline BOOL TTRegisterWins(TTRegister *a, TTRegister *b) {
     return a->_clock > b->_clock || (a->_clock == b->_clock && a->_replica > b->_replica);
 }
 
-/* Characters (_r, _c) to (_r, _c + _len - 1), contiguous in document order:
-   each after the one before it, the first after its origin (_or, _oc), or
-   after the document start when _or is 0. A deleted run keeps its ids and
-   loses its text and attributes. */
+/* Characters (_r, _c) to (_r, _c + _len - 1), contiguous in document order.
+   Fugue's tree: each character is the right child of the one before it; the
+   first is a child of its origin (_or, _oc), its right child or, _left, its
+   left child; or the root's (the document's) when _or is 0. A deleted run
+   keeps its ids and loses its text and attributes; it keeps who deleted it,
+   and when (_dr, _dc; 0: not known, version 1 data), for collecting it. */
 @interface TTRun : NSObject {
 @public
     TTReplica _r;
@@ -29,7 +31,10 @@ static inline BOOL TTRegisterWins(TTRegister *a, TTRegister *b) {
     NSUInteger _len;
     TTReplica _or;
     uint64_t _oc;
+    BOOL _left;
     BOOL _deleted;
+    TTReplica _dr;
+    uint64_t _dc;
     NSString *_text;
     NSDictionary<NSString *, TTRegister *> *_attrs;
 }
@@ -42,6 +47,8 @@ static inline BOOL TTRegisterWins(TTRegister *a, TTRegister *b) {
 @property (nonatomic, strong) NSMutableArray<TTRun *> *inserts;
 @property (nonatomic, strong) NSMutableArray<TTRun *> *updates;
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSNumber *> *version;
+/* Ids the sender collected (deleted, and gone): by replica, clocks. */
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSMutableIndexSet *> *collected;
 /* Copied in, coalesced with the run before when they are one run. */
 - (void)addInsert:(TTRun *)run;
 - (void)addUpdate:(TTRun *)run;

@@ -123,7 +123,12 @@ NSString *SNDateText(NSDate *date) {
     BOOL _deletes;   /* the model has Recently Deleted (version 2 on) */
     BOOL _nests;     /* the model has folders in folders (version 3 on) */
     BOOL _attaches;  /* the model has attachments (version 4 on) */
+    BOOL _five;      /* smart folders, a folder's order, files (version 5 on) */
     BOOL _savePending;
+    /* A sync asked for while one ran: what changed meanwhile, sent after. */
+    BOOL _syncAgain;
+    /* Saved by another context of the store's, not shown yet. */
+    BOOL _changedElsewhere;
     NSTimer *_timer;
 }
 
@@ -165,15 +170,21 @@ NSString *SNDateText(NSDate *date) {
     NSEntityDescription *folderEntity = model.entitiesByName[SNFolderEntity];
     _nests = [folderEntity.relationshipsByName objectForKey:@"parent"] != nil;
     _attaches = [model.entitiesByName objectForKey:SNAttachmentEntity] != nil;
+    _five = [folderEntity.attributesByName objectForKey:@"filter"] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
     _editors = [NSHashTable weakObjectsHashTable];
     _status = @"Not synced yet.";
+    /* Written by others on this store (a peer, through the peer server):
+       shown as a sync's would be. */
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(storeDidSave:)
+                                                 name:NSManagedObjectContextDidSaveNotification object:nil];
     [self removeExpiredNotes];
     return self;
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     [_timer invalidate];
 }
 
@@ -239,6 +250,8 @@ NSString *SNDateText(NSDate *date) {
     for (SNNoteEditor *e in _editors.allObjects) [e flush];
     if (_savePending) [self saveNow];
     [self removeExpiredNotes];
+    BOOL again = _syncAgain;
+    _syncAgain = NO;
     if (!ok) {
         [self say:[NSString stringWithFormat:@"Not synced: %@ Changes wait here.", error.localizedDescription ?: @"no answer."] synced:NO];
         return;
@@ -250,10 +263,94 @@ NSString *SNDateText(NSDate *date) {
     if (waiting) status = [status stringByAppendingFormat:@" %lu change%@ waiting.", (unsigned long)waiting, waiting == 1 ? @"" : @"s"];
     if (_engine.issues.count) status = [status stringByAppendingFormat:@" %lu refused.", (unsigned long)_engine.issues.count];
     [self say:status synced:moved];
+    if (again) [self sync];
 }
 
+- (ODataSyncRemote *)serverRemote {
+    return _serviceRoot ? _engine.remotes.firstObject : nil;
+}
+
+#pragma mark written elsewhere
+
+/* On the saving context's thread: only another context of this store's,
+   and only for the notes' own entities (not the engine's bookkeeping). */
+- (void)storeDidSave:(NSNotification *)n {
+    NSManagedObjectContext *saved = n.object;
+    if (saved == _context || saved.persistentStoreCoordinator != _coordinator) return;
+    BOOL ours = NO;
+    for (NSString *key in @[ NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey ])
+        for (NSManagedObject *o in n.userInfo[key])
+            if ([@[ SNNoteEntity, SNFolderEntity, SNAttachmentEntity ] containsObject:o.entity.name]) ours = YES;
+    if (!ours) return;
+    /* Once for many saves close together. */
+    @synchronized (self) {
+        if (_changedElsewhere) return;
+        _changedElsewhere = YES;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self performSelector:@selector(showChangesMadeElsewhere) withObject:nil afterDelay:0.1];
+    });
+}
+
+- (void)showChangesMadeElsewhere {
+    @synchronized (self) {
+        _changedElsewhere = NO;
+    }
+    /* A sync of ours shows them when it finishes. */
+    if (_syncing) return;
+    for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
+    for (SNNoteEditor *e in _editors.allObjects) [e flush];
+    [self say:_status synced:YES];
+}
+
+#pragma mark syncing one remote
+
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote named:(NSString *)name {
+    if (_syncing) return NO;
+    [self prepareToSync];
+    _syncing = YES;
+    [self say:[NSString stringWithFormat:@"Syncing with %@…", name] synced:NO];
+    ODataSyncEngine *engine = _engine;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *error = nil;
+        BOOL ok = [engine syncWithRemote:remote error:&error];
+        ODataSyncResult *result = engine.lastResult;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self finishSync:ok result:result error:error];
+        });
+    });
+    return YES;
+}
+
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote andWait:(NSError **)error {
+    if (_syncing) return NO;
+    [self prepareToSync];
+    _syncing = YES;
+    __block NSError *failure = nil;
+    __block BOOL ok = NO;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    ODataSyncEngine *engine = _engine;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *e = nil;
+        ok = [engine syncWithRemote:remote error:&e];
+        failure = e;
+        dispatch_semaphore_signal(done);
+    });
+    while (dispatch_semaphore_wait(done, DISPATCH_TIME_NOW))
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    [self finishSync:ok result:_engine.lastResult error:failure];
+    if (error) *error = failure;
+    return ok;
+}
+
+#pragma mark syncing the server
+
 - (void)sync {
-    if (_syncing || !_serviceRoot) return;
+    if (!_serviceRoot) return;
+    if (_syncing) {
+        _syncAgain = YES;
+        return;
+    }
     [self prepareToSync];
     _syncing = YES;
     [self say:@"Syncing…" synced:NO];
@@ -321,7 +418,40 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSArray<SNNote *> *)notesInFolder:(SNFolder *)folder matching:(NSString *)text {
-    return SNSortNotes([self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text deleted:NO] sortedBy:nil], self.sortOrder);
+    SNSmartFilter *filter = folder ? [self filterOfFolder:folder] : nil;
+    if (filter) {
+        /* Every note, then those its rules take. */
+        NSDate *now = [NSDate date];
+        NSMutableArray *taken = [NSMutableArray array];
+        for (SNNote *n in [self fetch:SNNoteEntity where:[self predicateForFolder:nil matching:text deleted:NO] sortedBy:nil])
+            if ([filter matchesNote:n now:now]) [taken addObject:n];
+        return SNSortNotes(taken, [self sortOrderForFolder:folder]);
+    }
+    return SNSortNotes([self fetch:SNNoteEntity where:[self predicateForFolder:folder matching:text deleted:NO] sortedBy:nil],
+                       [self sortOrderForFolder:folder]);
+}
+
+#pragma mark smart folders
+
+- (SNFolder *)addSmartFolderNamed:(NSString *)name filter:(SNSmartFilter *)filter inFolder:(SNFolder *)parent {
+    SNFolder *f = [self addFolderNamed:name inFolder:[self isSmartFolder:parent] ? nil : parent];
+    [self setFilter:filter ofFolder:f];
+    return f;
+}
+
+- (SNSmartFilter *)filterOfFolder:(SNFolder *)folder {
+    return _five ? [SNSmartFilter filterWithString:folder.filter] : nil;
+}
+
+- (void)setFilter:(SNSmartFilter *)filter ofFolder:(SNFolder *)folder {
+    NSString *s = filter.string;
+    if (!_five || [folder.filter isEqual:s]) return;
+    folder.filter = s;
+    [self save];
+}
+
+- (BOOL)isSmartFolder:(SNFolder *)folder {
+    return folder && [self filterOfFolder:folder] != nil;
 }
 
 #pragma mark folders in folders
@@ -436,6 +566,28 @@ NSString *SNDateText(NSDate *date) {
     return SNGroupNotes(notes, self.sortOrder, self.groupsByDate, [NSDate date]);
 }
 
+- (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes sortedBy:(SNSortOrder)order {
+    return SNGroupNotes(notes, order, self.groupsByDate, [NSDate date]);
+}
+
+- (NSNumber *)sortOrderOfFolder:(SNFolder *)folder {
+    if (!_five || !folder) return nil;
+    NSNumber *order = folder.sortOrder;
+    NSInteger o = order.integerValue;
+    return order && o >= SNSortByDateEdited && o <= SNSortByTitle ? order : nil;
+}
+
+- (void)setSortOrder:(NSNumber *)order ofFolder:(SNFolder *)folder {
+    if (!_five || !folder || order == folder.sortOrder || [order isEqual:folder.sortOrder]) return;
+    folder.sortOrder = order;
+    [self save];
+}
+
+- (SNSortOrder)sortOrderForFolder:(SNFolder *)folder {
+    NSNumber *own = folder ? [self sortOrderOfFolder:folder] : nil;
+    return own ? (SNSortOrder)own.integerValue : self.sortOrder;
+}
+
 - (NSUInteger)count:(NSPredicate *)predicate {
     NSFetchRequest *f = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
     f.predicate = predicate;
@@ -444,7 +596,28 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
+    if ([self isSmartFolder:folder]) return [self notesInFolder:folder matching:nil].count;
     return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
+}
+
+- (NSURL *)fileURLOfAttachment:(SNAttachment *)attachment {
+    if (![attachment.kind isEqual:SNAttachmentKindFile] || !attachment.data || !attachment.id) return nil;
+    NSString *name = _five && attachment.name.length ? attachment.name.lastPathComponent : @"File";
+    NSString *dir = [[NSTemporaryDirectory() stringByAppendingPathComponent:@"SimpleNotes Files"] stringByAppendingPathComponent:attachment.id];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSURL *url = [NSURL fileURLWithPath:[dir stringByAppendingPathComponent:name]];
+    return [attachment.data writeToURL:url atomically:YES] ? url : nil;
+}
+
+- (SNAttachment *)addFileToNote:(SNNote *)note data:(NSData *)data name:(NSString *)name type:(NSString *)type {
+    SNAttachment *a = [self insert:SNAttachmentEntity];
+    a.kind = SNAttachmentKindFile;
+    a.type = type.length ? type : @"application/octet-stream";
+    if (_five) a.name = name;
+    a.data = data;
+    a.note = note;
+    [self save];
+    return a;
 }
 
 - (SNAttachment *)addImageToNote:(SNNote *)note data:(NSData *)data type:(NSString *)type width:(double)width height:(double)height {
@@ -550,13 +723,15 @@ NSString *SNDateText(NSDate *date) {
 - (SNFolder *)addFolderNamed:(NSString *)name inFolder:(SNFolder *)parent {
     SNFolder *f = [self insert:SNFolderEntity];
     f.name = name;
+    /* Not in a smart folder: beside it. */
+    if ([self isSmartFolder:parent]) parent = [self parentOfFolder:parent];
     if (_nests) f.parent = parent;
     [self save];
     return f;
 }
 
 - (BOOL)moveFolder:(SNFolder *)folder toFolder:(SNFolder *)parent {
-    if (!_nests || parent == folder || (parent && [self folder:parent isInFolder:folder])) return NO;
+    if (!_nests || parent == folder || (parent && [self folder:parent isInFolder:folder]) || [self isSmartFolder:parent]) return NO;
     /* A circle cut as shown (parentOfFolder:) is cut so in the store
        first: moving one of its folders must not close it again. */
     for (SNFolder *f in [self folders])
@@ -594,7 +769,7 @@ NSString *SNDateText(NSDate *date) {
     n.title = @"New Note";
     n.body = @"";
     n.pinned = @NO;
-    n.folder = folder;
+    n.folder = [self isSmartFolder:folder] ? nil : folder;
     [self save];
     return n;
 }
@@ -654,6 +829,7 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (void)moveNote:(SNNote *)note toFolder:(SNFolder *)folder {
+    if ([self isSmartFolder:folder]) return;
     note.folder = folder;
     note.deletedAt = nil;
     [self save];
@@ -701,6 +877,13 @@ NSString *SNDateText(NSDate *date) {
     SNNote *note = [self note];
     if (!notes || !note) return nil;
     return [notes addImageToNote:note data:data type:type width:width height:height].id;
+}
+
+- (NSString *)addFileData:(NSData *)data name:(NSString *)name type:(NSString *)type {
+    SNNotes *notes = _notes;
+    SNNote *note = [self note];
+    if (!notes || !note) return nil;
+    return [notes addFileToNote:note data:data name:name type:type].id;
 }
 
 - (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {

@@ -22,6 +22,7 @@
     SNTextBinding *_binding;
     NSRange _selection;
     NSDictionary *_typing;
+    NSUndoManager *_undo;
 }
 
 - (void)setUp {
@@ -44,7 +45,7 @@
 - (void)setSelectedRange:(NSRange)range { _selection = range; }
 - (NSDictionary *)typingAttributes { return _typing ?: @{}; }
 - (void)setTypingAttributes:(NSDictionary *)attributes { _typing = attributes; }
-- (NSUndoManager *)undoManager { return nil; }
+- (NSUndoManager *)undoManager { return _undo; }
 
 - (void)tearDown {
     [_binding unbind];
@@ -107,6 +108,50 @@
     /* And typing goes on as before. */
     [self type:@" " at:8];
     XCTAssertEqualObjects(_editor.text.string, @">> Hello world");
+}
+
+#pragma mark undo
+
+/* An event of the run loop over: its edits one undo step. */
+- (void)endEvent {
+    [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+}
+
+/* Typed here, then edited elsewhere and merged in: undo takes out what was
+   typed here, wherever it is now, and leaves the other's edit. */
+- (void)testUndoAfterAMerge {
+    _undo = [[NSUndoManager alloc] init];
+    _undo.groupsByEvent = NO;
+    [_undo beginUndoGrouping];
+    _selection = NSMakeRange(11, 0);
+    for (NSString *c in @[ @"!", @"!" ]) [self key:c];
+    [_undo endUndoGrouping];
+    [self endEvent];
+    XCTAssertEqualObjects(_editor.text.string, @"Hello world!!");
+    TopoText *elsewhere = [_editor.text copyWithReplica:0];
+    [elsewhere insertString:@">> " atIndex:0 attributes:nil];
+    [_binding applyEdits:[_editor.text mergeText:elsewhere]];
+    XCTAssertTrue(_undo.canUndo, @"kept through the merge");
+    [_undo undo];
+    XCTAssertEqualObjects(_editor.text.string, @">> Hello world", @"both !s, one typing, undone; the >> kept");
+    XCTAssertEqualObjects(_storage.string, _editor.text.string);
+    XCTAssertTrue(_undo.canRedo);
+    [_undo redo];
+    XCTAssertEqualObjects(_storage.string, @">> Hello world!!");
+    XCTAssertEqualObjects(_editor.text.string, _storage.string);
+}
+
+- (void)testFormattingUndone {
+    _undo = [[NSUndoManager alloc] init];
+    _undo.groupsByEvent = NO;
+    [_undo beginUndoGrouping];
+    [_binding toggle:SNBoldKey inRange:NSMakeRange(0, 5)];
+    [_undo endUndoGrouping];
+    [self endEvent];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL][SNBoldKey], @YES);
+    [_undo undo];
+    XCTAssertNil([_editor.text attributesAtIndex:0 effectiveRange:NULL][SNBoldKey], @"bold undone");
+    XCTAssertFalse([_binding range:NSMakeRange(0, 5) has:SNBoldKey], @"and shown so");
 }
 
 #pragma mark lists

@@ -3,7 +3,8 @@ name: Release
 # SimpleNotes, packaged: ported from ODataKit's, XFormsKit's and RDLKit's
 # release workflows. A v* tag builds every package and attaches it to that
 # release; run by hand with a tag, it builds that tag and attaches to its
-# release; with none, it builds the branch, as artifacts only.
+# release; with none, it builds the branch, as artifacts only. A tag with
+# a - in it (v0.2.0-rc1) makes a pre-release.
 #
 #   macOS    SimpleNotes.app, universal, signed with a Developer ID and
 #            notarized (unsigned, and named so, without the secrets)
@@ -29,9 +30,9 @@ permissions:
 
 env:
   # ci.yml's pins: the release is built from what CI tested.
-  ODATAKIT_REF: fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
-  GNUSTEP_PATCHES_REF: 4d5599fcec9e35e1e62affb387b6a47a66c11fdc
-  FREECOREDATA_REF: f3d56b490c0618154e4727351384efe9488eb831
+  ODATAKIT_REF: 2ab40da93163805aa77057f05b0336fc230b23c0
+  GNUSTEP_PATCHES_REF: 4593e606f92910c520a1c48472708b9d2934eef9
+  FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
   TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
 
 jobs:
@@ -204,6 +205,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, '-') }}
           files: ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
 
   ################################# iOS #################################
@@ -279,6 +281,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, '-') }}
           files: |
             ${{ github.workspace }}/source/SimpleNotes-iOS-*.ipa
             ${{ github.workspace }}/source/SimpleNotes-iOS-Simulator-*.zip
@@ -438,4 +441,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          prerelease: ${{ contains(env.TAG, '-') }}
           files: ${{ github.workspace }}/source/SimpleNotes-*.AppImage

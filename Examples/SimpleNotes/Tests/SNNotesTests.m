@@ -7,6 +7,9 @@
 #import <ODataSync/ODataSyncService.h>
 #import "SNModel.h"
 #import "SNNotes.h"
+#import "SNNotebooks.h"
+#import "SNPeers.h"
+#import <ODataIncrementalStore/ODataConfiguration.h>
 
 @interface SNNotesTests : XCTestCase <SNNoteEditorDelegate>
 @end
@@ -463,6 +466,142 @@
     a.sortOrder = was;
 }
 
+/* A folder sorted its own way (View > Sort Folder By), on every device;
+   the others as the device sorts. */
+- (void)testAFolderHasItsOwnOrderEverywhere {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *home = [a addFolderNamed:@"Home"];
+    NSArray *titles = @[ @"Cherry", @"apple", @"Banana" ];
+    for (NSString *t in titles) [self edit:[a addNoteInFolder:home] on:a with:^(TopoText *text) {
+        [text insertString:t atIndex:0 attributes:nil];
+    }];
+    XCTAssertNil([a sortOrderOfFolder:home], @"the device's, to begin with");
+    [a setSortOrder:@(SNSortByTitle) ofFolder:home];
+    XCTAssertEqual([a sortOrderForFolder:home], SNSortByTitle);
+    XCTAssertEqual([a sortOrderForFolder:nil], a.sortOrder, @"All Notes: the device's");
+    XCTAssertEqualObjects([[a notesInFolder:home matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry" ]));
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = [b foldersInFolder:nil].firstObject;
+    XCTAssertEqualObjects([b sortOrderOfFolder:there], @(SNSortByTitle), @"synced with the folder");
+    XCTAssertEqualObjects([[b notesInFolder:there matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry" ]));
+    [b setSortOrder:nil ofFolder:there];
+    XCTAssertNil([b sortOrderOfFolder:there], @"back to the device's");
+}
+
+#pragma mark smart folders
+
+- (void)testASmartFolderHasTheNotesItsRulesTake {
+    SNNotes *a = [self device], *b = [self device];
+    SNFolder *home = [a addFolderNamed:@"Home"], *work = [a addFolderNamed:@"Work"];
+    SNNote *groceries = [a addNoteInFolder:home], *standup = [a addNoteInFolder:work], *ideas = [a addNoteInFolder:nil];
+    [self edit:groceries on:a with:^(TopoText *t) {
+        [t insertString:@"Groceries #errands\nmilk\neggs" atIndex:0 attributes:nil];
+        [t addParagraphAttributes:@{ @"list": @"check" } range:NSMakeRange(19, 5)];
+        [t addParagraphAttributes:@{ @"list": @"check", @"checked": @YES } range:NSMakeRange(24, 4)];
+    }];
+    [self edit:standup on:a with:^(TopoText *t) { [t insertString:@"Standup #work #errands" atIndex:0 attributes:nil]; }];
+    [self edit:ideas on:a with:^(TopoText *t) { [t insertString:@"Ideas #work" atIndex:0 attributes:nil]; }];
+    [a setNote:ideas pinned:YES];
+
+    SNSmartFilter *errands = [[SNSmartFilter alloc] init];
+    errands.tags = @[ @"errands" ];
+    SNFolder *smart = [a addSmartFolderNamed:@"Errands" filter:errands inFolder:nil];
+    XCTAssertTrue([a isSmartFolder:smart]);
+    XCTAssertFalse([a isSmartFolder:home]);
+    XCTAssertEqualObjects([NSSet setWithArray:[[a notesInFolder:smart matching:nil] valueForKey:@"title"]],
+                          ([NSSet setWithObjects:@"Groceries #errands", @"Standup #work #errands", nil]), @"from every folder");
+    XCTAssertEqual([a countOfNotesInFolder:smart], 2u);
+    XCTAssertEqual([a notesInFolder:smart matching:@"standup"].count, 1u, @"and searched");
+
+    /* All of the rules, or any. */
+    SNSmartFilter *f = [[SNSmartFilter alloc] init];
+    f.tags = @[ @"work", @"errands" ];
+    XCTAssertEqualObjects([self titles:a filter:f], [NSSet setWithObject:@"Standup #work #errands"], @"both tags");
+    f.anyTag = YES;
+    XCTAssertEqual([self titles:a filter:f].count, 3u, @"either tag");
+    SNSmartFilter *g = [[SNSmartFilter alloc] init];
+    g.checklists = SNChecklistRuleUnticked;
+    XCTAssertEqualObjects([self titles:a filter:g], [NSSet setWithObject:@"Groceries #errands"], @"an item not ticked");
+    g.pinnedOnly = YES;
+    XCTAssertEqual([self titles:a filter:g].count, 0u, @"and pinned: none");
+    g.matchesAny = YES;
+    XCTAssertEqual([self titles:a filter:g].count, 2u, @"or pinned: two");
+    XCTAssertEqualObjects([SNSmartFilter filterWithString:g.string], g, @"kept as text, read back the same");
+
+    /* Nothing goes into it; a note made in it is in no folder. */
+    [a moveNote:groceries toFolder:smart];
+    XCTAssertEqual(groceries.folder, home);
+    XCTAssertNil([a addNoteInFolder:smart].folder);
+    XCTAssertFalse([a moveFolder:work toFolder:smart]);
+
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = nil;
+    for (SNFolder *x in [b folders])
+        if ([x.name isEqual:@"Errands"]) there = x;
+    XCTAssertEqualObjects([b filterOfFolder:there], errands, @"its rules synced with it");
+    XCTAssertEqual([b countOfNotesInFolder:there], 2u);
+}
+
+/* A smart folder's rules edited on two devices apart: each one's changes
+   kept, rule by rule; a rule both changed, the later edit's. */
+- (void)testASmartFoldersRulesEditedApartAreMerged {
+    SNNotes *a = [self device], *b = [self device];
+    SNSmartFilter *start = [[SNSmartFilter alloc] init];
+    start.tags = @[ @"work", @"errands" ];
+    start.editedWithinDays = 30;
+    SNFolder *smart = [a addSmartFolderNamed:@"Mine" filter:start inFolder:nil];
+    [self sync:a];
+    [self sync:b];
+    SNFolder *there = nil;
+    for (SNFolder *f in b.folders) if ([f.name isEqual:@"Mine"]) there = f;
+    /* Here: #family added, #errands taken off, edited within 7 days. */
+    SNSmartFilter *fa = [a filterOfFolder:smart];
+    fa.tags = @[ @"work", @"family" ];
+    fa.editedWithinDays = 7;
+    [a setFilter:fa ofFolder:smart];
+    [self sync:a];
+    /* There, later: pinned only, edited within 90 days; the name too. */
+    [NSThread sleepForTimeInterval:0.01];
+    SNSmartFilter *fb = [b filterOfFolder:there];
+    fb.pinnedOnly = YES;
+    fb.editedWithinDays = 90;
+    [b setFilter:fb ofFolder:there];
+    [b renameFolder:there to:@"Mine, pinned"];
+    [self sync:b];
+    [self sync:a];
+    SNSmartFilter *want = [[SNSmartFilter alloc] init];
+    want.tags = @[ @"family", @"work" ];
+    want.pinnedOnly = YES;
+    want.editedWithinDays = 90;
+    XCTAssertEqualObjects([b filterOfFolder:there], want, @"%@", [b filterOfFolder:there].string);
+    XCTAssertEqualObjects([a filterOfFolder:smart], want, @"%@", [a filterOfFolder:smart].string);
+    XCTAssertEqualObjects(smart.name, @"Mine, pinned");
+}
+
+- (void)testMergingRulesByHand {
+    SNSmartFilter *base = [SNSmartFilter filterWithString:@"{\"tags\":[\"a\",\"b\"],\"checklists\":\"any\"}"];
+    SNSmartFilter *l = [base copy], *r = [base copy];
+    l.tags = @[ @"a", @"c" ];
+    l.checklists = SNChecklistRuleTicked;
+    r.tags = @[ @"b", @"a", @"d" ];
+    r.checklists = SNChecklistRuleUnticked;
+    r.matchesAny = YES;
+    SNSmartFilter *m = [SNSmartFilter filterMergingBase:base local:l remote:r localLater:YES];
+    XCTAssertEqualObjects(m.tags, (@[ @"a", @"c", @"d" ]), @"b taken off here; c and d added");
+    XCTAssertEqual(m.checklists, SNChecklistRuleTicked, @"both changed it: the later side's");
+    XCTAssertTrue(m.matchesAny, @"one side changed it");
+    XCTAssertEqualObjects([SNSmartFilter filterMergingBase:base local:r remote:l localLater:NO], m, @"the same from the other side");
+}
+
+- (NSSet *)titles:(SNNotes *)device filter:(SNSmartFilter *)filter {
+    NSMutableSet *out = [NSMutableSet set];
+    for (SNNote *n in [device notesInFolder:nil matching:nil])
+        if ([filter matchesNote:n now:[NSDate date]]) [out addObject:n.title];
+    return out;
+}
+
 #pragma mark attachments
 
 - (void)testAnAttachmentGoesToTheOtherDevice {
@@ -492,6 +631,21 @@
     XCTAssertNil([a attachmentWithID:attachmentID], @"and everywhere");
 }
 
+- (void)testAFileGoesToTheOtherDevice {
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    NSData *pdf = [@"%PDF-1.4 a little document" dataUsingEncoding:NSUTF8StringEncoding];
+    SNAttachment *file = [a addFileToNote:note data:pdf name:@"Lease.pdf" type:@"application/pdf"];
+    XCTAssertEqualObjects(file.kind, SNAttachmentKindFile);
+    [self sync:a];
+    [self sync:b];
+    SNAttachment *came = [b attachmentWithID:file.id];
+    XCTAssertEqualObjects(came.data, pdf);
+    XCTAssertEqualObjects(came.name, @"Lease.pdf");
+    XCTAssertEqualObjects(came.type, @"application/pdf");
+    XCTAssertEqualObjects([a addFileToNote:note data:pdf name:@"x" type:nil].type, @"application/octet-stream", @"a type, always");
+}
+
 - (void)testATableEditedOnTwoDevicesIsMerged {
     SNNotes *a = [self device], *b = [self device];
     SNNote *note = [a addNoteInFolder:nil];
@@ -516,6 +670,158 @@
     NSArray *want = @[ @[ @"Milk", @"2 l" ], @[ @"Eggs", @"" ] ];
     XCTAssertEqualObjects([a tableOfAttachment:made].strings, want);
     XCTAssertEqualObjects([b tableOfAttachment:there].strings, want);
+}
+
+#pragma mark a notebook per user
+
+/* The service again, its sets each user's own (SNNotebooks.h), signing in
+   by an access token (a JWT) of an issuer it trusts: the test's. */
+- (NSDictionary *)serveNotebooksPerUser {
+    NSError *error = nil;
+    NSDictionary *key = HSGenerateSigningKey(&error);
+    XCTAssertNotNil(key, @"%@", error);
+    _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
+    HSJWTAuthenticator *jwt = [[HSJWTAuthenticator alloc] initWithIssuer:@"https://id.test" audience:nil];
+    jwt.keySet = @{ @"keys": @[ HSPublicKey(key) ] };
+    _service.authenticator = jwt;
+    _service.allowsAnonymousRequests = YES;   /* as the server's AllowAnonymous */
+    SNServeNotebookPerUser(_service);
+    _histories = [[ODataSyncService alloc] initWithService:_service];
+    return key;
+}
+
+/* A device signed in as subject (nil: no one). */
+- (SNNotes *)deviceOf:(NSString *)subject key:(NSDictionary *)key {
+    SNNotes *d = [self device];
+    ODataConfiguration *c = [[ODataConfiguration alloc] initWithURL:d.serviceRoot options:nil];
+    if (subject) {
+        NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+        c.accessToken = HSSignJWT(@{ @"iss": @"https://id.test", @"sub": subject, @"iat": @((long)now), @"exp": @((long)now + 3600) }, key, NULL);
+        XCTAssertNotNil(c.accessToken);
+    }
+    d.configuration = c;
+    return d;
+}
+
+- (void)testEachUserHasANotebookOfTheirOwn {
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNNotes *alice = [self deviceOf:@"alice" key:key], *aliceAgain = [self deviceOf:@"alice" key:key], *bob = [self deviceOf:@"bob" key:key];
+    SNFolder *home = [alice addFolderNamed:@"Alice's"];
+    [self edit:[alice addNoteInFolder:home] on:alice with:^(TopoText *t) { [t insertString:@"Alice's secret" atIndex:0 attributes:nil]; }];
+    [self edit:[bob addNoteInFolder:nil] on:bob with:^(TopoText *t) { [t insertString:@"Bob's list" atIndex:0 attributes:nil]; }];
+    [self sync:alice];
+    [self sync:bob];
+    [self sync:aliceAgain];
+    [self sync:alice];
+    XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"only hers");
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Alice's secret" ], @"on each of her devices");
+    XCTAssertEqualObjects([[aliceAgain folders] valueForKey:@"name"], @[ @"Alice's" ]);
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil].firstObject body], @"Alice's secret", @"the body, not only the title");
+    XCTAssertEqualObjects([[aliceAgain notesInFolder:nil matching:nil].firstObject text].string, @"Alice's secret");
+    XCTAssertEqualObjects([[bob notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"Bob's list" ], @"only his");
+    XCTAssertEqual(bob.folders.count, 0u, @"none of her folders");
+    /* A deletion is told to its owner only. */
+    SNNote *secret = [aliceAgain notesInFolder:nil matching:nil].firstObject;
+    [aliceAgain deleteNote:secret];
+    [aliceAgain deleteNoteImmediately:secret];
+    [self sync:aliceAgain];
+    [self sync:alice];
+    [self sync:bob];
+    XCTAssertEqual([alice notesInFolder:nil matching:nil].count, 0u);
+    XCTAssertEqual([bob notesInFolder:nil matching:nil].count, 1u);
+    /* No one signed in: the rows no one owns, none of theirs. */
+    SNNotes *nobody = [self deviceOf:nil key:key];
+    [self sync:nobody];
+    XCTAssertEqual([nobody notesInFolder:nil matching:nil].count, 0u);
+    /* At the server, each row its owner's. */
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    c.persistentStoreCoordinator = _server;
+    NSArray *rows = [c executeFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteEntity] error:NULL];
+    XCTAssertEqualObjects([rows valueForKey:@"owner"], @[ @"bob" ]);
+}
+
+- (void)testRowsNoOneOwnsAreGivenToAUser {
+    SNNotes *before = [self device];   /* the notebook shared, no sign-in */
+    [self edit:[before addNoteInFolder:[before addFolderNamed:@"Old"]] on:before with:^(TopoText *t) { [t insertString:@"From before" atIndex:0 attributes:nil]; }];
+    [self sync:before];
+    NSError *error = nil;
+    XCTAssertEqual(SNGiveUnownedRows(_server, @"alice", &error), 2u, @"%@", error);
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNNotes *alice = [self deviceOf:@"alice" key:key];
+    [self sync:alice];
+    XCTAssertEqualObjects([[alice notesInFolder:nil matching:nil] valueForKey:@"title"], @[ @"From before" ]);
+}
+
+#pragma mark devices nearby
+
+- (void)waitUntil:(BOOL (^)(void))done {
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:10];
+    while (!done() && [until timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+}
+
+/* Two devices met with no server between them: one serves its notes (in
+   the process here, as its peer server's service), the other syncs with
+   it; edits made apart both kept, and what the peer wrote merged into an
+   editor open on the device serving. */
+- (void)testDevicesNearbySyncWithEachOther {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:[a addFolderNamed:@"Trip"]] on:a with:^(TopoText *t) { [t insertString:@"pack bags" atIndex:0 attributes:nil]; }];
+    ODataSyncPeerServer *served = [[ODataSyncPeerServer alloc] initWithEngine:a.engine host:@"127.0.0.1" port:SNPeersPort];
+    served.service.allowsAnonymousRequests = YES;
+    ODataSyncRemote *toA = [ODataSyncRemote peerWithServiceRoot:served.serviceRoot];
+    toA.transport = served.service;
+    NSError *error = nil;
+    XCTAssertTrue([b syncWithRemote:toA andWait:&error], @"%@", error);
+    XCTAssertEqualObjects([self onlyNote:b].body, @"pack bags");
+    XCTAssertEqualObjects([b.folders valueForKey:@"name"], @[ @"Trip" ]);
+
+    SNNoteEditor *open = [a editorForNote:[self onlyNote:a]];
+    NSMutableArray *merged = _merged = [NSMutableArray array];
+    open.delegate = self;
+    [open.text insertString:@"Paris: " atIndex:0 attributes:nil];
+    [open textDidChange];
+    [open flush];
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@", book hotel" atIndex:t.length attributes:nil]; }];
+    XCTAssertTrue([b syncWithRemote:toA andWait:&error], @"%@", error);
+    /* Written into a's store by its peer server: shown in a's editor. */
+    [self waitUntil:^BOOL { return [open.text.string isEqual:@"Paris: pack bags, book hotel"]; }];
+    XCTAssertEqualObjects(open.text.string, @"Paris: pack bags, book hotel");
+    XCTAssertGreaterThan(merged.count, 0u);
+    XCTAssertEqualObjects([self onlyNote:b].body, @"Paris: pack bags, book hotel");
+    [open close];
+    XCTAssertEqual(a.engine.issues.count + b.engine.issues.count, 0u);
+}
+
+/* The server signs peer tokens with a key it keeps; a signed-in device
+   asks for one, and keeps it. */
+- (void)testAServerIssuesPeerTokens {
+    NSURL *file = [self temporaryStore];
+    NSError *error = nil;
+    NSDictionary *signing = SNPeerSigningKeyAt(file, &error);
+    XCTAssertNotNil(signing, @"%@", error);
+    XCTAssertEqualObjects(SNPeerSigningKeyAt(file, NULL), signing, @"made once, then kept");
+    NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:file.path error:NULL];
+    XCTAssertEqual([attributes[NSFilePosixPermissions] integerValue], 0600);
+
+    NSDictionary *key = [self serveNotebooksPerUser];
+    SNIssuePeerTokens(_histories, signing);
+    SNNotes *alice = [self deviceOf:@"alice" key:key];
+    NSURL *directory = [[self temporaryStore] URLByAppendingPathExtension:@"peers"];
+    [_files addObject:directory];
+    SNPeers *peers = [[SNPeers alloc] initWithNotes:alice directory:directory error:&error];
+    XCTAssertNotNil(peers, @"%@", error);
+    XCTAssertFalse(peers.hasToken);
+    [peers fetchToken];
+    [self waitUntil:^BOOL { return !peers.fetchingToken; }];
+    XCTAssertTrue(peers.hasToken, @"%@", peers.status);
+    XCTAssertGreaterThan(peers.tokenExpires.timeIntervalSinceNow, 3600);
+    [peers stop];
+    /* Kept: the next launch has it. */
+    SNPeers *again = [[SNPeers alloc] initWithNotes:alice directory:directory error:&error];
+    XCTAssertTrue(again.hasToken);
+    [again.trust.identity removeWithError:NULL];
+    [[NSFileManager defaultManager] removeItemAtURL:directory error:NULL];
 }
 
 @end

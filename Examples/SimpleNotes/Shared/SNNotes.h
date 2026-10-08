@@ -16,6 +16,7 @@
 #import "SNFolder.h"
 #import "SNAttachment.h"
 #import "SNTextSource.h"
+#import "SNSmartFilter.h"
 
 @class SNNoteEditor, SNNoteGroup;
 
@@ -67,19 +68,28 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Changes not sent yet.
 - (NSUInteger)pendingCount;
 
-// On a thread of its own; SNNotesDidChangeNotification when done.
+// On a thread of its own; SNNotesDidChangeNotification when done. Asked
+// for while one runs: once more after it, for what changed meanwhile.
 - (void)sync;
 // The same, waited for, on this thread (the main one): for tests and the
 // self-test.
 - (BOOL)syncAndWait:(NSError **)error;
+// The server's remote (nil: none): what a peer token is asked of.
+@property (nonatomic, readonly, nullable) ODataSyncRemote *serverRemote;
+// One remote alone (a peer met now and then; the server stays the one
+// -sync syncs with), named in the status. NO while a sync runs.
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote named:(NSString *)name;
+// The same, waited for (tests).
+- (BOOL)syncWithRemote:(ODataSyncRemote *)remote andWait:(NSError **)error;
 
 #pragma mark Reading
 
 // Every folder, by name.
 - (NSArray<SNFolder *> *)folders;
 // Of a folder (nil: all of them), whose text has text in it (nil: all),
-// sorted (sortOrder); none deleted. A folder's own notes, not its
-// folders', as Apple Notes lists them.
+// sorted (the folder's order: -sortOrderForFolder:); none deleted. A
+// folder's own notes, not its folders', as Apple Notes lists them; a smart
+// folder's, every note its rules take.
 - (NSArray<SNNote *> *)notesInFolder:(nullable SNFolder *)folder matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesInFolder:(nullable SNFolder *)folder;
 // An image in a note: its data (as SNRichText makes it, a JPEG or a PNG no
@@ -90,6 +100,13 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // A table in a note (rows x columns, empty), saved and synced; the note's
 // text then refers to it by its id.
 - (SNAttachment *)addTableToNote:(SNNote *)note rows:(NSUInteger)rows columns:(NSUInteger)columns;
+// A file in a note (any but an image: a PDF, a document), its name and
+// type (MIME) kept; saved and synced like a note (model version 5).
+- (SNAttachment *)addFileToNote:(SNNote *)note data:(NSData *)data name:(NSString *)name type:(nullable NSString *)type;
+// A file attachment written out, under its name, for another application
+// to open (or Quick Look to show): in a temporary folder of its own. nil:
+// not a file, or not come yet.
+- (nullable NSURL *)fileURLOfAttachment:(SNAttachment *)attachment;
 // A table attachment's table, to edit: a copy of its own, written as a new
 // replica (an editing session's). nil: not a table.
 - (nullable TTTable *)tableOfAttachment:(SNAttachment *)attachment;
@@ -123,6 +140,17 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // Whether folder is in ancestor, at any depth.
 - (BOOL)folder:(SNFolder *)folder isInFolder:(SNFolder *)ancestor;
 
+#pragma mark Smart folders
+
+// A folder whose notes are those its rules take (SNSmartFilter), from
+// every folder, as Apple Notes' smart folders; nothing is moved into it,
+// and a note made in it is made in no folder.
+- (SNFolder *)addSmartFolderNamed:(NSString *)name filter:(SNSmartFilter *)filter inFolder:(nullable SNFolder *)parent;
+// Its rules; nil: not a smart folder (or a model before version 5).
+- (nullable SNSmartFilter *)filterOfFolder:(SNFolder *)folder;
+- (void)setFilter:(SNSmartFilter *)filter ofFolder:(SNFolder *)folder;
+- (BOOL)isSmartFolder:(nullable SNFolder *)folder;
+
 #pragma mark Tags
 
 // Every tag in the notes (Recently Deleted's not), by name, without #.
@@ -137,6 +165,13 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // every list: by date edited and grouped by date unless set otherwise.
 @property (nonatomic) SNSortOrder sortOrder;
 @property (nonatomic) BOOL groupsByDate;
+// A folder's own order (View > Sort Folder By, as Apple Notes'), synced
+// with it; nil: the device's (sortOrder).
+- (nullable NSNumber *)sortOrderOfFolder:(SNFolder *)folder;
+- (void)setSortOrder:(nullable NSNumber *)order ofFolder:(SNFolder *)folder;
+// What a folder's list is sorted by: its own order, else the device's
+// (All Notes, a tag: the device's).
+- (SNSortOrder)sortOrderForFolder:(nullable SNFolder *)folder;
 // A checklist item ticked goes to the bottom of its list at once (user
 // defaults SNMoveCheckedToBottom; off, as Apple Notes' "Manually").
 @property (nonatomic) BOOL movesCheckedToBottom;
@@ -145,6 +180,8 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // this year, and the years before (by the date sorted by); else the rest,
 // as Notes when some are pinned.
 - (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes;
+// The same, the notes sorted by order (a folder's own).
+- (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes sortedBy:(SNSortOrder)order;
 
 #pragma mark Changing (saved at once)
 
@@ -174,6 +211,7 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (NSUInteger)removeNotesDeletedBefore:(NSDate *)date;
 - (void)setNote:(SNNote *)note pinned:(BOOL)pinned;
 // Into another folder (nil: none); one in Recently Deleted is recovered so.
+// Not into a smart folder: nothing changes.
 - (void)moveNote:(SNNote *)note toFolder:(nullable SNFolder *)folder;
 // What the context has, saved (later, when a sync is running).
 - (void)save;
@@ -209,6 +247,8 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // An image added to the note (SNNotes' -addImageToNote:...), its id; an
 // attachment's, by id.
 - (NSString *)addImageData:(NSData *)data type:(NSString *)type width:(double)width height:(double)height;
+// A file added to the note (SNNotes' -addFileToNote:...), its id.
+- (NSString *)addFileData:(NSData *)data name:(NSString *)name type:(nullable NSString *)type;
 - (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 // The user changed text: written and saved a moment later.
 - (void)textDidChange;

@@ -44,7 +44,7 @@ ENV PREFIX=/opt/gnustep \
 
 # The stack: gnustep-patches' build, at CI's pin.
 FROM toolchain AS stack
-ARG GNUSTEP_PATCHES_REF=4d5599fcec9e35e1e62affb387b6a47a66c11fdc
+ARG GNUSTEP_PATCHES_REF=4593e606f92910c520a1c48472708b9d2934eef9
 RUN set -e; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
@@ -54,8 +54,8 @@ RUN set -e; \
 
 # FreeCoreData and ODataKit, at CI's pins.
 FROM stack AS libraries
-ARG FREECOREDATA_REF=f3d56b490c0618154e4727351384efe9488eb831
-ARG ODATAKIT_REF=fd7ed8a767bcaab7b12cdeb8b98c96c3a83e1401
+ARG FREECOREDATA_REF=591dfa6eb602929713fbd2e3eaaa828198a3cf1b
+ARG ODATAKIT_REF=2ab40da93163805aa77057f05b0336fc230b23c0
 SHELL ["/bin/bash", "-c"]
 RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \
@@ -92,7 +92,8 @@ ENV LD_LIBRARY_PATH=/opt/gnustep/lib:/opt/gnustep/Local/Library/Libraries:/opt/g
     HOME=/data TZ=UTC \
     SN_PORT=8080 SN_LOCALHOST=NO \
     SN_STORE_URL=/data/notes.sqlite \
-    SN_ACCESS_LOG=json
+    SN_ACCESS_LOG=json \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 USER 10001:10001
 WORKDIR /data
 VOLUME /data

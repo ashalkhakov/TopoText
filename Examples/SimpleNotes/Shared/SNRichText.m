@@ -306,6 +306,13 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         if (room) [room getValue:&size];
         a = room ? SNSystemRoomAttachment(size) : SNSystemImageAttachment(nil, nil, size);
         a.loaded = room != nil;
+    } else if ([attachment.kind isEqual:SNAttachmentKindFile]) {
+        /* A card: its icon, its name, its kind and size. */
+        NSString *name = [attachment.entity.attributesByName objectForKey:@"name"] ? attachment.name : nil;
+        if (!name.length) name = @"File";
+        a = SNSystemFileAttachment(data, name, SNFileDescription(name, data.length), MIN(maxWidth, 360));
+        a.loaded = data != nil;
+        a.textWidth = maxWidth;
     } else {
         double w = attachment.width.doubleValue, h = attachment.height.doubleValue;
         if (data && (w < 1 || h < 1)) SNSystemImagePixels(data, &w, &h);
@@ -323,6 +330,10 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 
 #pragma mark the binding
 
+/* The undo step last registered, by any binding (the note's, a cell's):
+   typing goes on in a step only while it is the last one. */
+static __weak TTUndoStep *SNLastUndoStep;
+
 @implementation SNTextBinding {
     BOOL _applying;
     /* What was typed since the paragraphs were last made one formatting
@@ -338,6 +349,11 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     NSMutableDictionary<NSString *, NSValue *> *_rooms;
     /* The text's width images were last sized to. */
     CGFloat _shownWidth;
+    /* Undo: the step typing goes on in, and where it left off; the undo
+       manager steps were registered with (to take them back on unbind). */
+    TTUndoStep *_typingStep;
+    NSUInteger _typingEnd;
+    NSUndoManager *_undoManager;
 }
 
 - (instancetype)initWithTextView:(id<SNTextViewing>)view editor:(id<SNTextSource>)editor {
@@ -367,10 +383,82 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 
 - (void)dealloc {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_undoManager removeAllActionsWithTarget:self];
 }
 
 - (void)unbind {
     [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [self endUndoRecording];
+    /* An undo manager keeps its targets unretained. */
+    [_undoManager removeAllActionsWithTarget:self];
+    _undoManager = nil;
+}
+
+#pragma mark undo
+
+/* Before the binding writes what the user did into the text: the edits of
+   this event kept as one undo step, registered with the view's undo manager
+   as it begins; typing that goes on where it left off (a character typed,
+   or deleted, at its end) kept in the typing's step, as a text view keeps
+   typing one undo. By the characters' ids (TopoText (Undo)): a sync's
+   edits merged in meanwhile do not make it wrong. */
+- (void)recordEditOf:(NSRange)r replacing:(NSRange)old characters:(BOOL)characters {
+    TopoText *t = _editor.text;
+    if (!t.recordingUndoStep) {
+        NSUndoManager *last = SNSystemUndoManager(_view);
+        BOOL typing = characters && _typingStep && _typingStep == SNLastUndoStep && last.canUndo &&
+                      ((!old.length && r.location == _typingEnd) || (!r.length && old.length == 1 && NSMaxRange(old) == _typingEnd));
+        if (typing) {
+            [t continueUndoStep:_typingStep];
+        } else {
+            [t beginUndoStep];
+            NSUndoManager *um = SNSystemUndoManager(_view);
+            if (um) {
+                _undoManager = um;
+                [um registerUndoWithTarget:self selector:@selector(undoStep:) object:t.recordingUndoStep];
+                SNLastUndoStep = t.recordingUndoStep;
+            }
+        }
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(endUndoRecording) object:nil];
+        [self performSelector:@selector(endUndoRecording) withObject:nil afterDelay:0];
+    }
+    /* A character typed or deleted: typing, which may go on. */
+    BOOL typed = characters && ((!old.length && r.length) || (!r.length && old.length == 1)) &&
+                 (!old.length ? ![[_storage.string substringWithRange:r] containsString:@"\n"] : YES);
+    _typingStep = typed ? t.recordingUndoStep : nil;
+    _typingEnd = typed ? (old.length ? old.location : NSMaxRange(r)) : NSNotFound;
+}
+
+/* The event's step done with: what comes next is a step of its own. */
+- (void)endUndoRecording {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(endUndoRecording) object:nil];
+    TopoText *t = _editor.text;
+    if (t.recordingUndoStep) [t endUndoStep];
+}
+
+/* A step undone (or redone): its edits undone in the text, as edits of this
+   copy's; what that did shown, chosen; the step that redoes it registered
+   (as a redo, the undo manager being undoing). */
+- (void)undoStep:(TTUndoStep *)step {
+    [self endUndoRecording];
+    _typingStep = nil;
+    TopoText *t = _editor.text;
+    TTUndoStep *redo = nil;
+    NSArray<TTEdit *> *edits = [t undoStep:step redoStep:&redo];
+    NSUndoManager *um = SNSystemUndoManager(_view) ?: _undoManager;
+    [um registerUndoWithTarget:self selector:@selector(undoStep:) object:redo];
+    SNLastUndoStep = nil;
+    [self applyEdits:edits];
+    /* The last thing it did, chosen: text put back selected; text taken out,
+       the insertion point where it was. */
+    TTEdit *last = edits.lastObject;
+    if (last) {
+        NSUInteger len = _storage.length, at = MIN(last.range.location, len);
+        _view.selectedRange = last.kind == TTEditDelete ? NSMakeRange(at, 0) : NSMakeRange(at, MIN(last.range.length, len - at));
+        [self selectionDidChange];
+    }
+    [_editor textDidChange];
+    SNSystemTextChanged(_view);
 }
 
 /* The view's selection; NSNotFound when the view is gone. */
@@ -398,6 +486,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     if (mask & NSTextStorageEditedCharacters) {
         NSRange old = NSMakeRange(r.location, (NSUInteger)((NSInteger)r.length - delta));
         if (NSMaxRange(old) > t.length) old = NSMakeRange(MIN(r.location, t.length), t.length - MIN(r.location, t.length));
+        [self recordEditOf:r replacing:old characters:YES];
         [t deleteCharactersInRange:old];
         NSUInteger at = old.location;
         NSString *string = _storage.string;
@@ -431,7 +520,10 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
                 [keys addObjectsFromArray:now.allKeys];
                 for (NSString *k in keys)
                     if (![want[k] isEqual:now[k]]) diff[k] = want[k] ?: [NSNull null];
-                if (diff.count) [t addAttributes:diff range:part];
+                if (diff.count) {
+                    [self recordEditOf:part replacing:part characters:NO];
+                    [t addAttributes:diff range:part];
+                }
                 i = NSMaxRange(part);
             }
         }
@@ -446,6 +538,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
             NSRange run = v.rangeValue;
             [mapped setAttributes:SNTextAttributes([_storage attributesAtIndex:run.location effectiveRange:NULL]) range:run];
         }
+        [self recordEditOf:NSMakeRange(0, _storage.length) replacing:NSMakeRange(0, t.length) characters:NO];
         [t setAttributedString:mapped];
     }
     [_editor textDidChange];
@@ -510,7 +603,9 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
         _view.selectedRange = NSMakeRange(start, MIN(MAX(end, start), len) - start);
     }
     [self selectionDidChange];
-    [_view.undoManager removeAllActions];
+    /* Undo goes on: its steps are kept by ids, which a merge leaves right.
+       Only typing's place has moved. */
+    _typingStep = nil;
 }
 
 - (void)showParagraphsAsTheText {
@@ -575,6 +670,11 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 
 - (NSString *)addTableWithRows:(NSUInteger)rows columns:(NSUInteger)columns {
     return [_editor respondsToSelector:@selector(addTableWithRows:columns:)] ? [_editor addTableWithRows:rows columns:columns] : nil;
+}
+
+- (NSString *)addFileData:(NSData *)data name:(NSString *)name {
+    if (!data || data.length > SNAttachmentMaxFileBytes || ![_editor respondsToSelector:@selector(addFileData:name:type:)]) return nil;
+    return [_editor addFileData:data name:name type:SNTypeOfFileNamed(name)];
 }
 
 /* How wide an image may be shown: the text's width. */
@@ -647,7 +747,7 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     [self refreshAttachments];
 }
 
-/* A pasted image saved as one of the note's attachments, its id; its view
+/* A pasted image (or file) saved as one of the note's attachments, its id; its view
    attachment is given the id once the view's edit is done (not while the
    storage is still processing it). */
 - (NSString *)attachmentForPasted:(NSTextAttachment *)pasted {
@@ -655,9 +755,15 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     if (made) return made;
     NSString *type = nil;
     double w = 0, h = 0;
-    NSData *data = SNImageDataForAttachment(SNSystemDataOfAttachment(pasted), &type, &w, &h);
-    if (!data) return nil;
-    made = [self addImageData:data type:type width:w height:h];
+    NSData *raw = SNSystemDataOfAttachment(pasted);
+    NSData *data = SNImageDataForAttachment(raw, &type, &w, &h);
+    if (data) {
+        made = [self addImageData:data type:type width:w height:h];
+    } else {
+        /* Not an image: a file, by its name (a PDF dropped, say). */
+        NSString *name = pasted.fileWrapper.preferredFilename ?: pasted.fileWrapper.filename;
+        if (raw && name.length) made = [self addFileData:raw name:name];
+    }
     if (!made) return nil;
     [_pendingAttachments setObject:made forKey:pasted];
     [self performSelector:@selector(idsForPastedAttachments) withObject:nil afterDelay:0];
@@ -704,6 +810,13 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
     unichar c = SNAttachmentCharacter;
     [_storage replaceCharactersInRange:range
                   withAttributedString:[[NSAttributedString alloc] initWithString:[NSString stringWithCharacters:&c length:1] attributes:view]];
+}
+
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name inRange:(NSRange)range {
+    NSString *made = [self addFileData:data name:name.length ? name : @"File"];
+    if (!made) return NO;
+    [self insertAttachment:made inRange:range];
+    return YES;
 }
 
 - (BOOL)insertImageData:(NSData *)data inRange:(NSRange)range {
@@ -974,6 +1087,9 @@ static SNTextAttachment *SNShowAttachment(NSString *attachmentID, SNAttachment *
 }
 
 - (void)selectionDidChange {
+    /* The insertion point moved away: typing there is another step. */
+    NSRange sel = [self selection];
+    if (_typingStep && (sel.length || sel.location != _typingEnd)) _typingStep = nil;
     [self refreshTypingKeepingInline:NO];
 }
 

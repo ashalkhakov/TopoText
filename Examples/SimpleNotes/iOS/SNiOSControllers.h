@@ -6,14 +6,22 @@
 #import <UIKit/UIKit.h>
 #import "SNNotes.h"
 #import <PhotosUI/PhotosUI.h>
+#import <QuickLook/QuickLook.h>
+#import "SNSmartFolderViewController.h"
+#import "SNSignIn.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
+// The smart folder form, for a new one (folder nil) or one to edit.
+- (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;
+// The server's sheet's address, signed in to as the server asks (a code
+// for OpenID Connect, a user and password), then synced with.
+- (void)signInToServer:(NSURL *)serviceRoot;
 @end
 
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>
@@ -26,6 +34,11 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)sortByDateCreated:(nullable id)sender;
 - (IBAction)sortByTitle:(nullable id)sender;
 - (IBAction)toggleGroupByDate:(nullable id)sender;
+// Sort Folder By: the folder shown, its own order (Default: the device's).
+- (IBAction)sortFolderByDefault:(nullable id)sender;
+- (IBAction)sortFolderByDateEdited:(nullable id)sender;
+- (IBAction)sortFolderByDateCreated:(nullable id)sender;
+- (IBAction)sortFolderByTitle:(nullable id)sender;
 // The groups listed: their headings and notes' titles, as in shownRows.
 - (NSArray<NSString *> *)shownRows;
 // Recently Deleted: recovered, or deleted for good, from here.
@@ -36,7 +49,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
 // SNEditorViewController.xib: the text view, and the format bar.
 @interface SNEditorViewController : UIViewController <UITextViewDelegate, UIGestureRecognizerDelegate, SNNoteEditorDelegate,
-                                                       PHPickerViewControllerDelegate>
+                                                       PHPickerViewControllerDelegate, UIDocumentPickerDelegate,
+                                                       QLPreviewControllerDataSource>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory, as Apple Notes'
@@ -68,6 +82,13 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)addLink:(nullable id)sender;
 // Photos into the note (the photo picker).
 - (IBAction)attachPhoto:(nullable id)sender;
+// Files into the note (the document picker): an image as one, any other
+// as a card, which a tap shows (Quick Look).
+- (IBAction)attachFile:(nullable id)sender;
+// A file's data into the note at the insertion point, as a file picked.
+- (BOOL)insertFileData:(NSData *)data name:(NSString *)name;
+// A file attachment shown (Quick Look), as its card tapped.
+- (BOOL)previewFileOfAttachment:(NSString *)attachmentID;
 // An image's data into the note at the insertion point (as a photo picked).
 - (void)insertImageData:(NSData *)data;
 // A table at the insertion point (2 x 2), its first cell typed in. A table

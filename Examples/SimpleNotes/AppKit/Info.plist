@@ -29,5 +29,11 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_odatasync._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>SimpleNotes syncs your notes with your devices on the same network.</string>
 </dict>
 </plist>
