@@ -9,6 +9,7 @@
 #import <QuickLook/QuickLook.h>
 #import "SNSmartFolderViewController.h"
 #import "SNSignIn.h"
+#import "SNPeers.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -22,6 +23,12 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 // The server's sheet's address, signed in to as the server asks (a code
 // for OpenID Connect, a user and password), then synced with.
 - (void)signInToServer:(NSURL *)serviceRoot;
+// Devices Nearby (the antenna button): its files there, beside the store.
+@property (nonatomic, copy, nullable) NSURL *peersDirectory;
+// Made the first time it is asked for (its identity is a key in the
+// keychain: none made for nothing); nil and the alert when it cannot be.
+- (nullable SNPeers *)peers;
+- (IBAction)showDevicesNearby:(nullable id)sender;
 @end
 
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>

@@ -21,6 +21,10 @@ FOUNDATION_EXPORT NSNotificationName const SNPeersDidChangeNotification;
 // Where peers reach this device.
 FOUNDATION_EXPORT const NSUInteger SNPeersPort;
 
+// Whether the notes are served to devices nearby (kept: served again at the
+// next launch).
+FOUNDATION_EXPORT NSString * const SNServePeersDefaultsKey;   // @"SNServePeers"
+
 @protocol SNPeersDelegate <NSObject>
 @optional
 // A pairing done (error nil: paired, a sync with it begun) or refused.

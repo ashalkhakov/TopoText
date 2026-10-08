@@ -1,5 +1,6 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
+#import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNModel.h"
@@ -303,6 +304,22 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         [(SNFoldersViewController *)root signInToServer:was];
         SNWait(10, ^BOOL { return [notes.serviceRoot isEqual:was]; });
         SNSay([notes.serviceRoot isEqual:was], @"a server with no sign-in, synced with as it is");
+        /* Devices Nearby: its screen, and the peer token the server (no
+           sign-in: none to give) offers to be asked for. */
+        NSURL *peersDir = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                     [NSString stringWithFormat:@"sn-selftest-peers-%@", [NSProcessInfo processInfo].globallyUniqueString]]];
+        NSError *peersError = nil;
+        SNPeers *peers = [[SNPeers alloc] initWithNotes:notes directory:peersDir error:&peersError];
+        SNPeersViewController *nearby = peers ? [[SNPeersViewController alloc] initWithPeers:peers] : nil;
+        [nearby loadViewIfNeeded];
+        UITableViewCell *serve = [nearby tableView:nearby.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0]];
+        UITableViewCell *pairing = [nearby tableView:nearby.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:1 inSection:2]];
+        SNSay([nearby numberOfSectionsInTableView:nearby.tableView] == 3 && [serve.accessoryView isKindOfClass:[UISwitch class]] &&
+                  ![(UISwitch *)serve.accessoryView isOn] && [pairing.textLabel.text hasPrefix:@"Pair With Code"],
+              [NSString stringWithFormat:@"the Devices Nearby screen loads (%@)", peersError.localizedDescription ?: @"an identity made"]);
+        [peers stop];
+        [peers.trust.identity removeWithError:NULL];
+        [[NSFileManager defaultManager] removeItemAtURL:peersDir error:NULL];
         SNWait(30, ^BOOL { return !notes.syncing; });
         /* A smart folder from its form: every note tagged #work. */
         SNSmartFilter *workTagged = [[SNSmartFilter alloc] init];

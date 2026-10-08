@@ -1,8 +1,6 @@
 #import "SNPeersWindow.h"
 #import "SNWindowController.h"
 
-NSString * const SNServePeersDefaultsKey = @"SNServePeers";
-
 @implementation SNPeersWindow
 
 - (instancetype)initWithPeers:(SNPeers *)peers {

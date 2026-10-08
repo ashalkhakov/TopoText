@@ -5,6 +5,7 @@
 
 NSNotificationName const SNPeersDidChangeNotification = @"SNPeersDidChange";
 const NSUInteger SNPeersPort = 8642;
+NSString * const SNServePeersDefaultsKey = @"SNServePeers";
 
 /* Whom a paired device syncs as here. */
 static NSString * const SNPeerSubject = @"peer";

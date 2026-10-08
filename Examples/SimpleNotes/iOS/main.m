@@ -33,7 +33,11 @@
     }
     if (SNSelfTestRoot) _notes.serviceRoot = SNSelfTestRoot;
     else _notes.syncInterval = 30;
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[SNFoldersViewController alloc] initWithNotes:_notes]];
+    SNFoldersViewController *folders = [[SNFoldersViewController alloc] initWithNotes:_notes];
+    folders.peersDirectory = [store.URLByDeletingLastPathComponent URLByAppendingPathComponent:@"Peers" isDirectory:YES];
+    /* Served again if it was (while the app is open). */
+    if (!SNSelfTestRoot && [[NSUserDefaults standardUserDefaults] boolForKey:SNServePeersDefaultsKey]) [[folders peers] startServing:NULL];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:folders];
     nav.navigationBar.prefersLargeTitles = YES;
     _window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     _window.rootViewController = nav;

@@ -1,4 +1,5 @@
 #import "SNiOSControllers.h"
+#import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
@@ -65,6 +66,7 @@ static NSString *SNDaysLeftText(SNNote *note) {
     NSArray<NSString *> *_tags;
     /* The server being signed in to, until it is (then the notes'). */
     SNSignIn *_signIn;
+    SNPeers *_peers;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -91,8 +93,11 @@ static NSString *SNDaysLeftText(SNNote *note) {
             [self newSmartFolder:nil];
         }] ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"]
-                                                                             style:UIBarButtonItemStylePlain target:self action:@selector(server:)];
+    self.navigationItem.leftBarButtonItems = @[
+        [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
+                                        target:self action:@selector(server:)],
+        [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"antenna.radiowaves.left.and.right"] style:UIBarButtonItemStylePlain
+                                        target:self action:@selector(showDevicesNearby:)] ];
     SNAddRefresh(self, @selector(refresh:));
     [self reload];
 }
@@ -158,6 +163,25 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)smartFolderViewControllerDidCancel:(SNSmartFolderViewController *)editor {
     [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark devices nearby
+
+- (SNPeers *)peers {
+    if (_peers || !_peersDirectory) return _peers;
+    NSError *error = nil;
+    _peers = [[SNPeers alloc] initWithNotes:_notes directory:_peersDirectory error:&error];
+    _peers.deviceName = [UIDevice currentDevice].name;
+    if (!_peers) SNTell(self, @"Devices nearby cannot be synced with.", error.localizedDescription ?: @"");
+    else if (_notes.serverRemote && !_peers.hasToken) [_peers fetchToken];
+    return _peers;
+}
+
+- (IBAction)showDevicesNearby:(id)sender {
+    SNPeers *peers = [self peers];
+    if (!peers) return;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[SNPeersViewController alloc] initWithPeers:peers]];
+    [self presentViewController:nav animated:YES completion:nil];
 }
 
 - (void)server:(id)sender {

@@ -283,7 +283,7 @@ def simplenotes(topotext_ids):
                                            'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
                                            'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
-    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNSecretStore.m',
+    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNSecretStore.m',
                                      'SNEditorViewController.xib', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
     icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
@@ -325,7 +325,7 @@ def simplenotes(topotext_ids):
                                                                       appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')
     targets.append(('SimpleNotes', tid, 'SimpleNotes.app'))
 
-    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNUndoTextView.m', 'SNSecretStore.m']) + common,
+    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNPeersViewController.m', 'SNUndoTextView.m', 'SNSecretStore.m']) + common,
                      sources_of(ios, ['SNEditorViewController.xib']), ios['SimpleNotes-iOS.xcconfig'])
     tid, ios_product = native_target(p, 'SimpleNotes-iOS', 'com.apple.product-type.application', 'SimpleNotes-iOS', '.app', ios_phases,
                                      deps('SimpleNotes-iOS'), config_list(p, 'SimpleNotes-iOS', {}, {}, ios['SimpleNotes-iOS.xcconfig'],

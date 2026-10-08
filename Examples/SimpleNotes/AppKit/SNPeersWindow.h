@@ -8,10 +8,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// Whether the notes are served to devices nearby (kept: served again at
-// the next launch).
-FOUNDATION_EXPORT NSString * const SNServePeersDefaultsKey;   // @"SNServePeers"
-
 @interface SNPeersWindow : NSWindowController <SNPeersDelegate, NSTableViewDataSource, NSTableViewDelegate>
 @property (nonatomic, strong) IBOutlet NSButton *serveButton;
 @property (nonatomic, strong) IBOutlet NSTextField *servingLabel;

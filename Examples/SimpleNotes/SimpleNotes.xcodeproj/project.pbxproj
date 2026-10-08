@@ -489,6 +489,10 @@
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
 		};
+		F805AB3AE8BCCEE4EF1C9A0E /* SNPeersViewController.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = A498AC792A7B7675377DED03;
+		};
 		F8B436EFF3F013351B5AC588 /* OTelKit.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = F6D896F11584BB5C77EEEA7A;
@@ -1141,6 +1145,13 @@
 			sourceTree = "<group>";
 			name = SNCheck.m;
 		};
+		853198F19D87AB918149E201 /* SNPeersViewController.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/SNPeersViewController.h;
+			sourceTree = "<group>";
+			name = SNPeersViewController.h;
+		};
 		93905B50397F393A04D89B2C /* MainMenu.xib */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = file.xib;
@@ -1217,6 +1228,13 @@
 			path = "AppKit/SimpleNotes-macOS.xcconfig";
 			sourceTree = "<group>";
 			name = "SimpleNotes-macOS.xcconfig";
+		};
+		A498AC792A7B7675377DED03 /* SNPeersViewController.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNPeersViewController.m;
+			sourceTree = "<group>";
+			name = SNPeersViewController.m;
 		};
 		A6AD243562BFE2DA0E510338 /* SNNotes.h */ = {
 			isa = PBXFileReference;
@@ -1569,6 +1587,8 @@
 				6E9D5B559DEB6B7E294A4AB3,
 				0892E92D83242A6457DEFF1A,
 				054A76FC40094ADDD3CBC934,
+				853198F19D87AB918149E201,
+				A498AC792A7B7675377DED03,
 				036F46B4B4BE3204D3B8A566,
 				E24E63BBA2A66A746F957E15,
 				60B496EE8C7BBF49E296082F,
@@ -1829,6 +1849,7 @@
 				7A872943A4DF7167C961B66A,
 				72A18D153A49CB051B239C79,
 				57C340E00E089F2758BECFEA,
+				F805AB3AE8BCCEE4EF1C9A0E,
 				330A0C62A452B44EBD481FEA,
 				7E28E0CE996D7FC9B8BE562B,
 				62FD998ECE6FA8C402E5CE81,

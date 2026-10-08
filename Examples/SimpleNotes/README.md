@@ -531,9 +531,10 @@ stays where the item was.
 
 ## Devices nearby
 
-Sync › Devices Nearby… (on the desktop) syncs your notes directly with
-your other devices on the same network, without the server
-(ODataSync's peer sync).
+Sync › Devices Nearby… on the desktop, and the antenna button over the
+folder list on iOS, sync your notes directly with your other devices on
+the same network, without the server (ODataSync's peer sync). On iOS
+the notes are served while SimpleNotes is open.
 
 - **Serve my notes to devices nearby** makes this computer one the others
   can reach. It's advertised over Bonjour (Avahi on Linux), served over TLS,
@@ -547,7 +548,6 @@ your other devices on the same network, without the server
 
 ## Not yet
 
-- **Devices nearby on iOS.** The iOS app syncs through the server only.
 - **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
   the version every device has seen. SimpleNotes doesn't track that yet; the
   server could, once devices send deltas rather than whole notes.
