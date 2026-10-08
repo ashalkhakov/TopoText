@@ -92,7 +92,8 @@ ENV LD_LIBRARY_PATH=/opt/gnustep/lib:/opt/gnustep/Local/Library/Libraries:/opt/g
     HOME=/data TZ=UTC \
     SN_PORT=8080 SN_LOCALHOST=NO \
     SN_STORE_URL=/data/notes.sqlite \
-    SN_ACCESS_LOG=json
+    SN_ACCESS_LOG=json \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 USER 10001:10001
 WORKDIR /data
 VOLUME /data

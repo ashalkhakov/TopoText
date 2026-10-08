@@ -9,7 +9,10 @@
 #   * FreeCoreData's framework bundle, which gnustep-base looks for;
 #   * glibc's UTF-16 and UTF-32 converters (gnustep-base's strings use them
 #     through iconv: a character past 16 bits, an emoji, needs them);
-#   * gnustep-base's resources, the UTC time zone, and a user to run as.
+#   * gnustep-base's resources, the UTC time zone, and a user to run as;
+#   * the CA certificates, which every HTTPS request the server makes needs
+#     (an identity provider's discovery document and keys: without them
+#     each signed-in request is answered 503).
 #
 # Debug information is stripped, symbol tables kept: Objective-C methods are
 # named only there, and a crash's backtrace is worth them.
@@ -66,6 +69,11 @@ cp -a "$gconv/gconv-modules" "$gconv/UTF-16.so" "$gconv/UTF-32.so" "$gconv/UNICO
 base=$(find /opt/gnustep -path '*Libraries/gnustep-base' -type d | head -n 1)
 [ -z "$base" ] || cp --parents -a "$base" "$root/"
 [ ! -d /opt/gnustep/etc ] || cp --parents -a /opt/gnustep/etc "$root/"
+
+bundle=/etc/ssl/certs/ca-certificates.crt
+[ -s "$bundle" ] || { echo "no CA certificates at $bundle (ca-certificates)" >&2; exit 1; }
+mkdir -p "$root/etc/ssl/certs"
+cp -L "$bundle" "$root$bundle"
 
 mkdir -p "$root/usr/share/zoneinfo/Etc"
 cp -a /usr/share/zoneinfo/UTC "$root/usr/share/zoneinfo/"
