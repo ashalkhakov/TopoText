@@ -10,11 +10,7 @@ static NSString *SNOwnerOf(ODataRequest *request) {
 }
 
 - (NSPredicate *)predicateForVisibleObjectsInRequest:(ODataRequest *)request {
-    /* Made by hand: GNUstep's -predicateWithFormat: raises for a nil
-       argument (it gathers them in an array), as no one signed in is. */
-    NSPredicate *mine = [NSComparisonPredicate predicateWithLeftExpression:[NSExpression expressionForKeyPath:SNOwner]
-                                                           rightExpression:[NSExpression expressionForConstantValue:SNOwnerOf(request)]
-                                                                  modifier:NSDirectPredicateModifier type:NSEqualToPredicateOperatorType options:0];
+    NSPredicate *mine = [NSPredicate predicateWithFormat:@"%K == %@", SNOwner, SNOwnerOf(request)];
     NSPredicate *theirs = [super predicateForVisibleObjectsInRequest:request];
     return theirs ? [NSCompoundPredicate andPredicateWithSubpredicates:@[ theirs, mine ]] : mine;
 }
