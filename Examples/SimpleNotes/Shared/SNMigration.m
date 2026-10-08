@@ -17,6 +17,22 @@ static NSArray<NSString *> *SNStoreFiles(NSURL *url) {
     return @[ url.path, [url.path stringByAppendingString:@"-wal"], [url.path stringByAppendingString:@"-shm"] ];
 }
 
+/* A version's model as the store was made: with the bookkeeping its users
+   add, less what the bookkeeping has gained since the store was made (an
+   entity the store has none of: ODataSync's ODSMergeSeen, say), which the
+   migration then adds. */
+static NSManagedObjectModel *SNVersionAsStored(NSManagedObjectModel *version, Class<SNBookkeeper> bookkeeper, NSDictionary *metadata) {
+    NSSet *own = [NSSet setWithArray:[version.entities valueForKey:@"name"]];
+    [bookkeeper addBookkeepingToModel:version configuration:nil];
+    NSDictionary *hashes = metadata[NSStoreModelVersionHashesKey];
+    if (![hashes isKindOfClass:[NSDictionary class]]) return version;
+    NSMutableArray *kept = [NSMutableArray array];
+    for (NSEntityDescription *entity in version.entities)
+        if ([own containsObject:entity.name] || hashes[entity.name]) [kept addObject:entity];
+    if (kept.count != version.entities.count) version.entities = kept;
+    return version;
+}
+
 BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error) {
     if (![[NSFileManager defaultManager] fileExistsAtPath:storeURL.path]) return YES;
     NSDictionary *options = @{ NSPersistentHistoryTrackingKey: @YES };
@@ -34,8 +50,8 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
 
     NSManagedObjectModel *source = nil;
     for (NSManagedObjectModel *version in SNModelVersions(momdURL)) {
-        [bookkeeper addBookkeepingToModel:version configuration:nil];
-        if ([version isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = version;
+        NSManagedObjectModel *stored = SNVersionAsStored(version, bookkeeper, metadata);
+        if ([stored isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = stored;
     }
     if (!source) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreIncompatibleVersionHashError

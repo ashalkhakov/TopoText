@@ -13,7 +13,7 @@ the service or directly between peers.
 | Library | What it is |
 |---|---|
 | `TopoText` | The text: edits, attributes, positions, merging, deltas, the wire format. Foundation only. |
-| `TopoTextSync` | Its part in an ODataSync store: a conflict resolver that merges texts, and `NSManagedObject` helpers. |
+| `TopoTextSync` | Its part in an ODataSync store: a merger that moves texts as deltas (and a conflict resolver that merges whole states), and `NSManagedObject` helpers. |
 
 [SimpleNotes](Examples/SimpleNotes/README.md) is a small Apple Notes built on
 both. It runs on macOS, on GNUstep and on iOS, keeps every note on the
@@ -153,6 +153,29 @@ for (TTEdit *edit in [note tt_mergeKey:@"bodyText" intoText:text])
   [edit applyToAttributedString:textView.textStorage];
 ```
 
+**As a merged attribute** (ODataSync's, `docs/offline-sync.md` section 14 in
+ODataKit), the text moves as deltas instead of whole states, and what every
+device has seen deleted is collected:
+
+```objc
+//   bodyText   Binary   userInfo: ODataSync.merge = TopoText, TopoText.text = YES, TopoText.string = body
+
+[engine setMerger:[[TTSyncMerger alloc] init] forName:TTSyncMergerName];   // on each device
+[sync.engine setMerger:[[TTSyncMerger alloc] init] forName:TTSyncMergerName];  // at the service (ODataSyncService)
+```
+
+A row then goes up and comes down without its text. After the row, one
+`MergeAttributes` call sends each changed note's version and gets what the
+device lacks, and a second sends what the service lacks. The service keeps
+which version each device has seen, and once all have seen a deletion, the
+service and the devices collect its tombstones
+(`collectTombstonesSeenBy:`). After a merge, the merger sets the plain-text
+copy (`TopoText.string`) again; a subclass can set more (SimpleNotes sets the
+title). A service without merged attributes (an older one) is synced with as
+before, through the resolver below.
+
+**As a conflict resolver**, over whole states:
+
 When versions meet, ODataSync applies a version that already includes the
 other side's as it is. Only edits made without knowing of each other reach
 the resolver. The resolver merges every TopoText attribute and its plain
@@ -225,7 +248,7 @@ SimpleNotes' README, "Releases".
 | `Sources/TopoText/TTCoding.m` | The wire format: varints, WTF-8 text, attribute values, payloads, versions |
 | `Sources/TopoText/TTTable.m` | Tables that merge: row and column orders, a TopoText per cell |
 | `Sources/TopoText/TTInternal.h` | Runs, registers, payloads, shared by both |
-| `Sources/TopoTextSync/` | `TTSyncResolver`, `NSManagedObject (TopoText)` |
+| `Sources/TopoTextSync/` | `TTSyncMerger`, `TTSyncResolver`, `NSManagedObject (TopoText)` |
 | `Tests/` | Unit tests, the convergence fuzz, ODataSync end to end |
 | `Examples/SimpleNotes/` | The notes app and its server |
 | `Scripts/xcodeproj.py` | The Xcode projects and workspace, written |
@@ -240,9 +263,6 @@ still reads format 1, so a text stored before is read and written anew.
 
 ## Not yet
 
-- **Deltas over the wire.** ODataSync sends the whole state of a changed note.
-  Exchanging `-deltaSinceVersion:` instead would need an OData action of its
-  own, or a peer route.
 - **Every operation is O(runs).** That is fine for notes: in a worst-case
   document of 20k one-character runs, an edit takes 15 µs, and merging 2000
   concurrent edits takes 0.16 s. A book-length text would want a tree.

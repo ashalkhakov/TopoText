@@ -40,6 +40,7 @@
                                                 options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
 }
 
 - (void)tearDown {
@@ -169,6 +170,33 @@
     [self sync:b];
     [self sync:a];
     XCTAssertEqualObjects([self onlyNote:a].body, @"zero one two three");
+}
+
+/* The text moves as deltas (a merged attribute): typed and deleted on two
+   devices, the same everywhere, its title too; once both have seen the
+   deletion, its tombstones are collected, at the server and on them. */
+- (void)testTheTextMovesAsDeltasAndDeletionsAreCollected {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"Plans\nbuy milk and eggs" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t deleteCharactersInRange:NSMakeRange(14, 9)]; }];  /* " and eggs" */
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@"Weekend " atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [self sync:a];
+    for (SNNotes *d in @[ a, b ]) {
+        XCTAssertEqualObjects([self onlyNote:d].body, @"Weekend Plans\nbuy milk");
+        XCTAssertEqualObjects([self onlyNote:d].title, @"Weekend Plans");
+    }
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    c.persistentStoreCoordinator = _server;
+    NSManagedObject *atServer = [[c executeFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteEntity] error:NULL] firstObject];
+    XCTAssertEqualObjects([atServer valueForKey:@"body"], @"Weekend Plans\nbuy milk", @"the server's plain copy, set again");
+    XCTAssertEqualObjects([atServer valueForKey:@"title"], @"Weekend Plans");
+    TopoText *serverText = [TopoText textWithData:[atServer valueForKey:@"bodyText"] replica:0 error:NULL];
+    XCTAssertEqual(serverText.tombstoneCount, 0u, @"both devices saw the deletion: collected");
+    XCTAssertEqual([self onlyNote:a].text.tombstoneCount, 0u, @"and on the device");
 }
 
 - (void)testAFolderDeletedSendsItsNotesToRecentlyDeleted {
@@ -687,6 +715,7 @@
     _service.allowsAnonymousRequests = YES;   /* as the server's AllowAnonymous */
     SNServeNotebookPerUser(_service);
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
     return key;
 }
 

@@ -24,6 +24,10 @@
 			isa = PBXBuildFile;
 			fileRef = 1662602902F46AA2F6704BFD;
 		};
+		37B83C382772C420B7845F7D /* TTSyncMerger.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 2EE2740DC254B7BD3665216B;
+		};
 		4FDA7364E48D4FAAABE03EA0 /* ODataKit.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 347C854B35A734E70F2656EA;
@@ -125,6 +129,13 @@
 			path = Sources/TopoText/include/TopoText/TopoText.h;
 			sourceTree = "<group>";
 			name = TopoText.h;
+		};
+		2EE2740DC254B7BD3665216B /* TTSyncMerger.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Sources/TopoTextSync/TTSyncMerger.m;
+			sourceTree = "<group>";
+			name = TTSyncMerger.m;
 		};
 		2F53ECBD97F866E69A41DA12 /* TopoText.m */ = {
 			isa = PBXFileReference;
@@ -235,6 +246,7 @@
 			isa = PBXGroup;
 			children = (
 				20572AA6A11E182B835B0476,
+				2EE2740DC254B7BD3665216B,
 				0F0021534A3E598E7E0C9C22,
 			);
 			sourceTree = "<group>";
@@ -416,6 +428,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				94EB7AB6D891AF9CCF722377,
+				37B83C382772C420B7845F7D,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

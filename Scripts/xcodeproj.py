@@ -212,7 +212,7 @@ def topotext():
     odk = Remote(p, 'ODataKit', '../ODataKit/ODataKit.xcodeproj', {k: ODATAKIT[k] for k in ('ODataKit', 'ODataSync')})
     configs = [file_ref(p, 'Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
     tt = {f: file_ref(p, 'Sources/TopoText/' + f) for f in ('TopoText.m', 'TTCoding.m', 'TTTable.m', 'TTInternal.h', 'include/TopoText/TopoText.h')}
-    sy = {f: file_ref(p, 'Sources/TopoTextSync/' + f) for f in ('TTSyncResolver.m', 'include/TopoTextSync/TopoTextSync.h')}
+    sy = {f: file_ref(p, 'Sources/TopoTextSync/' + f) for f in ('TTSyncResolver.m', 'TTSyncMerger.m', 'include/TopoTextSync/TopoTextSync.h')}
     for k in tt:
         p.objects[tt[k]]['name'] = os.path.basename(k)
     for k in sy:
@@ -236,7 +236,7 @@ def topotext():
     # TopoTextSync
     hdr = phase(p, 'TopoTextSync', 'PBXHeadersBuildPhase', 'Headers',
                 [build_file(p, 'TopoTextSync', 'Headers', sy['include/TopoTextSync/TopoTextSync.h'], 'TopoTextSync.h', {'ATTRIBUTES': ['Public']})])
-    src = phase(p, 'TopoTextSync', 'PBXSourcesBuildPhase', 'Sources', [build_file(p, 'TopoTextSync', 'Sources', sy['TTSyncResolver.m'], 'TTSyncResolver.m')])
+    src = phase(p, 'TopoTextSync', 'PBXSourcesBuildPhase', 'Sources', [build_file(p, 'TopoTextSync', 'Sources', sy[f], f) for f in ('TTSyncResolver.m', 'TTSyncMerger.m')])
     fw = phase(p, 'TopoTextSync', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'TopoTextSync', 'Frameworks', topotext_product, 'TopoText.framework')] +
                [build_file(p, 'TopoTextSync', 'Frameworks', odk.products[k], k + '.framework') for k in ('ODataKit', 'ODataSync')])

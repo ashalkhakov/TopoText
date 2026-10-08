@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreData/CoreData.h>
 #import <ODataSync/ODataSyncEngine.h>
+#import <ODataSync/ODataSyncMerging.h>
 #import <TopoText/TopoText.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -43,6 +44,25 @@ FOUNDATION_EXPORT NSString * const TTSyncStringKey; /* @"TopoText.string": the S
 + (NSDictionary<NSString *, NSString *> *)textAttributesOfEntity:(NSEntityDescription *)entity;
 /* Two states merged: either nil (or NSNull, or not TopoText data) is none. */
 + (nullable TopoText *)mergeState:(nullable id)state withState:(nullable id)other;
+@end
+
+/* TopoText as a merged attribute (ODataSync's, docs/offline-sync.md 14 in
+   ODataKit): the text's deltas move, not its state, and what every copy has
+   seen deleted is collected. Declared on the Binary attribute, and
+   registered on each engine (the device's, the service's):
+
+     bodyText   Binary   ODataSync.merge  TopoText
+
+     [engine setMerger:[[TTSyncMerger alloc] init] forName:TTSyncMergerName];
+
+   It works on states and deltas as TopoText writes them (-data,
+   -deltaSinceVersion:); versions are TTVersion's data. */
+FOUNDATION_EXPORT NSString * const TTSyncMergerName; /* @"TopoText" */
+
+@interface TTSyncMerger : NSObject <ODataSyncMerging>
+/* After a merge: the attribute's plain-text copy (TopoText.string) set
+   again. A subclass sets more of what is derived from the text. */
+- (void)mergedAttribute:(NSAttributeDescription *)attribute ofObject:(NSManagedObject *)object;
 @end
 
 @interface NSManagedObject (TopoText)

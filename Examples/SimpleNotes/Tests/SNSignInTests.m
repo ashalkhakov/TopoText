@@ -139,6 +139,7 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     _service.allowsAnonymousMetadata = YES;
     SNServeNotebookPerUser(_service);
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
 }
 
 - (void)tearDown {

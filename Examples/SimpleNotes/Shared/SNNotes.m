@@ -173,6 +173,8 @@ NSString *SNDateText(NSDate *date) {
     _five = [folderEntity.attributesByName objectForKey:@"filter"] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
     _engine.resolver = [[SNResolver alloc] init];
+    /* The note's text moves as deltas (a merged attribute). */
+    SNRegisterMergers(_engine);
     _editors = [NSHashTable weakObjectsHashTable];
     _status = @"Not synced yet.";
     /* Written by others on this store (a peer, through the peer server):

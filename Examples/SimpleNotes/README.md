@@ -11,7 +11,10 @@ server, `simplenotes-server`, which serves them over OData.
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
 and [ODataSync](https://github.com/ashalkhakov/ODataKit/tree/master/Source/ODataSync)
-merges it through `TTSyncResolver`. The note is not settled for one side.
+moves it as a merged attribute: only what the other side lacks goes over the
+wire, and text deleted on every device is eventually forgotten (its
+tombstones collected), so a note doesn't grow for ever. The note is not
+settled for one side.
 
 | The AppKit app, on GNUstep (the Eau theme) | On iOS |
 |---|---|
@@ -545,9 +548,3 @@ the notes are served while SimpleNotes is open.
   shares no server with this one: Show Pairing Code on one, Pair With
   Code… on the other (the code is good once, for two minutes).
 - Edits made apart merge as they do through the server.
-
-## Not yet
-
-- **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
-  the version every device has seen. SimpleNotes doesn't track that yet; the
-  server could, once devices send deltas rather than whole notes.

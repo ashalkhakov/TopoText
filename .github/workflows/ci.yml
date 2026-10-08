@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: 2ab40da93163805aa77057f05b0336fc230b23c0
+  ODATAKIT_REF: e3962cd392d8e4e47d7a03bc8533d10713f3bb00
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################

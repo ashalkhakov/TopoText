@@ -63,6 +63,15 @@ static inline BOOL TTIdGreater(uint64_t c1, TTReplica r1, uint64_t c2, TTReplica
         if ([other->_clocks[r] unsignedLongLongValue] > [m[r] unsignedLongLongValue]) m[r] = other->_clocks[r];
     return [[TTVersion alloc] initWithClocks:m];
 }
+- (TTVersion *)versionByMeetingVersion:(TTVersion *)other {
+    NSMutableDictionary *m = [NSMutableDictionary dictionary];
+    for (NSNumber *r in _clocks) {
+        NSNumber *theirs = other->_clocks[r];
+        if (!theirs) continue;
+        m[r] = [theirs unsignedLongLongValue] < [_clocks[r] unsignedLongLongValue] ? theirs : _clocks[r];
+    }
+    return [[TTVersion alloc] initWithClocks:m];
+}
 - (BOOL)isEqual:(id)o { return [o isKindOfClass:[TTVersion class]] && [((TTVersion *)o)->_clocks isEqualToDictionary:_clocks]; }
 - (NSUInteger)hash { return _clocks.count; }
 - (id)copyWithZone:(NSZone *)zone { return self; }

@@ -234,4 +234,43 @@ static NSManagedObjectModel *TTNotesModel(void) {
     XCTAssertEqualObjects(r2.values[@"body"], @"xsharedy");
 }
 
+/* The merger ODataSync moves deltas with: what a copy lacks and nothing
+   more, both ways; and what both copies have seen deleted collected. */
+- (void)testTheMergerMovesDeltasAndCollects {
+    TTSyncMerger *merger = [[TTSyncMerger alloc] init];
+    TopoText *a = [TopoText textWithReplica:1];
+    [a insertString:@"hello world" atIndex:0 attributes:nil];
+    NSData *atA = a.data;
+    /* A copy with nothing gets it whole. */
+    NSData *atB = [merger stateByMerging:[merger deltaOfState:atA sinceVersion:nil] intoState:nil error:NULL];
+    XCTAssertEqualObjects([TopoText textWithData:atB replica:2 error:NULL].string, @"hello world");
+    XCTAssertEqual([merger deltaOfState:atA sinceVersion:[merger versionOfState:atB]].length, 0u, @"nothing it lacks: an empty delta");
+
+    /* Apart: a deletes " world" (at the end: nothing is placed by it), b
+       adds "Oh, " before it all. */
+    TopoText *ta = [TopoText textWithData:atA replica:1 error:NULL], *tb = [TopoText textWithData:atB replica:2 error:NULL];
+    [ta deleteCharactersInRange:NSMakeRange(5, 6)];
+    [tb insertString:@"Oh, " atIndex:0 attributes:nil];
+    atA = ta.data;
+    atB = tb.data;
+    NSData *toB = [merger deltaOfState:atA sinceVersion:[merger versionOfState:atB]];
+    NSData *toA = [merger deltaOfState:atB sinceVersion:[merger versionOfState:atA]];
+    XCTAssertLessThan(toB.length, atA.length, @"a delta, not the state");
+    atA = [merger stateByMerging:toA intoState:atA error:NULL];
+    atB = [merger stateByMerging:toB intoState:atB error:NULL];
+    XCTAssertEqualObjects([TopoText textWithData:atA replica:1 error:NULL].string, @"Oh, hello");
+    XCTAssertEqualObjects([TopoText textWithData:atB replica:2 error:NULL].string, @"Oh, hello");
+
+    /* Both have seen " world" deleted: it goes, and the text stays. */
+    NSData *seen = [merger versionMeeting:[merger versionOfState:atA] andVersion:[merger versionOfState:atB]];
+    NSData *collected = [merger stateByCollecting:atA seenBy:seen];
+    TopoText *after = [TopoText textWithData:collected replica:1 error:NULL];
+    XCTAssertEqualObjects(after.string, @"Oh, hello");
+    XCTAssertLessThan(after.tombstoneCount, [TopoText textWithData:atA replica:1 error:NULL].tombstoneCount);
+    XCTAssertEqualObjects([merger stateByCollecting:collected seenBy:seen], collected, @"nothing more to collect: the same state");
+    NSError *error = nil;
+    XCTAssertNil([merger stateByMerging:[@"not text" dataUsingEncoding:NSUTF8StringEncoding] intoState:atA error:&error]);
+    XCTAssertNotNil(error);
+}
+
 @end

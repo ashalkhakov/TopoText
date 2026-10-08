@@ -25,6 +25,7 @@
 
 #pragma once
 #import <CoreData/CoreData.h>
+#import <TopoTextSync/TopoTextSync.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -43,6 +44,15 @@ FOUNDATION_EXPORT NSManagedObjectModel *_Nullable SNModel(void);
 
 // The first line of a body, trimmed: a note's title ("New Note" for none).
 FOUNDATION_EXPORT NSString *SNTitleOfBody(NSString *body);
+
+// A note's text as a merged attribute (ODataSync.merge on bodyText): its
+// deltas move, not its state. After a merge, its plain copy (body) and its
+// title set again.
+@interface SNNoteMerger : TTSyncMerger
+@end
+// SNNoteMerger registered on an engine: a device's, the server's (its
+// ODataSyncService's), before it syncs or serves.
+FOUNDATION_EXPORT void SNRegisterMergers(ODataSyncEngine *engine);
 // What a list shows under the title: the rest, on one line.
 FOUNDATION_EXPORT NSString *SNSnippetOfBody(NSString *body);
 

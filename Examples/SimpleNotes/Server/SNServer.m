@@ -180,6 +180,9 @@ static NSURL *SNURL(id value) {
         NSLog(@"%lu rows no one owned given to %@", (unsigned long)given, heir);
     }
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    /* The notes' texts, merged as deltas come (and as older devices'
+       whole states do). */
+    SNRegisterMergers(_histories.engine);
     if (peers) {
         NSURL *file = peerKey.length ? [NSURL fileURLWithPath:peerKey]
             : [NSURL fileURLWithPath:@"SimpleNotes-peer-key.json"

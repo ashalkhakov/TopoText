@@ -43,6 +43,7 @@
         return SNUpgradeBody(body, entity);
     };
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
 }
 
 - (void)tearDown {
@@ -151,6 +152,48 @@
     XCTAssertTrue(SNMigrateStore(store, _momd, [ODataSyncEngine class], &error));
     XCTAssertEqualObjects([[NSFileManager defaultManager] attributesOfItemAtPath:store.path error:NULL].fileModificationDate, before);
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[store.path stringByAppendingString:@".old"]]);
+}
+
+/* A server's store made before its bookkeeping gained an entity (ODataSync's
+   ODSMergeSeen, for merged attributes): brought up to it, its notes kept. */
+- (void)testAServerStoreFromBeforeItsBookkeepingGrewIsMigrated {
+    NSURL *store = [self temporaryStore];
+    @autoreleasepool {
+        NSManagedObjectModel *before = SNModelAt(_momd);
+        [ODataSyncService addBookkeepingToModel:before configuration:nil];
+        NSMutableArray *entities = [before.entities mutableCopy];
+        for (NSEntityDescription *e in before.entities)
+            if ([e.name isEqualToString:@"ODSMergeSeen"]) [entities removeObject:e];
+        XCTAssertLessThan(entities.count, before.entities.count, @"the bookkeeping has the new entity");
+        before.entities = entities;
+        NSPersistentStoreCoordinator *old = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:before];
+        NSError *error = nil;
+        XCTAssertNotNil([old addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:store
+                                                options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
+        NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        c.persistentStoreCoordinator = old;
+        [c performBlockAndWait:^{
+            NSManagedObject *note = [NSEntityDescription insertNewObjectForEntityForName:SNNoteEntity inManagedObjectContext:c];
+            [note setValue:@"n1" forKey:@"id"];
+            [note setValue:@"Kept" forKey:@"title"];
+            [c save:NULL];
+        }];
+        for (NSPersistentStore *s in [old.persistentStores copy]) [old removePersistentStore:s error:NULL];
+    }
+    NSError *error = nil;
+    XCTAssertTrue(SNMigrateStore(store, _momd, [ODataSyncService class], &error), @"%@", error);
+    NSManagedObjectModel *now = SNModelAt(_momd);
+    [ODataSyncService addBookkeepingToModel:now configuration:nil];
+    NSPersistentStoreCoordinator *opened = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:now];
+    XCTAssertNotNil([opened addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:store
+                                               options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    c.persistentStoreCoordinator = opened;
+    __block NSArray *titles = nil;
+    [c performBlockAndWait:^{
+        titles = [[c executeFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteEntity] error:NULL] valueForKey:@"title"];
+    }];
+    XCTAssertEqualObjects(titles, @[ @"Kept" ]);
 }
 
 @end
