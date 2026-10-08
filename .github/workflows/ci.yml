@@ -107,6 +107,24 @@ jobs:
           Examples/SimpleNotes/Tests/ios-self-test.sh "$RUNNER_TEMP/DerivedData/Build/Products/Debug/simplenotes-server" \
             "$RUNNER_TEMP/DerivedData-iOS/Build/Products/Debug-iphonesimulator/SimpleNotes.app"
 
+      # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
+      # always a build to try: unsigned, named for the commit, and kept two
+      # weeks. Signed releases are release.yml's.
+      - name: Package the apps
+        run: |
+          ditto -c -k --keepParent "$RUNNER_TEMP/DerivedData/Build/Products/Debug/SimpleNotes.app" \
+            "$RUNNER_TEMP/SimpleNotes-macOS-unsigned.zip"
+          ditto -c -k --keepParent "$RUNNER_TEMP/DerivedData-iOS/Build/Products/Debug-iphonesimulator/SimpleNotes.app" \
+            "$RUNNER_TEMP/SimpleNotes-iOS-Simulator.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-macOS-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/SimpleNotes-macOS-unsigned.zip
+            ${{ runner.temp }}/SimpleNotes-iOS-Simulator.zip
+          retention-days: 14
+
   ########################### GNUstep / Linux ###########################
   # A patched stack built by gnustep-patches, FreeCoreData as the Core Data
   # underneath, ODataKit installed into it: as ODataKit's own CI.
@@ -309,3 +327,44 @@ jobs:
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
           SN_STORE_ARGS="-StoreType MariaDB -StoreURL mysql://root:notes@127.0.0.1:3306/notes" SN_CHECK_PORT=18081 \
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+
+      # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
+      # always a build to try: named for the commit, kept two weeks. Built on
+      # this job's Ubuntu, so it needs a glibc as new; release.yml's, built on
+      # an older one, runs on more.
+      - name: Fetch linuxdeploy and the AppImage runtime
+        run: ./Scripts/install-linuxdeploy.sh
+
+      - name: Package the AppImage
+        env:
+          APP_VERSION: 0.0.0-${{ github.run_number }}-${{ github.sha }}
+        run: |
+          sudo apt-get -q -y install file desktop-file-utils fonts-liberation
+          ./Scripts/stamp-version.sh "$APP_VERSION"
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/prepare-appdir.sh
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+
+      # As release.yml's: a plain Ubuntu (this job's) with no GNUstep, the
+      # image's own server, and the app's self-test against it.
+      - name: Smoke-test the AppImage on a clean system
+        run: |
+          image=$(ls SimpleNotes-*.AppImage)
+          chmod +x "$image"
+          docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash -c '
+            export DEBIAN_FRONTEND=noninteractive APPIMAGE_EXTRACT_AND_RUN=1
+            for i in 1 2 3; do
+              apt-get update -qq && apt-get install -y -qq --fix-missing xvfb xauth ca-certificates python3 \
+                libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libgl1 libharfbuzz0b > /dev/null && break
+              sleep 10
+            done
+            rm -rf /usr/share/fonts
+            ./'"$image"' --server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &
+            for i in $(seq 1 60); do python3 -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:18090/odata/\")" 2>/dev/null && break; sleep 1; done
+            python3 Examples/SimpleNotes/Tests/seed.py http://127.0.0.1:18090/odata/ || { cat /tmp/server.log; exit 1; }
+            timeout 300 xvfb-run -a ./'"$image"' --self-test http://127.0.0.1:18090/odata/'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SimpleNotes-AppImage-${{ github.sha }}
+          path: ${{ env.SRC_PATH }}/SimpleNotes-*.AppImage
+          retention-days: 14
