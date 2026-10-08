@@ -14,6 +14,8 @@ NSURL *SNServiceRootOf(NSString *typed) {
     NSURL *_current;
     NSURL *_page;
     BOOL _showingCode;
+    /* Why the last sign-in failed, until another begins. */
+    NSString *_failure;
     /* What a sign-in learnt is waited for by: Sign In, OK. */
     BOOL _signInWhenLearnt, _okWhenLearnt;
 }
@@ -77,8 +79,10 @@ NSURL *SNServiceRootOf(NSString *typed) {
     if (server && !s) status = @"Type the server's address.";
     else if (s.kind == SNSignInNone) status = @"This server asks for no sign-in.";
     else if (s.signedIn) status = s.userName.length ? [NSString stringWithFormat:@"Signed in as %@.", s.userName] : @"Signed in.";
+    else if (s && _failure.length) status = [NSString stringWithFormat:@"Not signed in: %@", _failure];
     else if (s) status = @"Not signed in.";
     _statusLabel.stringValue = status;
+    _statusLabel.toolTip = status;
     _signInButton.enabled = s && !s.signedIn && !_showingCode;
     _signOutButton.enabled = s.signedIn && s.kind != SNSignInNone;
     for (NSView *v in @[ _codeHintLabel, _pageLabel, _codeLabel, _openPageButton, _waitingLabel ]) v.hidden = !_showingCode;
@@ -91,6 +95,7 @@ NSURL *SNServiceRootOf(NSString *typed) {
 #pragma mark signing in
 
 - (IBAction)signIn:(id)sender {
+    _failure = nil;
     SNSignIn *s = [self signInForTyped];
     if (!s) {
         NSBeep();
@@ -152,6 +157,7 @@ NSURL *SNServiceRootOf(NSString *typed) {
 
 - (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
     _showingCode = NO;
+    _failure = error.localizedDescription;
     _signInWhenLearnt = _okWhenLearnt = NO;
     [self refresh];
     NSAlert *alert = [[NSAlert alloc] init];
