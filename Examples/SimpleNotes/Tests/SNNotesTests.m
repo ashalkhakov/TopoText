@@ -865,6 +865,21 @@
     XCTAssertEqual(a.engine.issues.count + b.engine.issues.count, 0u);
 }
 
+/* A sync says how far it is: the changes being sent, of how many. */
+- (void)testASyncSaysHowFarItIs {
+    SNNotes *a = [self device];
+    [self sync:a];
+    for (NSUInteger i = 0; i < 60; i++) [a addNoteInFolder:nil];
+    NSMutableArray<NSString *> *said = [NSMutableArray array];
+    id observer = [[NSNotificationCenter defaultCenter] addObserverForName:SNNotesDidChangeNotification object:a queue:nil
+                                                                usingBlock:^(NSNotification *n) { [said addObject:n.userInfo[@"status"] ?: @""]; }];
+    [a sync];
+    [self waitUntil:^BOOL { return !a.syncing; }];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    XCTAssertTrue([said containsObject:@"Sending 60 of 60 changes…"], @"%@", said);
+    XCTAssertTrue([said.lastObject hasPrefix:@"Synced"], @"%@", said);
+}
+
 /* Devices nearby synced with by themselves (automatic): none without a
    token or a pairing; one as it is found; again a moment after a change
    here; one that refused, not again for a while; nothing once it is off. */

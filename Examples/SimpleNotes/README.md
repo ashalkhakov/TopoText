@@ -248,7 +248,9 @@ read and edited meanwhile. Imported notes are saved a few hundred at a
 time, so a large import uses little memory, appears as it goes, and what
 was imported before a Stop (or a failure) is kept. When it's done, the
 window says what happened and lists anything left out (the rest goes to
-the log). On iOS, the same shows in a sheet.
+the log). On iOS, the same shows in a sheet. The sync that sends an
+import to the server says how far it is too, in the status line:
+"Sending 3,000 of 25,000 changes…", then "Merging … notes' text…".
 
 **File > Import Notes…** reads such an export back. It also reads other
 apps' exports:

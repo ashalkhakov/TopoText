@@ -113,7 +113,7 @@ NSString *SNDateText(NSDate *date) {
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
 @end
 
-@interface SNNotes ()
+@interface SNNotes () <ODataSyncDelegate>
 - (void)forgetEditor:(SNNoteEditor *)editor;
 @end
 
@@ -125,6 +125,8 @@ NSString *SNDateText(NSDate *date) {
     BOOL _attaches;  /* the model has attachments (version 4 on) */
     BOOL _five;      /* smart folders, a folder's order, files (version 5 on) */
     BOOL _savePending;
+    /* Whom the sync running is with, in its status (nil: the server). */
+    NSString *_syncingWith;
     /* A sync asked for while one ran: what changed meanwhile, sent after. */
     BOOL _syncAgain;
     /* Saved by another context of the store's, not shown yet. */
@@ -172,6 +174,7 @@ NSString *SNDateText(NSDate *date) {
     _attaches = [model.entitiesByName objectForKey:SNAttachmentEntity] != nil;
     _five = [folderEntity.attributesByName objectForKey:@"filter"] != nil;
     _engine = [[ODataSyncEngine alloc] initWithCoordinator:_coordinator];
+    _engine.delegate = self;
     _engine.resolver = [[SNResolver alloc] init];
     /* The note's text moves as deltas (a merged attribute). */
     SNRegisterMergers(_engine);
@@ -248,6 +251,7 @@ NSString *SNDateText(NSDate *date) {
    they changed meanwhile), the editors merged, what waited saved. */
 - (void)finishSync:(BOOL)ok result:(ODataSyncResult *)result error:(NSError *)error {
     _syncing = NO;
+    _syncingWith = nil;
     for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
     for (SNNoteEditor *e in _editors.allObjects) [e flush];
     if (_savePending) [self saveNow];
@@ -266,6 +270,32 @@ NSString *SNDateText(NSDate *date) {
     if (_engine.issues.count) status = [status stringByAppendingFormat:@" %lu refused.", (unsigned long)_engine.issues.count];
     [self say:status synced:moved];
     if (again) [self sync];
+}
+
+/* How far the sync is, in its status: "Sending 3,000 of 25,000 changes…".
+   Told on the engine's thread; said on the main one, while it runs. */
+- (void)syncEngine:(ODataSyncEngine *)engine didProgress:(ODataSyncProgress *)progress {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self->_syncing) return;
+        NSString *(^count)(NSUInteger) = ^NSString *(NSUInteger n) {
+            return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
+        };
+        NSString *what = nil;
+        switch (progress.phase) {
+            case ODataSyncPhaseReceiving:
+                if (progress.completed) what = [NSString stringWithFormat:@"Receiving changes: %@ so far…", count(progress.completed)];
+                break;
+            case ODataSyncPhaseSending:
+                if (progress.total) what = [NSString stringWithFormat:@"Sending %@ of %@ changes…", count(progress.completed), count(progress.total)];
+                break;
+            case ODataSyncPhaseMerging:
+                if (progress.total) what = [NSString stringWithFormat:@"Merging %@ of %@ notes' text…", count(progress.completed), count(progress.total)];
+                break;
+        }
+        if (!what) return;
+        if (self->_syncingWith) what = [NSString stringWithFormat:@"With %@: %@", self->_syncingWith, what];
+        [self say:what synced:NO];
+    });
 }
 
 - (ODataSyncRemote *)serverRemote {
@@ -311,6 +341,7 @@ NSString *SNDateText(NSDate *date) {
     if (_syncing) return NO;
     [self prepareToSync];
     _syncing = YES;
+    _syncingWith = [name copy];
     [self say:[NSString stringWithFormat:@"Syncing with %@…", name] synced:NO];
     ODataSyncEngine *engine = _engine;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -355,6 +386,7 @@ NSString *SNDateText(NSDate *date) {
     }
     [self prepareToSync];
     _syncing = YES;
+    _syncingWith = nil;
     [self say:@"Syncing…" synced:NO];
     ODataSyncEngine *engine = _engine;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
