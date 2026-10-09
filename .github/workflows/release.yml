@@ -30,9 +30,9 @@ permissions:
 
 env:
   # ci.yml's pins: the release is built from what CI tested.
-  ODATAKIT_REF: a69d925f77d5e5d8c1a1f0e5ae73199c0cdf2f8f
-  GNUSTEP_PATCHES_REF: 239a625bcbfe90818f5ff08d4dbeb2fa47c9ff38
-  FREECOREDATA_REF: fd6ae5318162137c6dd1a4a5a8c08ca5503dac5d
+  ODATAKIT_REF: cac277d2d8f5ab60c97e6c1a817f4fe260854784
+  GNUSTEP_PATCHES_REF: 1eda55d84efa24990a54b67bbbd6e3b785fc1ba9
+  FREECOREDATA_REF: 3e15e5313fd5ec23756fc14fe7642c50c0803be0
   TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
 
 jobs:

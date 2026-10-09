@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: a69d925f77d5e5d8c1a1f0e5ae73199c0cdf2f8f
+  ODATAKIT_REF: cac277d2d8f5ab60c97e6c1a817f4fe260854784
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -160,12 +160,14 @@ jobs:
       # gnustep-patches edc2289: a nil argument for %@ compares with nil;
       # 40a2bc8: keep-nib-textfield-bezel retired, merged into Eau's dev;
       # 4593e60: Eau built at a pinned commit of dev (01be00b); 239a625:
-      # NSDictionary and NSArray read a binary property list from a file.
+      # NSDictionary and NSArray read a binary property list from a file;
+      # 1eda55d: six libs-base fixes retired, merged upstream.
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
-      # notes to another store (MoveFrom).
-      GNUSTEP_PATCHES_REF: 239a625bcbfe90818f5ff08d4dbeb2fa47c9ff38
-      FREECOREDATA_REF: fd6ae5318162137c6dd1a4a5a8c08ca5503dac5d
+      # notes to another store (MoveFrom); 338bc7b (#71): an object and its
+      # context let go of what they held (the server's memory).
+      GNUSTEP_PATCHES_REF: 1eda55d84efa24990a54b67bbbd6e3b785fc1ba9
+      FREECOREDATA_REF: 3e15e5313fd5ec23756fc14fe7642c50c0803be0
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
