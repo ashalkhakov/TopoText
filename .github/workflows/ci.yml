@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: cac277d2d8f5ab60c97e6c1a817f4fe260854784
+  ODATAKIT_REF: 4fa80f72e3882bd31a3707e15dd69068ef607590
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -165,9 +165,10 @@ jobs:
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
       # notes to another store (MoveFrom); 338bc7b (#71): an object and its
-      # context let go of what they held (the server's memory).
+      # context let go of what they held (the server's memory); eaf7072
+      # (#72): a context that related objects is let go of.
       GNUSTEP_PATCHES_REF: 1eda55d84efa24990a54b67bbbd6e3b785fc1ba9
-      FREECOREDATA_REF: 3e15e5313fd5ec23756fc14fe7642c50c0803be0
+      FREECOREDATA_REF: eaf7072e19205e209bd2be95e0f89e67b9f00bc7
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
