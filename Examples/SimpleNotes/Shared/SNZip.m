@@ -145,9 +145,13 @@ static void SNDOSOfDate(NSDate *date, uint16_t *dosDate, uint16_t *dosTime) {
 @end
 
 @implementation SNZipWriter {
-    NSMutableData *_data;
+    NSMutableData *_data;        /* in memory */
+    NSFileHandle *_file;         /* or into a file */
+    NSURL *_url;
+    uint64_t _offset;
     NSMutableData *_directory;
     uint16_t _count;
+    BOOL _failed;
 }
 
 - (instancetype)init {
@@ -158,7 +162,38 @@ static void SNDOSOfDate(NSDate *date, uint16_t *dosDate, uint16_t *dosTime) {
     return self;
 }
 
-- (void)addData:(NSData *)data atPath:(NSString *)path date:(NSDate *)date {
+- (instancetype)initWithURL:(NSURL *)url error:(NSError **)error {
+    self = [super init];
+    if (!self) return nil;
+    if (![[NSFileManager defaultManager] createFileAtPath:url.path contents:nil attributes:nil] ||
+        !(_file = [NSFileHandle fileHandleForWritingAtPath:url.path])) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+                                            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"“%@” could not be written.", url.lastPathComponent] }];
+        return nil;
+    }
+    _url = url;
+    _directory = [NSMutableData data];
+    return self;
+}
+
+/* Written out: into memory, or the file. */
+- (BOOL)put:(NSData *)bytes {
+    if (_failed) return NO;
+    if (_data) {
+        [_data appendData:bytes];
+    } else {
+        @try {
+            [_file writeData:bytes];
+        } @catch (NSException *e) {
+            _failed = YES;
+            return NO;
+        }
+    }
+    _offset += bytes.length;
+    return YES;
+}
+
+- (BOOL)addData:(NSData *)data atPath:(NSString *)path date:(NSDate *)date {
     NSData *name = [path dataUsingEncoding:NSUTF8StringEncoding];
     uint32_t crc = (uint32_t)crc32(0, data.bytes, (uInt)data.length);
     uint16_t method = 0;
@@ -183,21 +218,22 @@ static void SNDOSOfDate(NSDate *date, uint16_t *dosDate, uint16_t *dosTime) {
     }
     uint16_t dosDate, dosTime;
     SNDOSOfDate(date, &dosDate, &dosTime);
-    uint32_t offset = (uint32_t)_data.length;
+    uint32_t offset = (uint32_t)_offset;
     /* The local header, then the file. */
-    SNWrite32(_data, 0x04034b50);
-    SNWrite16(_data, 20);
-    SNWrite16(_data, 0x800);
-    SNWrite16(_data, method);
-    SNWrite16(_data, dosTime);
-    SNWrite16(_data, dosDate);
-    SNWrite32(_data, crc);
-    SNWrite32(_data, (uint32_t)body.length);
-    SNWrite32(_data, (uint32_t)data.length);
-    SNWrite16(_data, (uint16_t)name.length);
-    SNWrite16(_data, 0);
-    [_data appendData:name];
-    [_data appendData:body];
+    NSMutableData *header = [NSMutableData data];
+    SNWrite32(header, 0x04034b50);
+    SNWrite16(header, 20);
+    SNWrite16(header, 0x800);
+    SNWrite16(header, method);
+    SNWrite16(header, dosTime);
+    SNWrite16(header, dosDate);
+    SNWrite32(header, crc);
+    SNWrite32(header, (uint32_t)body.length);
+    SNWrite32(header, (uint32_t)data.length);
+    SNWrite16(header, (uint16_t)name.length);
+    SNWrite16(header, 0);
+    [header appendData:name];
+    if (![self put:header] || ![self put:body]) return NO;
     /* Its entry in the central directory. */
     SNWrite32(_directory, 0x02014b50);
     SNWrite16(_directory, 20);
@@ -218,20 +254,40 @@ static void SNDOSOfDate(NSDate *date, uint16_t *dosDate, uint16_t *dosTime) {
     SNWrite32(_directory, offset);
     [_directory appendData:name];
     _count++;
+    return YES;
 }
 
-- (NSData *)data {
-    NSMutableData *out = [_data mutableCopy];
-    [out appendData:_directory];
+/* The central directory and its end. */
+- (NSData *)end {
+    NSMutableData *out = [_directory mutableCopy];
     SNWrite32(out, 0x06054b50);
     SNWrite16(out, 0);
     SNWrite16(out, 0);
     SNWrite16(out, _count);
     SNWrite16(out, _count);
     SNWrite32(out, (uint32_t)_directory.length);
-    SNWrite32(out, (uint32_t)_data.length);
+    SNWrite32(out, (uint32_t)_offset);
     SNWrite16(out, 0);
     return out;
+}
+
+- (NSData *)data {
+    NSMutableData *out = [_data mutableCopy] ?: [NSMutableData data];
+    [out appendData:[self end]];
+    return out;
+}
+
+- (BOOL)finish:(NSError **)error {
+    BOOL ok = _file && [self put:[self end]];
+    @try {
+        [_file closeFile];
+    } @catch (NSException *e) {
+        ok = NO;
+    }
+    _file = nil;
+    if (!ok && error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteOutOfSpaceError
+                                               userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"“%@” could not be written.", _url.lastPathComponent] }];
+    return ok;
 }
 
 @end

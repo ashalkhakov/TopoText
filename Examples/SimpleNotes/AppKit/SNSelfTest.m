@@ -6,6 +6,7 @@
 #import "SNSmartFolderPanel.h"
 #import "SNSyncPanel.h"
 #import "SNPeersWindow.h"
+#import "SNTransferPanel.h"
 
 NSURL *SNSelfTestRoot;
 
@@ -340,6 +341,40 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay(moveTo.delegate == window && filled > 1 && first <= filled && added == first,
               [NSString stringWithFormat:@"Move To is filled once (%lu items; %lu added, then %lu)", (unsigned long)filled,
                                          (unsigned long)first, (unsigned long)(added - first)]);
+        /* Move Folder To (where dragging in the sidebar does not work):
+           Projects into Home, and back into Work. */
+        NSMenu *moveFolderTo = nil;
+        for (NSMenuItem *top in [NSApp mainMenu].itemArray)
+            if ((moveFolderTo = [top.submenu itemWithTag:7002].submenu)) break;
+        BOOL (^moveFolder)(NSString *, NSString *) = ^BOOL(NSString *folder, NSString *into) {
+            if (![window showFolderNamed:folder]) return NO;
+            [window menuNeedsUpdate:moveFolderTo];
+            for (NSMenuItem *item in moveFolderTo.itemArray)
+                if ([[item.title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] isEqual:into]) {
+                    [window moveFolderToFolder:item];
+                    return YES;
+                }
+            return NO;
+        };
+        SNFolder *moved = nil;
+        for (SNFolder *f in notes.folders)
+            if ([f.name isEqual:@"Projects"]) moved = f;
+        BOOL intoHome = moveFolder(@"Projects", @"Home") && [[notes parentOfFolder:moved].name isEqual:@"Home"];
+        BOOL backInWork = moveFolder(@"Projects", @"Work") && [[notes parentOfFolder:moved].name isEqual:@"Work"];
+        SNSay(moveFolderTo.delegate == window && intoHome && backInWork, @"Move Folder To moves a folder into another, and back");
+        /* Export, in its panel (TransferPanel.xib): done, and said so. */
+        NSURL *exported = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                                     [NSString stringWithFormat:@"sn-selftest-%@.zip", [NSProcessInfo processInfo].globallyUniqueString]]];
+        SNTransfer *export = [SNTransfer exportOfNotes:notes toURL:exported];
+        SNTransferPanel *transferPanel = [[SNTransferPanel alloc] initWithTransfer:export];
+        BOOL loaded = transferPanel.window && transferPanel.progressBar && transferPanel.button;
+        BOOL ran = [export runAndWait:NULL];
+        SNSay(loaded && ran && export.done == export.total && export.total > 0 && [transferPanel.button.title isEqual:@"Close"] &&
+              [transferPanel.detailField.stringValue containsString:@"exported"],
+              [NSString stringWithFormat:@"an export in its panel (%@)", export.summary]);
+        [transferPanel close];
+        [[NSFileManager defaultManager] removeItemAtURL:exported error:NULL];
+        [window showFolderNamed:@"Work Things"];
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
         SNSay([window validateMenuItem:editSmart], @"Edit Smart Folder for it");
         [notes sync];

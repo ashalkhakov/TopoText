@@ -84,7 +84,9 @@ notes; the folders in it appear under it in the sidebar.
 
 - **On the Mac and GNUstep**, **New Folder** makes the folder inside the
   folder chosen (or at the top when none is). Drag a folder onto another to
-  move it in, or onto All Notes to move it to the top.
+  move it in, or onto All Notes to move it to the top; or choose
+  **File > Move Folder To** (which also works where dragging in the
+  sidebar doesn't, as on GNUstep for now).
 - **On iOS**, swipe a folder and choose **Move**.
 - **Deleting a folder** deletes the folders in it too. All their notes go to
   Recently Deleted.
@@ -240,6 +242,14 @@ The layout:
 | Bold, italic, strikethrough | `**`, `*`, `~~` |
 | Underline | `<u>` |
 
+Both run in the background, with a window that shows how far they've got
+("Importing 1,240 of 25,000 notes…") and a Stop button; the notes can be
+read and edited meanwhile. Imported notes are saved a few hundred at a
+time, so a large import uses little memory, appears as it goes, and what
+was imported before a Stop (or a failure) is kept. When it's done, the
+window says what happened and lists anything left out (the rest goes to
+the log). On iOS, the same shows in a sheet.
+
 **File > Import Notes…** reads such an export back. It also reads other
 apps' exports:
 
@@ -259,8 +269,10 @@ What import also does:
   the export.
 - **GFM tables** become tables.
 - **Where notes go:** everything goes into a new folder named after what
-  was imported. A single Markdown file goes straight into the chosen
-  folder instead.
+  was imported. When that is a single folder (Trilium's export of one note
+  and those under it, or a zip of one folder), that folder is the one made,
+  not one more around it. A single Markdown file goes straight into the
+  chosen folder instead.
 
 ## Model versions
 

@@ -4,6 +4,7 @@
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
 #import "SNTransfer.h"
+#import "SNTransferPanel.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -48,6 +49,11 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     NSManagedObjectID *_shownFolder;
     BOOL _showsDeleted;
     NSString *_shownTag;
+    /* An import or export as it goes, and the imports waiting for it (and
+       the folder they go into). */
+    SNTransferPanel *_transferPanel;
+    NSMutableArray<NSURL *> *_imports;
+    NSManagedObjectID *_importsInto;
 }
 
 /* What a note dragged onto a folder carries, and a folder dragged into
@@ -61,6 +67,7 @@ static NSString * const SNDeletedItem = @"SNRecentlyDeleted";
 static NSString * const SNTagsItem = @"SNTags";
 /* The Move To submenu, found by its tag (MainMenu.xib). */
 static const NSInteger SNMoveToMenuTag = 7001;
+static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
     if (!(self = [super initWithWindowNibName:@"NotesWindow"])) return nil;
@@ -96,10 +103,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [_folderTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
     _collapsed = [NSMutableSet set];
     [_noteTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
-    NSMenuItem *moveTo = nil;
+    /* Move To and Move Folder To, filled as they open. */
     for (NSMenuItem *top in [NSApp mainMenu].itemArray)
-        if ((moveTo = (NSMenuItem *)[top.submenu itemWithTag:SNMoveToMenuTag])) break;
-    moveTo.submenu.delegate = self;
+        for (NSNumber *tag in @[ @(SNMoveToMenuTag), @(SNMoveFolderToMenuTag) ])
+            [top.submenu itemWithTag:tag.integerValue].submenu.delegate = self;
     [self reloadFolders];
     [self reloadNotes];
     [self showStatus:_notes.status];
@@ -430,7 +437,11 @@ static const NSInteger SNMoveToMenuTag = 7001;
    and Eau's menu bar is told of every change. */
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     if (_fillingMoveTo) return;
-    NSArray<NSArray *> *items = [self moveToItems];
+    BOOL folders = NO;
+    for (NSMenuItem *top in [NSApp mainMenu].itemArray)
+        if ([top.submenu itemWithTag:SNMoveFolderToMenuTag].submenu == menu) folders = YES;
+    NSArray<NSArray *> *items = folders ? [self moveFolderToItems] : [self moveToItems];
+    SEL action = folders ? @selector(moveFolderToFolder:) : @selector(moveNoteToFolder:);
     NSMutableArray *shown = [NSMutableArray array];
     for (NSMenuItem *item in menu.itemArray) {
         if (item.isSeparatorItem) continue;
@@ -440,13 +451,37 @@ static const NSInteger SNMoveToMenuTag = 7001;
     _fillingMoveTo = YES;
     [menu removeAllItems];
     for (NSArray *i in items) {
-        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:i[0] action:@selector(moveNoteToFolder:) keyEquivalent:@""];
+        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:i[0] action:action keyEquivalent:@""];
         item.target = self;
         if (i[1] != [NSNull null]) item.representedObject = i[1];
         if ([i[2] boolValue]) item.state = NSControlStateValueOn;
         if (i == items.firstObject && items.count > 1) [menu addItem:[NSMenuItem separatorItem]];
     }
     _fillingMoveTo = NO;
+}
+
+/* The folder chosen, into another (not itself, not one in it, not a smart
+   one) or to the top: what dragging it does, for where dragging does not
+   work (GNUstep's sidebar). */
+- (NSArray<NSArray *> *)moveFolderToItems {
+    SNFolder *folder = [self selectedFolder];
+    SNFolder *parent = folder ? [_notes parentOfFolder:folder] : nil;
+    NSMutableArray *items = [NSMutableArray array];
+    [items addObject:@[ @"Top Level", [NSNull null], @(folder && !parent) ]];
+    for (SNFolder *f in _notes.folderTree) {
+        if ([_notes isSmartFolder:f] || f == folder || (folder && [_notes folder:f isInFolder:folder])) continue;
+        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+        [items addObject:@[ [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"], f, @(parent == f) ]];
+    }
+    return items;
+}
+
+- (IBAction)moveFolderToFolder:(id)sender {
+    SNFolder *folder = [self selectedFolder];
+    if (folder && [_notes moveFolder:folder toFolder:[sender representedObject]]) {
+        [self reloadFolders];
+        [self chooseItem:folder];
+    }
 }
 
 - (IBAction)moveNoteToFolder:(id)sender {
@@ -688,31 +723,47 @@ static const NSInteger SNMoveToMenuTag = 7001;
     panel.message = @"A folder of Markdown files, a zip of one (Trilium's export, say), or Markdown files.";
     panel.prompt = @"Import";
     if ([panel runModal] != NSModalResponseOK) return;
+    if (!_imports) _imports = [NSMutableArray array];
+    [_imports addObjectsFromArray:panel.URLs];
     SNFolder *into = [_notes isSmartFolder:[self selectedFolder]] ? nil : [self selectedFolder];
-    for (NSURL *url in panel.URLs) {
-        NSError *error = nil;
-        if ([_notes importFromURL:url intoFolder:into error:&error]) continue;
-        NSAlert *alert = [[NSAlert alloc] init];
-        alert.messageText = [NSString stringWithFormat:@"“%@” was not imported.", url.lastPathComponent];
-        alert.informativeText = error.localizedDescription ?: @"";
-        [alert runModal];
-    }
+    _importsInto = into.objectID;
+    if (!_transferPanel) [self startNextImport];
+}
+
+/* One import at a time, in its panel; the next when it is closed. */
+- (void)startNextImport {
+    if (!_imports.count) return;
+    NSURL *url = _imports.firstObject;
+    [_imports removeObjectAtIndex:0];
+    SNFolder *into = _importsInto ? (SNFolder *)[_notes.context existingObjectWithID:_importsInto error:NULL] : nil;
+    [self runTransfer:[SNTransfer importIntoNotes:_notes fromURL:url folder:into]];
+}
+
+- (void)runTransfer:(SNTransfer *)transfer {
+    _transferPanel = [[SNTransferPanel alloc] initWithTransfer:transfer];
+    _transferPanel.delegate = self;
+    [_transferPanel showWindow:nil];
+    [transfer start];
+}
+
+- (void)transferPanelDidClose:(SNTransferPanel *)panel {
+    _transferPanel = nil;
     [self reloadFolders];
     [self reloadNotes];
+    [self startNextImport];
 }
 
 - (IBAction)exportAllNotes:(id)sender {
+    if (_transferPanel) {
+        [_transferPanel showWindow:nil];
+        return;
+    }
     NSSavePanel *panel = [NSSavePanel savePanel];
     panel.nameFieldStringValue = @"Notes.zip";
     panel.message = @"Every note as Markdown, in a zip (or, the name without .zip, a folder).";
     panel.prompt = @"Export";
     if ([panel runModal] != NSModalResponseOK || !panel.URL) return;
-    NSError *error = nil;
-    if ([_notes exportMarkdownToURL:panel.URL error:&error]) return;
-    NSAlert *alert = [[NSAlert alloc] init];
-    alert.messageText = @"The notes were not exported.";
-    alert.informativeText = error.localizedDescription ?: @"";
-    [alert runModal];
+    [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:panel.URL]];
 }
 
 - (IBAction)renameFolder:(id)sender {
@@ -921,6 +972,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(recoverNote:)) return [self selectedNote].deletedAt != nil;
     if (a == @selector(emptyRecentlyDeleted:)) return _notes.countOfDeletedNotes > 0;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
+    if (a == @selector(moveFolderToFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(editSmartFolder:)) return [_notes isSmartFolder:[self selectedFolder]];
     if (a == @selector(sortFolderByDefault:) || a == @selector(sortFolderByDateEdited:) || a == @selector(sortFolderByDateCreated:) ||

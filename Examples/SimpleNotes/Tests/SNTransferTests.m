@@ -39,6 +39,26 @@ static NSData *SNTinyPNG(void) {
     return url;
 }
 
+/* An import run to its end: the notes it made, in the device's context. */
+- (NSArray<SNNote *> *)import:(NSURL *)url into:(SNFolder *)folder on:(SNNotes *)device error:(NSError **)error {
+    SNTransfer *t = [SNTransfer importIntoNotes:device fromURL:url folder:folder];
+    if (![t runAndWait:error]) return nil;
+    XCTAssertEqual(t.done, t.madeNotes.count);
+    NSMutableArray *notes = [NSMutableArray array];
+    for (NSManagedObjectID *objectID in t.madeNotes) {
+        SNNote *n = (SNNote *)[device.context existingObjectWithID:objectID error:NULL];
+        if (n) {
+            [device.context refreshObject:n mergeChanges:NO];
+            [notes addObject:n];
+        }
+    }
+    return notes;
+}
+
+- (BOOL)export:(SNNotes *)device to:(NSURL *)url error:(NSError **)error {
+    return [[SNTransfer exportOfNotes:device toURL:url] runAndWait:error];
+}
+
 - (SNNotes *)device {
     NSError *error = nil;
     NSURL *store = [self temporary:@".sqlite"];
@@ -206,7 +226,7 @@ static NSData *SNTinyPNG(void) {
 
     NSURL *zip = [self temporary:@".zip"];
     NSError *error = nil;
-    XCTAssertTrue([a exportMarkdownToURL:zip error:&error], @"%@", error);
+    XCTAssertTrue([self export:a to:zip error:&error], @"%@", error);
     SNZipReader *r = [[SNZipReader alloc] initWithData:[NSData dataWithContentsOfURL:zip]];
     XCTAssertEqualObjects([NSSet setWithArray:r.paths], ([NSSet setWithArray:@[ @"Loose.md", @"Work/Projects/Roadmap.md", @"Work/Projects/_attachments/Roadmap/image.png",
                                                                                 @"Work/Projects/_attachments/Roadmap/spec (v2).pdf" ]]));
@@ -215,7 +235,7 @@ static NSData *SNTinyPNG(void) {
                                "| Name |  |\n| --- | --- |\n|  | a\\|b |\n");
 
     SNNotes *b = [self device];
-    NSArray *made = [b importFromURL:zip intoFolder:nil error:&error];
+    NSArray *made = [self import:zip into:nil on:b error:&error];
     XCTAssertEqual(made.count, 2u, @"%@", error);
     SNFolder *imported = [b foldersInFolder:nil].firstObject;
     XCTAssertEqualObjects(imported.name, zip.lastPathComponent.stringByDeletingPathExtension);
@@ -257,9 +277,11 @@ static NSData *SNTinyPNG(void) {
 
     SNNotes *d = [self device];
     NSError *error = nil;
-    NSArray<SNNote *> *made = [d importFromURL:zip intoFolder:nil error:&error];
+    NSArray<SNNote *> *made = [self import:zip into:nil on:d error:&error];
     XCTAssertEqualObjects([made valueForKey:@"title"], (@[ @"First", @"Second", @"Script", @"Journal" ]), @"%@", error);
-    SNFolder *journal = [d foldersInFolder:[d foldersInFolder:nil].firstObject].firstObject;
+    /* One note and those under it: the folder itself, not in another. */
+    XCTAssertEqual([d foldersInFolder:nil].count, 1u);
+    SNFolder *journal = [d foldersInFolder:nil].firstObject;
     XCTAssertEqualObjects(journal.name, @"Journal");
     XCTAssertEqual([d notesInFolder:journal matching:nil].count, 4u);
     SNNote *first = made[0];
@@ -281,7 +303,7 @@ static NSData *SNTinyPNG(void) {
 
     SNNotes *d = [self device];
     NSError *error = nil;
-    NSArray<SNNote *> *made = [d importFromURL:dir intoFolder:nil error:&error];
+    NSArray<SNNote *> *made = [self import:dir into:nil on:d error:&error];
     XCTAssertEqualObjects([made valueForKey:@"title"], (@[ @"Readme", @"Bread" ]), @"%@", error);
     XCTAssertEqualObjects(made[1].folder.name, @"Recipes");
     XCTAssertEqual(made[1].attachments.count, 1u);
@@ -289,10 +311,58 @@ static NSData *SNTinyPNG(void) {
 
     /* One file: straight into the folder given. */
     SNFolder *f = [d addFolderNamed:@"Here"];
-    made = [d importFromURL:[dir URLByAppendingPathComponent:@"Recipes/Bread.md"] intoFolder:f error:&error];
+    made = [self import:[dir URLByAppendingPathComponent:@"Recipes/Bread.md"] into:f on:d error:&error];
     XCTAssertEqual(made.count, 1u, @"%@", error);
     XCTAssertEqualObjects(made[0].folder, f);
     XCTAssertEqual(made[0].attachments.count, 1u);
+}
+
+- (void)testAZipIsWrittenIntoAFile {
+    NSURL *url = [self temporary:@".zip"];
+    NSError *error = nil;
+    SNZipWriter *w = [[SNZipWriter alloc] initWithURL:url error:&error];
+    XCTAssertNotNil(w, @"%@", error);
+    XCTAssertTrue([w addData:[@"one" dataUsingEncoding:NSUTF8StringEncoding] atPath:@"a.md" date:nil]);
+    XCTAssertTrue([w addData:SNTinyPNG() atPath:@"b/c.png" date:nil]);
+    XCTAssertTrue([w finish:&error], @"%@", error);
+    SNZipReader *r = [[SNZipReader alloc] initWithData:[NSData dataWithContentsOfURL:url]];
+    XCTAssertEqualObjects(r.paths, (@[ @"a.md", @"b/c.png" ]));
+    XCTAssertEqualObjects([r dataAtPath:@"b/c.png"], SNTinyPNG());
+}
+
+/* More notes than a batch: counted first, done as they go, each made. */
+- (void)testManyNotesAreImportedABatchAtATime {
+    NSURL *dir = [self temporary:@""];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm createDirectoryAtURL:[dir URLByAppendingPathComponent:@"Log"] withIntermediateDirectories:YES attributes:nil error:NULL];
+    for (NSUInteger i = 0; i < 450; i++)
+        [[[NSString stringWithFormat:@"Day %lu", (unsigned long)i] dataUsingEncoding:NSUTF8StringEncoding]
+            writeToURL:[dir URLByAppendingPathComponent:[NSString stringWithFormat:@"Log/%03lu.md", (unsigned long)i]] atomically:NO];
+    SNNotes *d = [self device];
+    SNTransfer *t = [SNTransfer importIntoNotes:d fromURL:dir folder:nil];
+    NSError *error = nil;
+    XCTAssertTrue([t runAndWait:&error], @"%@", error);
+    XCTAssertEqual(t.total, 450u);
+    XCTAssertEqual(t.done, 450u);
+    XCTAssertEqual(t.madeNotes.count, 450u);
+    XCTAssertEqual([d countOfNotesInFolder:nil], 450u);
+    XCTAssertTrue([t.summary hasPrefix:@"450 notes imported"], @"%@", t.summary);
+
+    /* Stopped: what was made stays. */
+    SNTransfer *stopped = [SNTransfer importIntoNotes:d fromURL:dir folder:nil];
+    [stopped cancel];
+    XCTAssertTrue([stopped runAndWait:&error], @"%@", error);
+    XCTAssertTrue(stopped.cancelled);
+    XCTAssertEqual(stopped.done, 1u);
+    XCTAssertEqual([d countOfNotesInFolder:nil], 451u);
+
+    /* And out again, every one. */
+    NSURL *zip = [self temporary:@".zip"];
+    SNTransfer *export = [SNTransfer exportOfNotes:d toURL:zip];
+    XCTAssertTrue([export runAndWait:&error], @"%@", error);
+    XCTAssertEqual(export.total, 451u);
+    XCTAssertEqual(export.done, 451u);
+    XCTAssertEqual([[SNZipReader alloc] initWithData:[NSData dataWithContentsOfURL:zip]].paths.count, 451u);
 }
 
 @end

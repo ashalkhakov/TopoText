@@ -1,11 +1,15 @@
 /* AppKit before Core Data, as SNRichText.m: gnustep-gui's headers clash otherwise. */
 #import "SNRichText.h"
 #import "SNTransfer.h"
+#import "SNModel.h"
 #import "SNMarkdown.h"
 #import "SNZip.h"
 
 static NSString * const SNTransferErrorDomain = @"SNTransfer";
 static NSString * const SNAttachmentsFolder = @"_attachments";
+/* Notes made (or written) between two saves of the transfer's context,
+   which is emptied after each: what stays in memory. */
+static const NSUInteger SNTransferBatch = 200;
 
 static NSError *SNTransferError(NSString *message) {
     return [NSError errorWithDomain:SNTransferErrorDomain code:1 userInfo:@{ NSLocalizedDescriptionKey: message }];
@@ -43,71 +47,25 @@ static NSString *SNJoin(NSString *dir, NSString *name) {
     return dir.length ? [dir stringByAppendingFormat:@"/%@", name] : name;
 }
 
-#pragma mark - Export
-
-/* What export writes: files by path, and when each was last edited. */
-@interface SNExport : NSObject
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSData *> *files;
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDate *> *dates;
-@property (nonatomic, strong) NSMutableArray<NSString *> *order;
-@end
-
-@implementation SNExport
-- (instancetype)init {
-    self = [super init];
-    _files = [NSMutableDictionary dictionary];
-    _dates = [NSMutableDictionary dictionary];
-    _order = [NSMutableArray array];
-    return self;
-}
-- (void)write:(NSData *)data at:(NSString *)path date:(NSDate *)date {
-    if (!_files[path]) [_order addObject:path];
-    _files[path] = data;
-    if (date) _dates[path] = date;
-}
-@end
-
-/* A note's attachments, as export writes them. */
-@interface SNNoteExporter : NSObject <SNMarkdownExporting>
-@property (nonatomic, weak) SNNotes *notes;
-@property (nonatomic, weak) SNExport *export;
-@property (nonatomic, copy) NSString *dir;    /* the note's folder's path */
-@property (nonatomic, copy) NSString *stem;   /* the note's file's name, less .md */
-@property (nonatomic, strong) NSDate *date;
-@property (nonatomic, strong) NSMutableSet<NSString *> *taken;
-@end
-
-@implementation SNNoteExporter
-
-- (NSString *)markdownOfAttachment:(NSString *)attachmentID {
-    SNNotes *notes = _notes;
-    SNAttachment *a = [notes attachmentWithID:attachmentID];
-    if (!a.data) return nil;
-    if ([a.kind isEqual:SNAttachmentKindTable]) {
-        TTTable *table = [notes tableOfAttachment:a];
-        return table ? SNMarkdownOfTableRows(table.strings) : nil;
-    }
-    BOOL image = [a.kind isEqual:SNAttachmentKindImage];
-    NSString *name = [a.entity.attributesByName objectForKey:@"name"] ? a.name.lastPathComponent : nil;
-    NSString *extension = name.pathExtension;
-    if (image) {
-        name = @"image";
-        extension = [a.type isEqual:@"image/png"] ? @"png" : @"jpg";
-    }
-    if (!name.length) name = @"File";
-    if (!_taken) _taken = [NSMutableSet set];
-    NSString *file = SNUniqueName(SNFileName(name.stringByDeletingPathExtension), extension, _taken);
-    NSString *relative = [NSString stringWithFormat:@"%@/%@/%@", SNAttachmentsFolder, _stem, file];
-    [_export write:a.data at:SNJoin(_dir, relative) date:_date];
-    return image ? [NSString stringWithFormat:@"![](%@)", SNLinkPath(relative)]
-                 : [NSString stringWithFormat:@"[%@](%@)", [file stringByReplacingOccurrencesOfString:@"]" withString:@"\\]"], SNLinkPath(relative)];
+static NSString *SNCount(NSUInteger n) {
+    return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
 }
 
-@end
+static NSString *SNStringOfData(NSData *data) {
+    NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
+                      ?: [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
+    if ([s hasPrefix:@"﻿"]) s = [s substringFromIndex:1];
+    return s ?: @"";
+}
 
-#pragma mark - Import
+static BOOL SNIsNoteFile(NSString *path) {
+    NSString *e = path.pathExtension.lowercaseString;
+    return [e isEqual:@"md"] || [e isEqual:@"markdown"] || [e isEqual:@"txt"] || [e isEqual:@"html"] || [e isEqual:@"htm"];
+}
 
-/* Where import reads from: a zip's files, or a folder's. */
+#pragma mark - Where import reads from
+
+/* A zip's files, or a folder's. */
 @interface SNImportSource : NSObject
 @property (nonatomic, strong) SNZipReader *zip;
 @property (nonatomic, strong) NSURL *folder;
@@ -169,169 +127,437 @@ static NSString *SNResolvePath(NSString *dir, NSString *link) {
     return parts.count ? [parts componentsJoinedByString:@"/"] : nil;
 }
 
-/* A note's attachments, as import makes them. */
-@interface SNNoteImporter : NSObject <SNMarkdownImporting>
-@property (nonatomic, weak) SNNotes *notes;
+#pragma mark - The transfer
+
+@interface SNTransfer ()
+@property (atomic, readwrite) NSUInteger done;
+@property (atomic, readwrite) NSUInteger total;
+@property (atomic, readwrite, copy) NSString *status;
+@property (atomic, readwrite, getter=isFinished) BOOL finished;
+@property (atomic, readwrite, getter=isCancelled) BOOL cancelled;
+@property (atomic, readwrite, nullable) NSError *error;
+@property (atomic, readwrite, copy) NSArray<NSManagedObjectID *> *madeNotes;
+@property (atomic, readwrite, copy) NSArray<NSString *> *skipped;
+@property (atomic, readwrite, copy) NSString *summary;
+/* The note being made (import), for its attachments. */
 @property (nonatomic, strong) SNNote *note;
+@property (nonatomic, copy) NSString *noteDir;
 @property (nonatomic, strong) SNImportSource *source;
-@property (nonatomic, copy) NSString *dir;   /* the note's file's folder */
+- (void)skip:(NSString *)what;
+- (SNAttachment *)attachmentOf:(SNNote *)note kind:(NSString *)kind type:(NSString *)type data:(NSData *)data;
 @end
 
-@implementation SNNoteImporter
+/* A note's attachments, as import makes them (the transfer's note). */
+@interface SNNoteImporter : NSObject <SNMarkdownImporting>
+@property (nonatomic, weak) SNTransfer *transfer;
+@end
 
-- (NSString *)attachmentForPath:(NSString *)path title:(NSString *)title image:(BOOL)image {
-    NSString *resolved = SNResolvePath(_dir, path);
-    NSData *data = resolved ? [_source dataAtPath:resolved] : nil;
-    if (!data.length || data.length > SNAttachmentMaxFileBytes) return nil;
-    SNNotes *notes = _notes;
-    NSString *type = nil;
-    double w = 0, h = 0;
-    NSData *picture = SNImageDataForAttachment(data, &type, &w, &h);
-    if (picture) return [notes addImageToNote:_note data:picture type:type width:w height:h].id;
-    NSString *name = resolved.lastPathComponent;
-    return [notes addFileToNote:_note data:data name:name type:SNTypeOfFileNamed(name)].id;
+/* A note's attachments, as export writes them. */
+@interface SNNoteExporter : NSObject <SNMarkdownExporting>
+@property (nonatomic, weak) SNTransfer *transfer;
+@property (nonatomic, copy) NSDictionary<NSString *, SNAttachment *> *attachments;   /* by id */
+@property (nonatomic, copy) NSString *dir;    /* the note's folder's path */
+@property (nonatomic, copy) NSString *stem;   /* the note's file's name, less .md */
+@property (nonatomic, strong) NSDate *date;
+@property (nonatomic, strong) NSMutableSet<NSString *> *taken;
+@end
+
+@implementation SNTransfer {
+    SNNotes *_notes;
+    NSPersistentStoreCoordinator *_coordinator;
+    NSManagedObjectID *_folderID;      /* import: where into (nil: the top) */
+    NSManagedObjectContext *_context;  /* the transfer's own */
+    NSUInteger _unsaved;
+    NSMutableArray<SNNote *> *_batch;  /* made since the last save */
+    NSMutableArray<NSManagedObjectID *> *_made;
+    NSMutableArray<NSString *> *_skips;
+    NSDate *_reported;
+    NSString *_intoName;               /* import: the folder made, or given */
+    SNZipWriter *_zip;                 /* export: into a zip, or */
 }
 
-- (NSString *)attachmentForTableRows:(NSArray<NSArray<NSString *> *> *)rows {
-    NSUInteger columns = 0;
-    for (NSArray *row in rows) columns = MAX(columns, row.count);
-    if (!rows.count || !columns) return nil;
-    SNNotes *notes = _notes;
-    SNAttachment *a = [notes addTableToNote:_note rows:rows.count columns:columns];
-    TTTable *table = [notes tableOfAttachment:a];
-    for (NSUInteger r = 0; r < rows.count; r++) {
-        for (NSUInteger c = 0; c < rows[r].count; c++) {
-            if (rows[r][c].length) [[table textAtRow:r column:c] insertString:rows[r][c] atIndex:0 attributes:nil];
++ (instancetype)exportOfNotes:(SNNotes *)notes toURL:(NSURL *)url {
+    return [[self alloc] initWithNotes:notes URL:url import:NO folder:nil];
+}
+
++ (instancetype)importIntoNotes:(SNNotes *)notes fromURL:(NSURL *)url folder:(SNFolder *)folder {
+    return [[self alloc] initWithNotes:notes URL:url import:YES folder:folder];
+}
+
+- (instancetype)initWithNotes:(SNNotes *)notes URL:(NSURL *)url import:(BOOL)import folder:(SNFolder *)folder {
+    if (!(self = [super init])) return nil;
+    _notes = notes;
+    _coordinator = notes.context.persistentStoreCoordinator;
+    _URL = [url copy];
+    _import = import;
+    /* Into a real folder: a smart one's notes are others'. */
+    if (folder && ![notes isSmartFolder:folder]) {
+        [notes.context obtainPermanentIDsForObjects:@[ folder ] error:NULL];
+        _folderID = folder.objectID;
+        _intoName = folder.name;
+    }
+    _batch = [NSMutableArray array];
+    _made = [NSMutableArray array];
+    _skips = [NSMutableArray array];
+    self.status = import ? @"Reading…" : @"Counting the notes…";
+    self.summary = @"";
+    self.madeNotes = @[];
+    self.skipped = @[];
+    return self;
+}
+
+- (void)start {
+    /* What the editors have, written first: it goes out too. */
+    if (!_import) [_notes saveAll];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self run];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self finishOnMain];
+        });
+    });
+}
+
+- (BOOL)runAndWait:(NSError **)error {
+    if (!_import) [_notes saveAll];
+    [self run];
+    [self finishOnMain];
+    if (error) *error = self.error;
+    return self.error == nil;
+}
+
+- (void)cancel {
+    self.cancelled = YES;
+}
+
+- (void)run {
+    _context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    _context.persistentStoreCoordinator = _coordinator;
+    _context.undoManager = nil;
+    [_context performBlockAndWait:^{
+        @autoreleasepool {
+            if (self->_import) [self runImport];
+            else [self runExport];
+        }
+    }];
+    _context = nil;
+}
+
+- (void)finishOnMain {
+    self.finished = YES;
+    self.madeNotes = _made;
+    self.skipped = _skips;
+    self.summary = [self summaryNow];
+    /* What was imported goes to the server: once, now. */
+    if (_import && _made.count && _notes.serviceRoot) [_notes sync];
+    id<SNTransferDelegate> delegate = _delegate;
+    [delegate transferDidFinish:self];
+}
+
+- (NSString *)summaryNow {
+    NSString *notes = [NSString stringWithFormat:@"%@ note%@", SNCount(self.done), self.done == 1 ? @"" : @"s"];
+    NSString *where = _intoName.length ? [NSString stringWithFormat:@" into “%@”", _intoName] : @"";
+    NSString *s;
+    if (_import) {
+        if (self.error) s = [NSString stringWithFormat:@"The import stopped: %@ %@ imported%@ before are kept.", self.error.localizedDescription, notes, where];
+        else if (self.cancelled) s = [NSString stringWithFormat:@"Stopped: %@ imported%@ are kept.", notes, where];
+        else s = [NSString stringWithFormat:@"%@ imported%@.", [notes stringByReplacingCharactersInRange:NSMakeRange(0, 1) withString:[notes substringToIndex:1].uppercaseString], where];
+    } else {
+        if (self.error) s = [NSString stringWithFormat:@"The export stopped: %@", self.error.localizedDescription];
+        else if (self.cancelled) s = [NSString stringWithFormat:@"Stopped after %@.", notes];
+        else s = [NSString stringWithFormat:@"%@ exported to “%@”.", [notes stringByReplacingCharactersInRange:NSMakeRange(0, 1) withString:[notes substringToIndex:1].uppercaseString], _URL.lastPathComponent];
+    }
+    if (_skips.count) s = [s stringByAppendingFormat:@" %@ left out.", SNCount(_skips.count)];
+    return s;
+}
+
+#pragma mark progress
+
+- (void)skip:(NSString *)what {
+    [_skips addObject:what];
+}
+
+/* A note done: told now and then, saved every batch. */
+- (BOOL)step {
+    self.done = self.done + 1;
+    [self report:NO];
+    if (++_unsaved >= SNTransferBatch && ![self saveBatch]) return NO;
+    return !self.cancelled;
+}
+
+- (void)report:(BOOL)now {
+    NSDate *date = [NSDate date];
+    if (!now && _reported && date.timeIntervalSinceReferenceDate - _reported.timeIntervalSinceReferenceDate < 0.2) return;
+    _reported = date;
+    NSString *verb = _import ? @"Importing" : @"Exporting";
+    self.status = self.total ? [NSString stringWithFormat:@"%@ %@ of %@ notes…", verb, SNCount(self.done), SNCount(self.total)]
+                             : [NSString stringWithFormat:@"%@ %@ notes…", verb, SNCount(self.done)];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        id<SNTransferDelegate> delegate = self->_delegate;
+        [delegate transferDidProgress:self];
+    });
+}
+
+/* What was made, saved; the context emptied (folders are kept by ID). */
+- (BOOL)saveBatch {
+    _unsaved = 0;
+    if (_context.hasChanges) {
+        NSError *error = nil;
+        if (![_context save:&error]) {
+            self.error = error ?: SNTransferError(@"the notes could not be saved.");
+            return NO;
         }
     }
-    if (table) [notes saveTable:table toAttachment:a];
-    return a.id;
+    for (SNNote *n in _batch) [_made addObject:n.objectID];
+    [_batch removeAllObjects];
+    self.note = nil;
+    [_context reset];
+    return YES;
 }
 
-@end
+#pragma mark - Export
 
-static NSString *SNStringOfData(NSData *data) {
-    NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
-                      ?: [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
-    if ([s hasPrefix:@"﻿"]) s = [s substringFromIndex:1];
-    return s ?: @"";
-}
-
-static BOOL SNIsNoteFile(NSString *path) {
-    NSString *e = path.pathExtension.lowercaseString;
-    return [e isEqual:@"md"] || [e isEqual:@"markdown"] || [e isEqual:@"txt"] || [e isEqual:@"html"] || [e isEqual:@"htm"];
-}
-
-@implementation SNNotes (Transfer)
-
-#pragma mark Export
-
-- (void)export:(SNExport *)export folder:(SNFolder *)folder dir:(NSString *)dir {
-    NSMutableSet *taken = [NSMutableSet setWithObject:SNAttachmentsFolder.lowercaseString];
-    NSMutableArray *notes = [NSMutableArray array];
-    for (SNNote *note in [self notesInFolder:folder matching:nil]) {
-        if (folder || !note.folder) [notes addObject:note];
+- (BOOL)write:(NSData *)data at:(NSString *)path date:(NSDate *)date {
+    if (_zip) {
+        if ([_zip addData:data atPath:path date:date]) return YES;
+        self.error = SNTransferError([NSString stringWithFormat:@"“%@” could not be written (is the disk full?).", _URL.lastPathComponent]);
+        return NO;
     }
-    for (SNNote *note in notes) {
-        NSString *file = SNUniqueName(SNFileName(note.title ?: @""), @"md", taken);
-        SNNoteExporter *exporter = [[SNNoteExporter alloc] init];
-        exporter.notes = self;
-        exporter.export = export;
-        exporter.dir = dir;
-        exporter.stem = file.stringByDeletingPathExtension;
-        exporter.date = note.lastEdited;
-        NSString *markdown = SNMarkdownOfText(note.text, exporter);
-        [export write:[markdown dataUsingEncoding:NSUTF8StringEncoding] at:SNJoin(dir, file) date:note.lastEdited];
-    }
-    for (SNFolder *child in [self foldersInFolder:folder]) {
-        if ([self isSmartFolder:child]) continue;
-        NSString *name = SNUniqueName(SNFileName(child.name ?: @""), nil, taken);
-        [self export:export folder:child dir:SNJoin(dir, name)];
-    }
-}
-
-- (SNExport *)markdownExport {
-    [self saveAll];
-    SNExport *export = [[SNExport alloc] init];
-    [self export:export folder:nil dir:@""];
-    return export;
-}
-
-- (NSData *)markdownZip {
-    SNExport *export = [self markdownExport];
-    SNZipWriter *zip = [[SNZipWriter alloc] init];
-    for (NSString *path in export.order) [zip addData:export.files[path] atPath:path date:export.dates[path]];
-    return zip.data;
-}
-
-- (BOOL)exportMarkdownToURL:(NSURL *)url error:(NSError **)error {
-    if ([url.pathExtension.lowercaseString isEqual:@"zip"]) return [self.markdownZip writeToURL:url options:NSDataWritingAtomic error:error];
-    SNExport *export = [self markdownExport];
     NSFileManager *fm = [NSFileManager defaultManager];
-    if (![fm createDirectoryAtURL:url withIntermediateDirectories:YES attributes:nil error:error]) return NO;
-    for (NSString *path in export.order) {
-        NSURL *file = [url URLByAppendingPathComponent:path];
-        if (![fm createDirectoryAtURL:file.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:error]) return NO;
-        if (![export.files[path] writeToURL:file options:NSDataWritingAtomic error:error]) return NO;
-        NSDate *date = export.dates[path];
-        if (date) [fm setAttributes:@{ NSFileModificationDate: date } ofItemAtPath:file.path error:NULL];
+    NSURL *file = [_URL URLByAppendingPathComponent:path];
+    NSError *error = nil;
+    if (![fm createDirectoryAtURL:file.URLByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error] ||
+        ![data writeToURL:file options:NSDataWritingAtomic error:&error]) {
+        self.error = error;
+        return NO;
+    }
+    if (date) [fm setAttributes:@{ NSFileModificationDate: date } ofItemAtPath:file.path error:NULL];
+    return YES;
+}
+
+- (NSPredicate *)notDeleted {
+    NSEntityDescription *note = _coordinator.managedObjectModel.entitiesByName[SNNoteEntity];
+    return note.attributesByName[@"deletedAt"] ? [NSPredicate predicateWithFormat:@"deletedAt == nil"] : nil;
+}
+
+/* The folders (not smart), each one's parent as shown: folders in each
+   other round in a circle are cut at the one whose id sorts first, as
+   SNNotes does. By ID: name, and the IDs of those in each (nil: the top). */
+- (NSDictionary<id<NSCopying>, NSArray<NSManagedObjectID *> *> *)folderTreeNames:(NSMutableDictionary<NSManagedObjectID *, NSString *> *)names {
+    NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:SNFolderEntity];
+    NSArray<SNFolder *> *folders = [_context executeFetchRequest:fetch error:NULL] ?: @[];
+    NSMutableDictionary<NSManagedObjectID *, SNFolder *> *byID = [NSMutableDictionary dictionary];
+    for (SNFolder *f in folders) {
+        NSString *filter = f.entity.attributesByName[@"filter"] ? [f valueForKey:@"filter"] : nil;
+        if (filter.length) continue;
+        byID[f.objectID] = f;
+        names[f.objectID] = f.name ?: @"";
+    }
+    NSMutableDictionary<id<NSCopying>, NSMutableArray *> *children = [NSMutableDictionary dictionary];
+    for (SNFolder *f in byID.allValues) {
+        SNFolder *parent = f.entity.relationshipsByName[@"parent"] ? [f valueForKey:@"parent"] : nil;
+        if (parent && !byID[parent.objectID]) parent = nil;   /* a smart one's: at the top */
+        /* In a circle: cut at the one whose id sorts first. */
+        if (parent) {
+            NSMutableArray *ring = [NSMutableArray arrayWithObject:f];
+            SNFolder *up = parent;
+            while (up && ![ring containsObject:up]) {
+                [ring addObject:up];
+                SNFolder *next = up.entity.relationshipsByName[@"parent"] ? [up valueForKey:@"parent"] : nil;
+                up = next && byID[next.objectID] ? next : nil;
+            }
+            if (up == f) {
+                SNFolder *first = f;
+                for (SNFolder *r in ring)
+                    if ([r.id compare:first.id] == NSOrderedAscending) first = r;
+                if (first == f) parent = nil;
+            }
+        }
+        id<NSCopying> key = parent ? (id<NSCopying>)parent.objectID : (id<NSCopying>)[NSNull null];
+        if (!children[key]) children[key] = [NSMutableArray array];
+        [children[key] addObject:f.objectID];
+    }
+    for (NSMutableArray *list in children.allValues)
+        [list sortUsingComparator:^NSComparisonResult(NSManagedObjectID *a, NSManagedObjectID *b) {
+            return [names[a] localizedStandardCompare:names[b]];
+        }];
+    return children;
+}
+
+/* A folder's notes (nil: those in none), then its folders. */
+- (BOOL)exportFolder:(NSManagedObjectID *)folderID dir:(NSString *)dir tree:(NSDictionary *)tree names:(NSDictionary *)names {
+    NSMutableSet *taken = [NSMutableSet setWithObject:SNAttachmentsFolder.lowercaseString];
+    NSMutableArray *conditions = [NSMutableArray array];
+    [conditions addObject:folderID ? [NSPredicate predicateWithFormat:@"folder == %@", [_context objectWithID:folderID]]
+                                   : [NSPredicate predicateWithFormat:@"folder == nil"]];
+    if ([self notDeleted]) [conditions addObject:[self notDeleted]];
+    /* A page at a time, by id, the context emptied after each. */
+    for (NSUInteger offset = 0;; offset += SNTransferBatch) {
+        NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
+        fetch.predicate = [NSCompoundPredicate andPredicateWithSubpredicates:conditions];
+        fetch.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"id" ascending:YES] ];
+        fetch.fetchOffset = offset;
+        fetch.fetchLimit = SNTransferBatch;
+        NSError *error = nil;
+        NSArray<SNNote *> *notes = [_context executeFetchRequest:fetch error:&error];
+        if (!notes) {
+            self.error = error;
+            return NO;
+        }
+        for (SNNote *note in notes) {
+            @autoreleasepool {
+                NSString *file = SNUniqueName(SNFileName(note.title ?: @""), @"md", taken);
+                SNNoteExporter *exporter = [[SNNoteExporter alloc] init];
+                exporter.transfer = self;
+                NSMutableDictionary *attachments = [NSMutableDictionary dictionary];
+                for (SNAttachment *a in note.attachments)
+                    if (a.id) attachments[a.id] = a;
+                exporter.attachments = attachments;
+                exporter.dir = dir;
+                exporter.stem = file.stringByDeletingPathExtension;
+                exporter.date = note.lastEdited;
+                NSString *markdown = SNMarkdownOfText(note.text, exporter);
+                if (self.error || ![self write:[markdown dataUsingEncoding:NSUTF8StringEncoding] at:SNJoin(dir, file) date:note.lastEdited]) return NO;
+                self.done = self.done + 1;
+                [self report:NO];
+                if (self.cancelled) return NO;
+            }
+        }
+        [_context reset];
+        if (notes.count < SNTransferBatch) break;
+    }
+    for (NSManagedObjectID *child in tree[folderID ?: [NSNull null]]) {
+        NSString *name = SNUniqueName(SNFileName(names[child]), nil, taken);
+        if (![self exportFolder:child dir:SNJoin(dir, name) tree:tree names:names]) return NO;
     }
     return YES;
 }
 
-#pragma mark Import
-
-- (SNNote *)importNoteTitled:(NSString *)title text:(NSString *)markdown dir:(NSString *)dir
-                      source:(SNImportSource *)source folder:(SNFolder *)folder date:(NSDate *)date {
-    SNNote *note = [self addNoteInFolder:folder];
-    SNNoteImporter *importer = [[SNNoteImporter alloc] init];
-    importer.notes = self;
-    importer.note = note;
-    importer.source = source;
-    importer.dir = dir;
-    note.text = SNTextOfMarkdown(markdown, title, importer);
-    if (date) {
-        note.created = date;
-        note.lastEdited = date;
+- (void)runExport {
+    NSFetchRequest *count = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
+    count.predicate = [self notDeleted];
+    self.total = [_context countForFetchRequest:count error:NULL];
+    [self report:YES];
+    BOOL zip = [_URL.pathExtension.lowercaseString isEqual:@"zip"];
+    NSError *error = nil;
+    if (zip) {
+        _zip = [[SNZipWriter alloc] initWithURL:_URL error:&error];
+        if (!_zip) {
+            self.error = error;
+            return;
+        }
+    } else if (![[NSFileManager defaultManager] createDirectoryAtURL:_URL withIntermediateDirectories:YES attributes:nil error:&error]) {
+        self.error = error;
+        return;
     }
-    [self save];
-    return note;
+    NSMutableDictionary *names = [NSMutableDictionary dictionary];
+    NSDictionary *tree = [self folderTreeNames:names];
+    BOOL ok = [self exportFolder:nil dir:@"" tree:tree names:names];
+    if (zip) {
+        if (ok && ![_zip finish:&error]) {
+            self.error = error;
+            ok = NO;
+        }
+        if (!ok) {
+            [_zip finish:NULL];
+            /* A zip that stopped part way is no good: not left. */
+            [[NSFileManager defaultManager] removeItemAtURL:_URL error:NULL];
+        }
+        _zip = nil;
+    }
 }
 
-/* A file's note: Markdown, plain text or HTML. */
-- (SNNote *)importFile:(NSString *)path title:(NSString *)title source:(SNImportSource *)source folder:(SNFolder *)folder {
-    NSData *data = [source dataAtPath:path];
-    if (!data) return nil;
+#pragma mark - Import
+
+- (SNFolder *)folderWithID:(NSManagedObjectID *)folderID {
+    return folderID ? (SNFolder *)[_context objectWithID:folderID] : nil;
+}
+
+/* A folder made, in parent (nil: the top), and saved at once: kept by its
+   (permanent) ID while the context is emptied between batches. */
+- (NSManagedObjectID *)addFolderNamed:(NSString *)name in:(NSManagedObjectID *)parentID {
+    SNFolder *f = [NSEntityDescription insertNewObjectForEntityForName:SNFolderEntity inManagedObjectContext:_context];
+    f.id = [NSUUID UUID].UUIDString;
+    f.created = [NSDate date];
+    f.name = name;
+    if (parentID && f.entity.relationshipsByName[@"parent"]) [f setValue:[self folderWithID:parentID] forKey:@"parent"];
+    NSError *error = nil;
+    if (![_context save:&error]) {
+        self.error = error ?: SNTransferError(@"a folder could not be saved.");
+        return nil;
+    }
+    return f.objectID;
+}
+
+- (SNNote *)newNoteIn:(NSManagedObjectID *)folderID date:(NSDate *)date {
+    SNNote *n = [NSEntityDescription insertNewObjectForEntityForName:SNNoteEntity inManagedObjectContext:_context];
+    n.id = [NSUUID UUID].UUIDString;
+    n.created = date ?: [NSDate date];
+    n.lastEdited = n.created;
+    n.title = @"New Note";
+    n.body = @"";
+    n.pinned = @NO;
+    n.folder = [self folderWithID:folderID];
+    [_batch addObject:n];
+    return n;
+}
+
+- (SNAttachment *)attachmentOf:(SNNote *)note kind:(NSString *)kind type:(NSString *)type data:(NSData *)data {
+    SNAttachment *a = [NSEntityDescription insertNewObjectForEntityForName:SNAttachmentEntity inManagedObjectContext:_context];
+    a.id = [NSUUID UUID].UUIDString;
+    a.created = [NSDate date];
+    a.kind = kind;
+    a.type = type;
+    a.data = data;
+    a.note = note;
+    return a;
+}
+
+/* A Markdown (or HTML) file's note. */
+- (BOOL)importFile:(NSString *)path title:(NSString *)title into:(NSManagedObjectID *)folderID {
+    NSData *data = [_source dataAtPath:path];
+    if (!data) {
+        [self skip:[NSString stringWithFormat:@"%@: could not be read", path]];
+        return !self.cancelled;
+    }
     NSString *text = SNStringOfData(data);
     NSString *e = path.pathExtension.lowercaseString;
     if ([e isEqual:@"html"] || [e isEqual:@"htm"]) text = SNMarkdownOfHTML(text);
-    return [self importNoteTitled:title text:text dir:path.stringByDeletingLastPathComponent source:source folder:folder date:[source dateAtPath:path]];
+    SNNote *note = [self newNoteIn:folderID date:[_source dateAtPath:path]];
+    self.note = note;
+    self.noteDir = path.stringByDeletingLastPathComponent;
+    SNNoteImporter *importer = [[SNNoteImporter alloc] init];
+    importer.transfer = self;
+    note.text = SNTextOfMarkdown(text, title, importer);
+    self.note = nil;
+    return [self step];
 }
 
-/* A note of a code file's text (Trilium's code notes): its title, then the
-   code, each line a mono paragraph. */
-- (SNNote *)importCode:(NSString *)path title:(NSString *)title source:(SNImportSource *)source folder:(SNFolder *)folder {
-    NSData *data = [source dataAtPath:path];
-    if (!data) return nil;
-    SNNote *note = [self addNoteInFolder:folder];
+/* A code file's note (Trilium's code notes): its title, then the code,
+   each line a mono paragraph. */
+- (BOOL)importCode:(NSString *)path title:(NSString *)title into:(NSManagedObjectID *)folderID {
+    NSData *data = [_source dataAtPath:path];
+    if (!data) {
+        [self skip:[NSString stringWithFormat:@"%@: could not be read", path]];
+        return !self.cancelled;
+    }
+    SNNote *note = [self newNoteIn:folderID date:[_source dateAtPath:path]];
     TopoText *text = [TopoText textWithReplica:0];
     [text insertString:[title stringByAppendingString:@"\n"] atIndex:0 attributes:@{ SNStyleKey: SNStyleTitle }];
     NSString *code = [SNStringOfData(data) stringByTrimmingCharactersInSet:[NSCharacterSet newlineCharacterSet]];
     if (code.length) [text insertString:code atIndex:text.length attributes:@{ SNStyleKey: SNStyleMono }];
     note.text = text;
-    [self save];
-    return note;
+    return [self step];
 }
 
 /* A note holding a file (Trilium's image and file notes). */
-- (SNNote *)importAttachment:(NSString *)path title:(NSString *)title source:(SNImportSource *)source folder:(SNFolder *)folder {
-    SNNote *note = [self addNoteInFolder:folder];
+- (BOOL)importAttachment:(NSString *)path title:(NSString *)title into:(NSManagedObjectID *)folderID {
+    SNNote *note = [self newNoteIn:folderID date:[_source dateAtPath:path]];
+    self.note = note;
+    self.noteDir = @"";
     SNNoteImporter *importer = [[SNNoteImporter alloc] init];
-    importer.notes = self;
-    importer.note = note;
-    importer.source = source;
-    importer.dir = @"";
+    importer.transfer = self;
     NSString *attachment = [importer attachmentForPath:path title:title image:YES];
+    self.note = nil;
     TopoText *text = [TopoText textWithReplica:0];
     [text insertString:title atIndex:0 attributes:@{ SNStyleKey: SNStyleTitle }];
     if (attachment) {
@@ -339,13 +565,31 @@ static BOOL SNIsNoteFile(NSString *path) {
         [text insertString:@"￼" atIndex:text.length attributes:@{ SNAttachmentKey: attachment }];
     }
     note.text = text;
-    [self save];
-    return note;
+    return [self step];
+}
+
+static NSArray *SNTriliumChildren(NSDictionary *f) {
+    NSMutableArray *real = [NSMutableArray array];
+    for (NSDictionary *c in [f[@"children"] isKindOfClass:[NSArray class]] ? f[@"children"] : @[])
+        if ([c isKindOfClass:[NSDictionary class]] && ![c[@"isClone"] boolValue]) [real addObject:c];
+    return real;
+}
+
+/* How many notes Trilium's files make. */
+static NSUInteger SNTriliumCount(NSArray *files) {
+    NSUInteger n = 0;
+    for (NSDictionary *f in files) {
+        if (![f isKindOfClass:[NSDictionary class]] || [f[@"isClone"] boolValue]) continue;
+        NSString *type = f[@"type"];
+        if ([f[@"dataFileName"] isKindOfClass:[NSString class]] &&
+            ([type isEqual:@"text"] || [type isEqual:@"code"] || [type isEqual:@"image"] || [type isEqual:@"file"])) n++;
+        n += SNTriliumCount(SNTriliumChildren(f));
+    }
+    return n;
 }
 
 /* Trilium's export: what its !!!meta.json says, a level of it. */
-- (void)importTrilium:(NSArray *)files dir:(NSString *)dir source:(SNImportSource *)source
-               folder:(SNFolder *)folder into:(NSMutableArray<SNNote *> *)made {
+- (BOOL)importTrilium:(NSArray *)files dir:(NSString *)dir into:(NSManagedObjectID *)folderID {
     NSArray *sorted = [files sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
         return [@([a[@"notePosition"] integerValue]) compare:@([b[@"notePosition"] integerValue])];
     }];
@@ -354,90 +598,103 @@ static BOOL SNIsNoteFile(NSString *path) {
         NSString *title = [f[@"title"] isKindOfClass:[NSString class]] && [f[@"title"] length] ? f[@"title"] : @"Untitled";
         NSString *type = f[@"type"];
         NSString *data = [f[@"dataFileName"] isKindOfClass:[NSString class]] ? SNJoin(dir, f[@"dataFileName"]) : nil;
-        NSArray *children = [f[@"children"] isKindOfClass:[NSArray class]] ? f[@"children"] : @[];
-        NSUInteger real = 0;
-        for (NSDictionary *c in children) {
-            if ([c isKindOfClass:[NSDictionary class]] && ![c[@"isClone"] boolValue]) real++;
-        }
-        SNFolder *target = folder;
-        if (real) {
+        NSArray *children = SNTriliumChildren(f);
+        NSManagedObjectID *target = folderID;
+        if (children.count) {
             /* Notes under it: a folder, its own text a note in it. */
-            target = [self addFolderNamed:title inFolder:folder];
+            target = [self addFolderNamed:title in:folderID];
+            if (!target) return NO;
             NSString *sub = [f[@"dirFileName"] isKindOfClass:[NSString class]] ? SNJoin(dir, f[@"dirFileName"]) : dir;
-            [self importTrilium:children dir:sub source:source folder:target into:made];
+            if (![self importTrilium:children dir:sub into:target]) return NO;
             if (![type isEqual:@"text"] || !data) continue;
-            NSData *own = [source dataAtPath:data];
+            NSData *own = [_source dataAtPath:data];
             NSString *text = own ? SNStringOfData(own) : @"";
             if ([data.pathExtension.lowercaseString hasPrefix:@"htm"]) text = SNMarkdownOfHTML(text);
-            if (![text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length) continue;
+            if (![text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].length) {
+                /* Counted, not made: it is the folder. */
+                self.total = self.total > 0 ? self.total - 1 : 0;
+                continue;
+            }
         }
-        if (!data) continue;
-        SNNote *note = nil;
-        if ([type isEqual:@"text"]) note = [self importFile:data title:title source:source folder:target];
-        else if ([type isEqual:@"code"]) note = [self importCode:data title:title source:source folder:target];
-        else if ([type isEqual:@"image"] || [type isEqual:@"file"]) note = [self importAttachment:data title:title source:source folder:target];
-        if (note) [made addObject:note];
+        BOOL ok = YES;
+        if (!data) {
+            if (!children.count && [type isEqual:@"book"]) continue;
+            if (!children.count) [self skip:[NSString stringWithFormat:@"%@: no file", title]];
+            continue;
+        }
+        if ([type isEqual:@"text"]) ok = [self importFile:data title:title into:target];
+        else if ([type isEqual:@"code"]) ok = [self importCode:data title:title into:target];
+        else if ([type isEqual:@"image"] || [type isEqual:@"file"]) ok = [self importAttachment:data title:title into:target];
+        else [self skip:[NSString stringWithFormat:@"%@: a %@ note, which SimpleNotes has no kind of", title, type ?: @"?"]];
+        if (!ok) return NO;
     }
+    return YES;
 }
 
-/* A folder of notes (or a zip of one): its .md files notes, its folders
-   with notes in them folders; the rest what notes link to. */
-- (void)importFolder:(NSString *)dir paths:(NSArray<NSString *> *)paths source:(SNImportSource *)source
-              folder:(SNFolder *)folder into:(NSMutableArray<SNNote *> *)made {
+/* The folders under dir that have notes in them, somewhere. */
+static NSArray<NSString *> *SNSubfoldersWithNotes(NSArray<NSString *> *paths, NSString *dir) {
     NSString *prefix = dir.length ? [dir stringByAppendingString:@"/"] : @"";
-    NSMutableArray *files = [NSMutableArray array];
     NSMutableOrderedSet *subdirs = [NSMutableOrderedSet orderedSet];
     for (NSString *path in paths) {
         if (prefix.length && ![path hasPrefix:prefix]) continue;
         NSString *rest = [path substringFromIndex:prefix.length];
         NSRange slash = [rest rangeOfString:@"/"];
-        if (slash.location == NSNotFound) {
-            if (SNIsNoteFile(rest)) [files addObject:path];
-        } else if (SNIsNoteFile(rest)) {
-            /* Only folders with notes somewhere in them. */
-            NSString *sub = [rest substringToIndex:slash.location];
-            if (![sub isEqual:SNAttachmentsFolder]) [subdirs addObject:sub];
-        }
+        if (slash.location == NSNotFound || !SNIsNoteFile(rest)) continue;
+        NSString *sub = [rest substringToIndex:slash.location];
+        if (![sub isEqual:SNAttachmentsFolder]) [subdirs addObject:sub];
     }
-    [files sortUsingSelector:@selector(localizedStandardCompare:)];
-    for (NSString *path in files) {
-        SNNote *note = [self importFile:path title:path.lastPathComponent.stringByDeletingPathExtension source:source folder:folder];
-        if (note) [made addObject:note];
-    }
-    for (NSString *sub in [subdirs.array sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
-        SNFolder *child = [self addFolderNamed:sub inFolder:folder];
-        [self importFolder:SNJoin(dir, sub) paths:paths source:source folder:child into:made];
-    }
+    return [subdirs.array sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
-- (NSArray<SNNote *> *)importFromURL:(NSURL *)url intoFolder:(SNFolder *)folder error:(NSError **)error {
-    if ([self isSmartFolder:folder]) folder = nil;
+/* A folder of notes (or a zip of one): its .md files notes, its folders
+   with notes in them folders; the rest what notes link to. */
+- (BOOL)importFolder:(NSString *)dir paths:(NSArray<NSString *> *)paths into:(NSManagedObjectID *)folderID {
+    NSString *prefix = dir.length ? [dir stringByAppendingString:@"/"] : @"";
+    NSMutableArray *files = [NSMutableArray array];
+    for (NSString *path in paths) {
+        if (prefix.length && ![path hasPrefix:prefix]) continue;
+        NSString *rest = [path substringFromIndex:prefix.length];
+        if ([rest rangeOfString:@"/"].location == NSNotFound && SNIsNoteFile(rest)) [files addObject:path];
+    }
+    [files sortUsingSelector:@selector(localizedStandardCompare:)];
+    for (NSString *path in files)
+        if (![self importFile:path title:path.lastPathComponent.stringByDeletingPathExtension into:folderID]) return NO;
+    for (NSString *sub in SNSubfoldersWithNotes(paths, dir)) {
+        NSManagedObjectID *child = [self addFolderNamed:sub in:folderID];
+        if (!child || ![self importFolder:SNJoin(dir, sub) paths:paths into:child]) return NO;
+    }
+    return YES;
+}
+
+- (void)runImport {
     BOOL directory = NO;
-    [[NSFileManager defaultManager] fileExistsAtPath:url.path isDirectory:&directory];
+    [[NSFileManager defaultManager] fileExistsAtPath:_URL.path isDirectory:&directory];
     SNImportSource *source = [[SNImportSource alloc] init];
-    NSString *name = url.lastPathComponent.stringByDeletingPathExtension;
-    NSMutableArray<SNNote *> *made = [NSMutableArray array];
-    if (!directory && SNIsNoteFile(url.path)) {
+    self.source = source;
+    NSString *name = _URL.lastPathComponent.stringByDeletingPathExtension;
+    if (!directory && SNIsNoteFile(_URL.path)) {
         /* One file: a note, straight in. */
-        source.folder = url.URLByDeletingLastPathComponent;
-        SNNote *note = [self importFile:url.lastPathComponent title:name source:source folder:folder];
-        if (!note) {
-            if (error) *error = SNTransferError([NSString stringWithFormat:@"“%@” could not be read.", url.lastPathComponent]);
-            return nil;
-        }
-        return @[ note ];
+        source.folder = _URL.URLByDeletingLastPathComponent;
+        self.total = 1;
+        if ([self importFile:_URL.lastPathComponent title:name into:_folderID]) [self saveBatch];
+        if (!self.done && !self.error) self.error = SNTransferError([NSString stringWithFormat:@"“%@” could not be read.", _URL.lastPathComponent]);
+        return;
     }
     if (directory) {
-        source.folder = url;
+        source.folder = _URL;
     } else {
-        NSData *data = [NSData dataWithContentsOfURL:url options:NSDataReadingMappedIfSafe error:error];
-        if (!data) return nil;
+        NSError *error = nil;
+        NSData *data = [NSData dataWithContentsOfURL:_URL options:NSDataReadingMappedIfSafe error:&error];
+        if (!data) {
+            self.error = error;
+            return;
+        }
         source.zip = [[SNZipReader alloc] initWithData:data];
         if (!source.zip) {
-            if (error) *error = SNTransferError([NSString stringWithFormat:@"“%@” is not a zip archive, a folder or a Markdown file.", url.lastPathComponent]);
-            return nil;
+            self.error = SNTransferError([NSString stringWithFormat:@"“%@” is not a zip archive, a folder or a Markdown file.", _URL.lastPathComponent]);
+            return;
         }
-        /* A zip of one folder: that folder's. */
+        /* A zip of one folder: that folder's, named after it. */
         NSString *top = nil;
         BOOL one = YES;
         for (NSString *p in source.zip.paths) {
@@ -450,23 +707,126 @@ static BOOL SNIsNoteFile(NSString *path) {
             }
             top = first;
         }
-        if (one && top) source.root = [top stringByAppendingString:@"/"];
+        if (one && top) {
+            source.root = [top stringByAppendingString:@"/"];
+            name = top;
+        }
     }
     NSArray<NSString *> *paths = [source paths];
-    SNFolder *into = [self addFolderNamed:name.length ? name : @"Imported" inFolder:folder];
     NSData *meta = [paths containsObject:@"!!!meta.json"] ? [source dataAtPath:@"!!!meta.json"] : nil;
     NSDictionary *trilium = meta ? [NSJSONSerialization JSONObjectWithData:meta options:0 error:NULL] : nil;
-    if ([trilium isKindOfClass:[NSDictionary class]] && [trilium[@"files"] isKindOfClass:[NSArray class]]) {
-        [self importTrilium:trilium[@"files"] dir:@"" source:source folder:into into:made];
+    NSArray *files = [trilium isKindOfClass:[NSDictionary class]] && [trilium[@"files"] isKindOfClass:[NSArray class]] ? trilium[@"files"] : nil;
+    NSMutableArray *tops = [NSMutableArray array];
+    for (NSDictionary *f in files)
+        if ([f isKindOfClass:[NSDictionary class]] && ![f[@"isClone"] boolValue]) [tops addObject:f];
+    BOOL ok;
+    NSManagedObjectID *into = nil;
+    if (files) {
+        self.total = SNTriliumCount(files);
+        [self report:YES];
+        if (tops.count == 1 && SNTriliumChildren(tops[0]).count) {
+            /* One note and those under it (Trilium exports a subtree so): it
+               is the folder, not one more around it. */
+            NSString *title = tops[0][@"title"];
+            _intoName = [title isKindOfClass:[NSString class]] && title.length ? title : @"Untitled";
+            ok = [self importTrilium:tops dir:@"" into:_folderID];
+        } else {
+            into = [self addFolderNamed:name.length ? name : @"Imported" in:_folderID];
+            _intoName = name;
+            ok = into && [self importTrilium:files dir:@"" into:into];
+        }
     } else {
-        [self importFolder:@"" paths:paths source:source folder:into into:made];
+        NSUInteger n = 0;
+        for (NSString *p in paths)
+            if (SNIsNoteFile(p) && ![p hasPrefix:[SNAttachmentsFolder stringByAppendingString:@"/"]] &&
+                [p rangeOfString:[NSString stringWithFormat:@"/%@/", SNAttachmentsFolder]].location == NSNotFound) n++;
+        self.total = n;
+        [self report:YES];
+        into = [self addFolderNamed:name.length ? name : @"Imported" in:_folderID];
+        _intoName = name;
+        ok = into && [self importFolder:@"" paths:paths into:into];
     }
-    if (!made.count) {
-        [self deleteFolder:into];
-        if (error) *error = SNTransferError([NSString stringWithFormat:@"“%@” has no notes in it.", url.lastPathComponent]);
+    if (ok || self.cancelled) [self saveBatch];
+    if (!self.done && !self.error && !self.cancelled) {
+        /* Nothing in it: the folder made for it goes again. */
+        if (into) {
+            [_context deleteObject:[self folderWithID:into]];
+            [_context save:NULL];
+        }
+        self.error = SNTransferError([NSString stringWithFormat:@"“%@” has no notes in it.", _URL.lastPathComponent]);
+    }
+}
+
+@end
+
+@implementation SNNoteImporter
+
+- (NSString *)attachmentForPath:(NSString *)path title:(NSString *)title image:(BOOL)image {
+    SNTransfer *transfer = _transfer;
+    NSString *resolved = SNResolvePath(transfer.noteDir, path);
+    NSData *data = resolved ? [transfer.source dataAtPath:resolved] : nil;
+    if (!data.length) {
+        if (resolved) [transfer skip:[NSString stringWithFormat:@"%@: not in the export", resolved]];
         return nil;
     }
-    return made;
+    if (data.length > SNAttachmentMaxFileBytes) {
+        [transfer skip:[NSString stringWithFormat:@"%@: larger than 25 MB", resolved]];
+        return nil;
+    }
+    NSString *type = nil;
+    double w = 0, h = 0;
+    NSData *picture = SNImageDataForAttachment(data, &type, &w, &h);
+    SNAttachment *a;
+    if (picture) {
+        a = [transfer attachmentOf:transfer.note kind:SNAttachmentKindImage type:type data:picture];
+        a.width = @(w);
+        a.height = @(h);
+    } else {
+        NSString *name = resolved.lastPathComponent;
+        a = [transfer attachmentOf:transfer.note kind:SNAttachmentKindFile type:SNTypeOfFileNamed(name) data:data];
+        if (a.entity.attributesByName[@"name"]) a.name = name;
+    }
+    return a.id;
+}
+
+- (NSString *)attachmentForTableRows:(NSArray<NSArray<NSString *> *> *)rows {
+    NSUInteger columns = 0;
+    for (NSArray *row in rows) columns = MAX(columns, row.count);
+    if (!rows.count || !columns) return nil;
+    TTTable *table = [TTTable tableWithRows:rows.count columns:columns replica:0];
+    for (NSUInteger r = 0; r < rows.count; r++)
+        for (NSUInteger c = 0; c < rows[r].count; c++)
+            if (rows[r][c].length) [[table textAtRow:r column:c] insertString:rows[r][c] atIndex:0 attributes:nil];
+    SNTransfer *transfer = _transfer;
+    return [transfer attachmentOf:transfer.note kind:SNAttachmentKindTable type:SNTableType data:table.data].id;
+}
+
+@end
+
+@implementation SNNoteExporter
+
+- (NSString *)markdownOfAttachment:(NSString *)attachmentID {
+    SNAttachment *a = _attachments[attachmentID];
+    if (!a.data) return nil;
+    if ([a.kind isEqual:SNAttachmentKindTable]) {
+        TTTable *table = [TTTable tableWithData:a.data replica:0 error:NULL];
+        return table ? SNMarkdownOfTableRows(table.strings) : nil;
+    }
+    BOOL image = [a.kind isEqual:SNAttachmentKindImage];
+    NSString *name = a.entity.attributesByName[@"name"] ? a.name.lastPathComponent : nil;
+    NSString *extension = name.pathExtension;
+    if (image) {
+        name = @"image";
+        extension = [a.type isEqual:@"image/png"] ? @"png" : @"jpg";
+    }
+    if (!name.length) name = @"File";
+    if (!_taken) _taken = [NSMutableSet set];
+    NSString *file = SNUniqueName(SNFileName(name.stringByDeletingPathExtension), extension, _taken);
+    NSString *relative = [NSString stringWithFormat:@"%@/%@/%@", SNAttachmentsFolder, _stem, file];
+    SNTransfer *transfer = _transfer;
+    if (![transfer write:a.data at:SNJoin(_dir, relative) date:_date]) return nil;
+    return image ? [NSString stringWithFormat:@"![](%@)", SNLinkPath(relative)]
+                 : [NSString stringWithFormat:@"[%@](%@)", [file stringByReplacingOccurrencesOfString:@"]" withString:@"\\]"], SNLinkPath(relative)];
 }
 
 @end

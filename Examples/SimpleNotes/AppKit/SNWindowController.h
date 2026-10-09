@@ -7,13 +7,15 @@
 #import <AppKit/AppKit.h>
 #import "SNNotes.h"
 #import "SNTextView.h"
+#import "SNTransferPanel.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class SNTableGrid;
 
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
-                                                    NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate>
+                                                    NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate,
+                                                    SNTransferPanelDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The sidebar: All Notes, the folders (folders in folders under them),
 // Recently Deleted, and the tags.
@@ -50,6 +52,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)emptyRecentlyDeleted:(nullable id)sender;
 // The Move To menu's items: the note into the folder an item names.
 - (IBAction)moveNoteToFolder:(nullable id)sender;
+// The Move Folder To menu's items: the folder chosen into the folder an
+// item names (none: to the top).
+- (IBAction)moveFolderToFolder:(nullable id)sender;
 - (IBAction)renameFolder:(nullable id)sender;
 // File > New Smart Folder…, Edit Smart Folder… (SNSmartFolderPanel).
 - (IBAction)newSmartFolder:(nullable id)sender;

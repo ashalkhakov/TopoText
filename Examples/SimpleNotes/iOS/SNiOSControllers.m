@@ -5,6 +5,7 @@
 #import "SNUndoTextView.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
+#import "SNTransferViewController.h"
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -68,6 +69,11 @@ static NSString *SNDaysLeftText(SNNote *note) {
     /* The server being signed in to, until it is (then the notes'). */
     SNSignIn *_signIn;
     SNPeers *_peers;
+    /* Imports waiting for the one going (each with access to its file
+       while it goes), and the export's zip, to save once written. */
+    NSMutableArray<NSURL *> *_imports;
+    NSURL *_importing;
+    BOOL _scoped;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -149,36 +155,50 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)documentPicker:(UIDocumentPickerViewController *)picker didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     if (picker.documentPickerMode == UIDocumentPickerModeExportToService) return;
-    NSMutableArray *failed = [NSMutableArray array];
-    for (NSURL *url in urls) {
-        BOOL scoped = [url startAccessingSecurityScopedResource];
-        NSError *error = nil;
-        if (![_notes importFromURL:url intoFolder:nil error:&error])
-            [failed addObject:error.localizedDescription ?: url.lastPathComponent];
-        if (scoped) [url stopAccessingSecurityScopedResource];
-    }
-    [self reload];
-    if (!failed.count) return;
-    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Not Imported" message:[failed componentsJoinedByString:@"\n"]
-                                                        preferredStyle:UIAlertControllerStyleAlert];
-    [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:a animated:YES completion:nil];
+    if (!_imports) _imports = [NSMutableArray array];
+    [_imports addObjectsFromArray:urls];
+    if (!_importing) [self startNextImport];
+}
+
+/* One import at a time, in its sheet; the next when it is closed. */
+- (void)startNextImport {
+    if (!_imports.count) return;
+    _importing = _imports.firstObject;
+    [_imports removeObjectAtIndex:0];
+    _scoped = [_importing startAccessingSecurityScopedResource];
+    [self runTransfer:[SNTransfer importIntoNotes:_notes fromURL:_importing folder:nil]];
+}
+
+- (void)runTransfer:(SNTransfer *)transfer {
+    SNTransferViewController *sheet = [[SNTransferViewController alloc] initWithTransfer:transfer];
+    sheet.delegate = self;
+    [self presentViewController:sheet animated:YES completion:nil];
+    [transfer start];
+}
+
+- (void)transferViewControllerDidClose:(SNTransferViewController *)controller {
+    SNTransfer *transfer = controller.transfer;
+    [controller dismissViewControllerAnimated:YES completion:^{
+        [self reload];
+        if (transfer.import) {
+            if (self->_scoped) [self->_importing stopAccessingSecurityScopedResource];
+            self->_importing = nil;
+            self->_scoped = NO;
+            [self startNextImport];
+        } else if (!transfer.error && !transfer.cancelled) {
+            /* Written: saved where the user says, in Files. */
+            UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ transfer.URL ] asCopy:YES];
+            picker.delegate = self;
+            [self presentViewController:picker animated:YES completion:nil];
+        }
+    }];
 }
 
 /* Every note as Markdown, in a zip saved to Files. */
 - (void)exportAllNotes:(id)sender {
+    if (_importing) return;
     NSURL *zip = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:@"Notes.zip"];
-    NSError *error = nil;
-    if (![_notes exportMarkdownToURL:zip error:&error]) {
-        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Not Exported" message:error.localizedDescription
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-        [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-        [self presentViewController:a animated:YES completion:nil];
-        return;
-    }
-    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ zip ] asCopy:YES];
-    picker.delegate = self;
-    [self presentViewController:picker animated:YES completion:nil];
+    [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:zip]];
 }
 
 - (void)newFolder:(id)sender {

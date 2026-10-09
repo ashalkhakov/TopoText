@@ -141,6 +141,10 @@ CA
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="Move To" id="SNm-mn-211"/>
                             </menuItem>
+                            <menuItem title="Move Folder To" tag="7002" id="SNm-mi-933">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Move Folder To" id="SNm-mn-933"/>
+                            </menuItem>
                             <menuItem title="Recover Note" id="SNm-mi-212">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>

@@ -69,6 +69,10 @@
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
 		};
+		1D3E0EBF808C8D10BBC7A9B8 /* SNTransferViewController.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = B22E24B4B4725F0EFE51DD23;
+		};
 		1D628DFD086981FFCD224B1D /* SNNotebooks.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 0E28CF600D1F26B783917DFC;
@@ -106,6 +110,10 @@
 		31315B895C7B07BAF6DA0F94 /* SNTableGrid.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
+		};
+		32994D778D47C18E6E9FFC6E /* SNTransferPanel.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = A74090D524D5A82D2036F9F3;
 		};
 		330A0C62A452B44EBD481FEA /* SNUndoTextView.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -461,6 +469,10 @@
 				);
 			};
 		};
+		D8CD33C84CC9AEFF9DB416B0 /* TransferPanel.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 0028F98C5C8655B937FD37DB;
+		};
 		D90D2FE1CB02EF0327E26267 /* SNMigration.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
@@ -808,6 +820,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0028F98C5C8655B937FD37DB /* TransferPanel.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/TransferPanel.xib;
+			sourceTree = "<group>";
+			name = TransferPanel.xib;
+		};
 		036F46B4B4BE3204D3B8A566 /* SNUndoTextView.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -835,6 +854,13 @@
 			path = Shared/SNNote.h;
 			sourceTree = "<group>";
 			name = SNNote.h;
+		};
+		0ADA6E491D7F3980F71CA1A3 /* SNTransferViewController.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/SNTransferViewController.h;
+			sourceTree = "<group>";
+			name = SNTransferViewController.h;
 		};
 		0E28CF600D1F26B783917DFC /* SNNotebooks.m */ = {
 			isa = PBXFileReference;
@@ -1190,6 +1216,13 @@
 			sourceTree = "<group>";
 			name = SNPeersViewController.h;
 		};
+		870E968B749C1FBB17F52C78 /* SNTransferPanel.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNTransferPanel.h;
+			sourceTree = "<group>";
+			name = SNTransferPanel.h;
+		};
 		8CA44378B789F5979E110A09 /* SNTransfer.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1302,12 +1335,26 @@
 			sourceTree = "<group>";
 			name = Info.plist;
 		};
+		A74090D524D5A82D2036F9F3 /* SNTransferPanel.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNTransferPanel.m;
+			sourceTree = "<group>";
+			name = SNTransferPanel.m;
+		};
 		AC94564EB5B357E5DA849A01 /* SNAppController.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
 			path = AppKit/SNAppController.m;
 			sourceTree = "<group>";
 			name = SNAppController.m;
+		};
+		B22E24B4B4725F0EFE51DD23 /* SNTransferViewController.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNTransferViewController.m;
+			sourceTree = "<group>";
+			name = SNTransferViewController.m;
 		};
 		BCCB2602B0C5007DD193EFB5 /* SimpleNotes 2.xcdatamodel */ = {
 			isa = PBXFileReference;
@@ -1543,6 +1590,8 @@
 				D70D32CA3559A9A3C8792783,
 				96680BD1CF6A14847F144BB9,
 				CDAACC1B7695C7D881D1F53C,
+				870E968B749C1FBB17F52C78,
+				A74090D524D5A82D2036F9F3,
 				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
@@ -1552,6 +1601,7 @@
 				7E6A0E52D2824B01873D4747,
 				7B171DA9ABD39A0E778CE234,
 				F311510A21AD054DB71F2A08,
+				0028F98C5C8655B937FD37DB,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1661,6 +1711,8 @@
 				054A76FC40094ADDD3CBC934,
 				853198F19D87AB918149E201,
 				A498AC792A7B7675377DED03,
+				0ADA6E491D7F3980F71CA1A3,
+				B22E24B4B4725F0EFE51DD23,
 				036F46B4B4BE3204D3B8A566,
 				E24E63BBA2A66A746F957E15,
 				60B496EE8C7BBF49E296082F,
@@ -1896,6 +1948,7 @@
 				AC1307ED585C96E4A0074734,
 				0FCC9C9E0E329BC98E59E527,
 				C93C1B38E5CC45EE1BFB472B,
+				D8CD33C84CC9AEFF9DB416B0,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1922,6 +1975,7 @@
 				72A18D153A49CB051B239C79,
 				57C340E00E089F2758BECFEA,
 				F805AB3AE8BCCEE4EF1C9A0E,
+				1D3E0EBF808C8D10BBC7A9B8,
 				330A0C62A452B44EBD481FEA,
 				7E28E0CE996D7FC9B8BE562B,
 				62FD998ECE6FA8C402E5CE81,
@@ -1971,6 +2025,7 @@
 				42A80778769E29C7DC69B57E,
 				78691EDAA70C27B6E68BBF1A,
 				E28023D9DDBD289626CB9170,
+				32994D778D47C18E6E9FFC6E,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,

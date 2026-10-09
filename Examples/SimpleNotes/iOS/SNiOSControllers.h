@@ -5,6 +5,7 @@
 #pragma once
 #import <UIKit/UIKit.h>
 #import "SNNotes.h"
+#import "SNTransferViewController.h"
 #import <PhotosUI/PhotosUI.h>
 #import <QuickLook/QuickLook.h>
 #import "SNSmartFolderViewController.h"
@@ -16,7 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate, UIDocumentPickerDelegate>
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate, UIDocumentPickerDelegate,
+                                                               SNTransferViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The smart folder form, for a new one (folder nil) or one to edit.
 - (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;

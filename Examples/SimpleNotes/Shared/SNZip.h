@@ -20,11 +20,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSDate *)dateAtPath:(NSString *)path;
 @end
 
+// Written in memory (-init, then -data), or into a file as it goes
+// (-initWithURL:error:, then -finish:): an export of many notes is never
+// all in memory.
 @interface SNZipWriter : NSObject
-// A file, deflated (or stored, when that is no smaller).
-- (void)addData:(NSData *)data atPath:(NSString *)path date:(nullable NSDate *)date;
-// The archive written so far.
+- (instancetype)init;
+// The file at url made (replacing one there); nil and why not.
+- (nullable instancetype)initWithURL:(NSURL *)url error:(NSError **)error;
+// A file, deflated (or stored, when that is no smaller). NO: not written
+// (the disk full, say); the archive is no good then.
+- (BOOL)addData:(NSData *)data atPath:(NSString *)path date:(nullable NSDate *)date;
+// In memory: the archive written so far.
 - (NSData *)data;
+// Into a file: its end written, and the file closed.
+- (BOOL)finish:(NSError **)error;
 @end
 
 NS_ASSUME_NONNULL_END
