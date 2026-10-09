@@ -17,7 +17,7 @@ ARG SDK=odatakit-sdk:latest
 # FreeCoreData, rebuilt over the sdk's: a commit of it, or a checkout of
 # one's own (--build-context freecoredata=../FreeCoreData).
 FROM alpine/git AS freecoredata-git
-ARG FREECOREDATA_REF=eaf7072e19205e209bd2be95e0f89e67b9f00bc7
+ARG FREECOREDATA_REF=524709592bf8670dab363d4c00d70eff4aa51e55
 RUN git clone -q https://github.com/ashalkhakov/FreeCoreData.git /src && cd /src && git checkout -q "$FREECOREDATA_REF"
 FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /

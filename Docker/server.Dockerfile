@@ -54,8 +54,8 @@ RUN set -e; \
 
 # FreeCoreData and ODataKit, at CI's pins.
 FROM stack AS libraries
-ARG FREECOREDATA_REF=eaf7072e19205e209bd2be95e0f89e67b9f00bc7
-ARG ODATAKIT_REF=4fa80f72e3882bd31a3707e15dd69068ef607590
+ARG FREECOREDATA_REF=524709592bf8670dab363d4c00d70eff4aa51e55
+ARG ODATAKIT_REF=6a381a9ced6c7937390c1cdce937f47c00798a71
 SHELL ["/bin/bash", "-c"]
 RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \
