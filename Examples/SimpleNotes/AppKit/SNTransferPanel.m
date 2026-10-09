@@ -42,7 +42,6 @@
     for (NSString *s in skipped) NSLog(@"SimpleNotes: left out: %@", s);
     _detailField.stringValue = [lines componentsJoinedByString:@"\n"];
     _button.title = @"Close";
-    _button.keyEquivalent = @"\r";
 }
 
 - (IBAction)stopOrClose:(id)sender {
@@ -53,6 +52,13 @@
         return;
     }
     [self close];
+    /* Told once this click is done: the delegate lets go of the panel, and
+       its button, which GNUstep would otherwise free while the button's own
+       action runs (with its observers still registered). */
+    [self performSelector:@selector(tellClosed) withObject:nil afterDelay:0];
+}
+
+- (void)tellClosed {
     id<SNTransferPanelDelegate> delegate = _delegate;
     [delegate transferPanelDidClose:self];
 }

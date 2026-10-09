@@ -16,6 +16,17 @@ NSURL *SNSelfTestRoot;
 @interface SNSelfTestSecrets : NSObject <SNSecretStoring>
 @end
 
+/* Lets go of a transfer panel when it says it closed, as the window does. */
+@interface SNSelfTestPanelHolder : NSObject <SNTransferPanelDelegate>
+@property (nonatomic, strong) SNTransferPanel *panel;
+@end
+
+@implementation SNSelfTestPanelHolder
+- (void)transferPanelDidClose:(SNTransferPanel *)panel {
+    _panel = nil;
+}
+@end
+
 @implementation SNSelfTestSecrets {
     NSMutableDictionary *_all;
 }
@@ -372,7 +383,16 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay(loaded && ran && export.done == export.total && export.total > 0 && [transferPanel.button.title isEqual:@"Close"] &&
               [transferPanel.detailField.stringValue containsString:@"exported"],
               [NSString stringWithFormat:@"an export in its panel (%@)", export.summary]);
-        [transferPanel close];
+        /* Closed by its button, and let go of (GNUstep freed the button in
+           its own action, observers and all, and the app stopped). */
+        SNSelfTestPanelHolder *holder = [[SNSelfTestPanelHolder alloc] init];
+        holder.panel = transferPanel;
+        transferPanel.delegate = holder;
+        __weak SNTransferPanel *closed = transferPanel;
+        transferPanel = nil;
+        [holder.panel.button performClick:nil];
+        SNWait(2, ^BOOL { return holder.panel == nil && closed == nil; });
+        SNSay(holder.panel == nil, [NSString stringWithFormat:@"Close lets go of the panel (%@)", closed ? @"still held elsewhere" : @"freed"]);
         [[NSFileManager defaultManager] removeItemAtURL:exported error:NULL];
         [window showFolderNamed:@"Work Things"];
         NSMenuItem *editSmart = [[NSMenuItem alloc] initWithTitle:@"Edit" action:@selector(editSmartFolder:) keyEquivalent:@""];
