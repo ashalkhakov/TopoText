@@ -31,7 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 // On the main thread: something changed (a save, a sync, the server), the
 // views read again. userInfo: "status" (text), "synced" (YES after a sync
-// that brought or sent something).
+// that brought or sent something), "statusOnly" (YES when only the status
+// changed, as a sync goes: nothing to read again).
 FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 
 @interface SNNotes : NSObject
@@ -158,6 +159,9 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // The notes tagged so, sorted; whose text has text in it (nil: all).
 - (NSArray<SNNote *> *)notesTagged:(NSString *)tag matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesTagged:(NSString *)tag;
+// Every tag and how many notes have it, in one pass over the notes: for a
+// list of them all (-countOfNotesTagged: is a pass each).
+- (NSDictionary<NSString *, NSNumber *> *)tagCounts;
 
 #pragma mark Sorting and grouping
 

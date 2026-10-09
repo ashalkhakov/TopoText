@@ -54,6 +54,10 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     SNTransferPanel *_transferPanel;
     NSMutableArray<NSURL *> *_imports;
     NSManagedObjectID *_importsInto;
+    /* The sidebar's counts, as last read (by folder ID, by "#tag", and
+       All Notes' and Recently Deleted's): read once a reload, not each
+       time a row is drawn. */
+    NSDictionary *_counts;
 }
 
 /* What a note dragged onto a folder carries, and a folder dragged into
@@ -185,24 +189,36 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 - (void)reloadFolders {
     _reloading = YES;
-    _topFolders = [_notes foldersInFolder:nil];
+    NSArray<SNFolder *> *tree = _notes.folderTree;
+    NSMutableArray *top = [NSMutableArray array];
     NSMutableDictionary *children = [NSMutableDictionary dictionary];
-    for (SNFolder *f in _notes.folderTree) {
+    NSMutableDictionary *counts = [NSMutableDictionary dictionary];
+    for (SNFolder *f in tree) {
+        counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
         SNFolder *parent = [_notes parentOfFolder:f];
-        if (!parent) continue;
+        if (!parent) {
+            [top addObject:f];
+            continue;
+        }
         NSMutableArray *in = children[parent.objectID] ?: (children[parent.objectID] = [NSMutableArray array]);
         [in addObject:f];
     }
+    _topFolders = top;
     _children = children;
     /* A tag's row keeps its string while the tag is there. */
+    NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
     NSMutableArray *tags = [NSMutableArray array];
-    for (NSString *t in _notes.tags) {
+    for (NSString *t in [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
         NSString *tag = [@"#" stringByAppendingString:t];
         [tags addObject:[self itemForTag:tag] ?: tag];
+        counts[tag] = tagCounts[t];
     }
     _tags = tags;
+    counts[SNAllNotesItem] = @([_notes countOfNotesInFolder:nil]);
+    counts[SNDeletedItem] = @(_notes.countOfDeletedNotes);
+    _counts = counts;
     [_folderTable reloadData];
-    for (SNFolder *f in _notes.folderTree)
+    for (SNFolder *f in tree)
         if (_children[f.objectID] && ![_collapsed containsObject:f.objectID]) [_folderTable expandItem:f];
     if (_tags.count && ![_collapsed containsObject:SNTagsItem]) [_folderTable expandItem:SNTagsItem];
     /* A folder gone (deleted, here or elsewhere), or a tag: All Notes. */
@@ -247,6 +263,11 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 }
 
 - (void)notesChanged:(NSNotification *)n {
+    /* How far a sync is, said a few times a second: the status alone. */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        [self showStatus:n.userInfo[@"status"] ?: @""];
+        return;
+    }
     [self reloadFolders];
     [self reloadNotes];
     /* An attachment can come after the text that has it; a table's cells
@@ -283,15 +304,15 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         return [[NSAttributedString alloc] initWithString:@"Tags" attributes:@{ NSFontAttributeName: [NSFont boldSystemFontOfSize:11],
                                                                                NSForegroundColorAttributeName: [NSColor secondaryLabelColor] }];
     if (item == SNDeletedItem)
-        return [NSString stringWithFormat:@"Recently Deleted  (%lu)", (unsigned long)_notes.countOfDeletedNotes];
+        return [NSString stringWithFormat:@"Recently Deleted  (%lu)", (unsigned long)[_counts[SNDeletedItem] unsignedIntegerValue]];
     if ([item isKindOfClass:[SNFolder class]]) {
         SNFolder *f = item;
         /* A smart folder: a gear before its name, as Apple Notes' icon. */
         return [NSString stringWithFormat:@"%@%@  (%lu)", [_notes isSmartFolder:f] ? @"\u2699\uFE0E " : @"",
-                                          f.name.length ? f.name : @"Untitled", (unsigned long)[_notes countOfNotesInFolder:f]];
+                                          f.name.length ? f.name : @"Untitled", (unsigned long)[_counts[f.objectID] unsignedIntegerValue]];
     }
-    if (item == SNAllNotesItem) return [NSString stringWithFormat:@"All Notes  (%lu)", (unsigned long)[_notes countOfNotesInFolder:nil]];
-    return [NSString stringWithFormat:@"%@  (%lu)", item, (unsigned long)[_notes countOfNotesTagged:[item substringFromIndex:1]]];
+    if (item == SNAllNotesItem) return [NSString stringWithFormat:@"All Notes  (%lu)", (unsigned long)[_counts[SNAllNotesItem] unsignedIntegerValue]];
+    return [NSString stringWithFormat:@"%@  (%lu)", item, (unsigned long)[_counts[item] unsignedIntegerValue]];
 }
 
 - (BOOL)outlineView:(NSOutlineView *)outline shouldSelectItem:(id)item {

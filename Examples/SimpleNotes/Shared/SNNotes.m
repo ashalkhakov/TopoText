@@ -199,6 +199,14 @@ NSString *SNDateText(NSDate *date) {
                                                       userInfo:@{ @"status": _status, @"synced": @(synced) }];
 }
 
+/* The status alone changed (a sync begun, how far it is): nothing for
+   the views to read again. */
+- (void)sayOnly:(NSString *)status {
+    _status = [status copy];
+    [[NSNotificationCenter defaultCenter] postNotificationName:SNNotesDidChangeNotification object:self
+                                                      userInfo:@{ @"status": _status, @"synced": @NO, @"statusOnly": @YES }];
+}
+
 #pragma mark the server
 
 - (void)setServiceRoot:(NSURL *)serviceRoot {
@@ -294,7 +302,7 @@ NSString *SNDateText(NSDate *date) {
         }
         if (!what) return;
         if (self->_syncingWith) what = [NSString stringWithFormat:@"With %@: %@", self->_syncingWith, what];
-        [self say:what synced:NO];
+        [self sayOnly:what];
     });
 }
 
@@ -342,7 +350,7 @@ NSString *SNDateText(NSDate *date) {
     [self prepareToSync];
     _syncing = YES;
     _syncingWith = [name copy];
-    [self say:[NSString stringWithFormat:@"Syncing with %@…", name] synced:NO];
+    [self sayOnly:[NSString stringWithFormat:@"Syncing with %@…", name]];
     ODataSyncEngine *engine = _engine;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSError *error = nil;
@@ -387,7 +395,7 @@ NSString *SNDateText(NSDate *date) {
     [self prepareToSync];
     _syncing = YES;
     _syncingWith = nil;
-    [self say:@"Syncing…" synced:NO];
+    [self sayOnly:@"Syncing…"];
     ODataSyncEngine *engine = _engine;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSError *error = nil;
@@ -522,33 +530,50 @@ NSString *SNDateText(NSDate *date) {
     return NO;
 }
 
-- (NSArray<SNFolder *> *)foldersInFolder:(SNFolder *)folder {
-    NSMutableArray *in = [NSMutableArray array];
-    for (SNFolder *f in [self folders])
-        if ([self parentOfFolder:f] == folder) [in addObject:f];
-    return in;
+/* Every folder by the folder it is in, as shown (NSNull: the top), by
+   name: one fetch, and each folder's parent found once. (Asked of each
+   folder in turn, as each level of a tree is, it was a fetch of every
+   folder each time: with hundreds, seconds, and on FreeCoreData hundreds
+   of MB allocated and freed.) */
+- (NSDictionary<id<NSCopying>, NSArray<SNFolder *> *> *)foldersByParent {
+    NSMutableDictionary *children = [NSMutableDictionary dictionary];
+    for (SNFolder *f in [self folders]) {
+        SNFolder *parent = [self parentOfFolder:f];
+        id key = parent ? (id)parent.objectID : (id)[NSNull null];
+        NSMutableArray *in = children[key] ?: (children[key] = [NSMutableArray array]);
+        [in addObject:f];
+    }
+    return children;
 }
 
-- (void)addTreeOf:(SNFolder *)folder to:(NSMutableArray *)tree {
-    for (SNFolder *f in [self foldersInFolder:folder]) {
+- (NSArray<SNFolder *> *)foldersInFolder:(SNFolder *)folder {
+    return [self foldersByParent][folder ? (id)folder.objectID : (id)[NSNull null]] ?: @[];
+}
+
+- (void)addTreeOf:(SNFolder *)folder from:(NSDictionary *)children to:(NSMutableArray *)tree {
+    for (SNFolder *f in children[folder ? (id)folder.objectID : (id)[NSNull null]]) {
         [tree addObject:f];
-        [self addTreeOf:f to:tree];
+        [self addTreeOf:f from:children to:tree];
     }
 }
 
 - (NSArray<SNFolder *> *)folderTree {
     NSMutableArray *tree = [NSMutableArray array];
-    [self addTreeOf:nil to:tree];
+    [self addTreeOf:nil from:[self foldersByParent] to:tree];
     return tree;
 }
 
 #pragma mark tags
 
-- (NSArray<NSString *> *)tags {
-    NSMutableSet *tags = [NSMutableSet set];
+- (NSDictionary<NSString *, NSNumber *> *)tagCounts {
+    NSMutableDictionary *counts = [NSMutableDictionary dictionary];
     for (SNNote *n in [self fetch:SNNoteEntity where:[self predicateForFolder:nil matching:@"#" deleted:NO] sortedBy:nil])
-        [tags addObjectsFromArray:SNTagsInText(n.body ?: @"")];
-    return [tags.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+        for (NSString *tag in [NSSet setWithArray:SNTagsInText(n.body ?: @"")]) counts[tag] = @([counts[tag] unsignedIntegerValue] + 1);
+    return counts;
+}
+
+- (NSArray<NSString *> *)tags {
+    return [[self tagCounts].allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
 - (NSArray<SNNote *> *)notesTagged:(NSString *)tag matching:(NSString *)text {
@@ -563,7 +588,7 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSUInteger)countOfNotesTagged:(NSString *)tag {
-    return [self notesTagged:tag matching:nil].count;
+    return [[self tagCounts][tag.lowercaseString] unsignedIntegerValue];
 }
 
 #pragma mark sorting and grouping
@@ -785,7 +810,7 @@ NSString *SNDateText(NSDate *date) {
     /* The folders in it too, each deleted (and sent so); all their notes
        to Recently Deleted. */
     NSMutableArray<SNFolder *> *gone = [NSMutableArray arrayWithObject:folder];
-    [self addTreeOf:folder to:gone];
+    [self addTreeOf:folder from:[self foldersByParent] to:gone];
     NSDate *now = [NSDate date];
     for (SNFolder *f in gone) {
         for (SNNote *n in f.notes.allObjects) {

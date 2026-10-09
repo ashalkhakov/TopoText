@@ -66,6 +66,10 @@ static NSString *SNDaysLeftText(SNNote *note) {
     SNNotes *_notes;
     NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
     NSArray<NSString *> *_tags;
+    /* The counts, read once a reload (by folder ID, by tag; All Notes'
+       and Recently Deleted's under NSNull and @""), not as each cell is
+       drawn. */
+    NSDictionary *_counts;
     /* The server being signed in to, until it is (then the notes'). */
     SNSignIn *_signIn;
     SNPeers *_peers;
@@ -125,13 +129,24 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)reload {
     _folders = _notes.folderTree;
-    _tags = _notes.tags;
+    NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
+    _tags = [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+    NSMutableDictionary *counts = [tagCounts mutableCopy];
+    for (SNFolder *f in _folders) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
+    counts[[NSNull null]] = @([_notes countOfNotesInFolder:nil]);
+    counts[@""] = @(_notes.countOfDeletedNotes);
+    _counts = counts;
     [self.tableView reloadData];
     SNShowStatus(self, _notes);
 }
 
 - (void)changed:(NSNotification *)n {
     if (!_notes.syncing) [self.refreshControl endRefreshing];
+    /* How far a sync is: the status alone (shown by SNShowStatus). */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        SNShowStatus(self, _notes);
+        return;
+    }
     [self reload];
 }
 
@@ -373,17 +388,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     if (ip.section == SNDeletedSection) {
         c.text = @"Recently Deleted";
         c.image = [UIImage systemImageNamed:@"trash"];
-        count = _notes.countOfDeletedNotes;
+        count = [_counts[@""] unsignedIntegerValue];
     } else if (ip.section == SNTagsSection) {
         NSString *tag = _tags[(NSUInteger)ip.row];
         c.text = [@"#" stringByAppendingString:tag];
         c.image = [UIImage systemImageNamed:@"number"];
-        count = [_notes countOfNotesTagged:tag];
+        count = [_counts[tag] unsignedIntegerValue];
     } else {
         SNFolder *f = ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil;
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
         c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
-        count = [_notes countOfNotesInFolder:f];
+        count = [_counts[f ? (id)f.objectID : (id)[NSNull null]] unsignedIntegerValue];
         depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
     }
     c.secondaryText = [NSString stringWithFormat:@"%lu", (unsigned long)count];
@@ -590,6 +605,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 - (void)changed:(NSNotification *)n {
     if (!_notes.syncing) [self.refreshControl endRefreshing];
+    /* How far a sync is: the status alone (shown by SNShowStatus). */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        SNShowStatus(self, _notes);
+        return;
+    }
     if (_folder && (_folder.isDeleted || !_folder.managedObjectContext)) {
         [self.navigationController popToRootViewControllerAnimated:YES];
         return;

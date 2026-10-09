@@ -521,6 +521,10 @@
 			isa = PBXBuildFile;
 			fileRef = 93905B50397F393A04D89B2C;
 		};
+		EEA04789435666169D25A3C8 /* SNMemory-Apple.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 088AFD2695E6A139D1C77D40;
+		};
 		F48063A33E82F7318AC1D2FF /* SNModel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
@@ -840,6 +844,13 @@
 			path = iOS/SNSmartFolderViewController.m;
 			sourceTree = "<group>";
 			name = SNSmartFolderViewController.m;
+		};
+		088AFD2695E6A139D1C77D40 /* SNMemory-Apple.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNMemory-Apple.m";
+			sourceTree = "<group>";
+			name = "SNMemory-Apple.m";
 		};
 		0892E92D83242A6457DEFF1A /* SNSmartFolderViewController.h */ = {
 			isa = PBXFileReference;
@@ -1216,6 +1227,13 @@
 			sourceTree = "<group>";
 			name = SNPeersViewController.h;
 		};
+		870E686C4171EC7BDA75A2FC /* SNMemory.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNMemory.h;
+			sourceTree = "<group>";
+			name = SNMemory.h;
+		};
 		870E968B749C1FBB17F52C78 /* SNTransferPanel.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1425,6 +1443,13 @@
 			sourceTree = "<group>";
 			name = SNSyncPanel.h;
 		};
+		DED814D7F908B806E51A135D /* SNMemory.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNMemory.m;
+			sourceTree = "<group>";
+			name = SNMemory.m;
+		};
 		DF6E4590561AFD1E2D8B2DA3 /* SNSmartFilter.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1592,6 +1617,9 @@
 				CDAACC1B7695C7D881D1F53C,
 				870E968B749C1FBB17F52C78,
 				A74090D524D5A82D2036F9F3,
+				870E686C4171EC7BDA75A2FC,
+				DED814D7F908B806E51A135D,
+				088AFD2695E6A139D1C77D40,
 				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
@@ -2026,6 +2054,7 @@
 				78691EDAA70C27B6E68BBF1A,
 				E28023D9DDBD289626CB9170,
 				32994D778D47C18E6E9FFC6E,
+				EEA04789435666169D25A3C8,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
