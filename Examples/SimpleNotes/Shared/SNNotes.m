@@ -449,6 +449,17 @@ NSString *SNDateText(NSDate *date) {
     });
 }
 
+- (void)resendAllNotes {
+    if (!_serviceRoot || _syncing) return;
+    [self prepareToSync];
+    NSError *error = nil;
+    if (![_engine exchangeAllMergedAttributesWithError:&error]) {
+        [self say:[NSString stringWithFormat:@"Not sent again: %@", error.localizedDescription ?: @"the notes could not be read."] synced:NO];
+        return;
+    }
+    [self sync];
+}
+
 - (BOOL)syncAndWait:(NSError **)error {
     if (_syncing || !_serviceRoot) return NO;
     [self prepareToSync];

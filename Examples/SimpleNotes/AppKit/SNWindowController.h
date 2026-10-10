@@ -72,6 +72,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)sortFolderByTitle:(nullable id)sender;
 - (IBAction)togglePinned:(nullable id)sender;
 - (IBAction)sync:(nullable id)sender;
+// Every note's text exchanged with the server again, both ways (a repair).
+- (IBAction)resendAllNotes:(nullable id)sender;
 - (IBAction)toggleBold:(nullable id)sender;
 - (IBAction)toggleItalic:(nullable id)sender;
 - (IBAction)toggleUnderline:(nullable id)sender;

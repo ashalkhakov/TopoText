@@ -168,6 +168,50 @@
     XCTAssertEqualObjects([self onlyNote:a].bodyText, [self onlyNote:b].bodyText);
 }
 
+/* Typed into on one device, synced after each pause: no conflict, there
+   being no other writer. */
+- (void)testTypingOnOneDeviceMeetsNoConflict {
+    SNNotes *a = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"10 - Saturday" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    for (int i = 0; i < 3; i++) {
+        [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:@"\nmore" atIndex:t.length attributes:nil]; }];
+        [self sync:a];
+        XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"edit %d: %@", i, a.engine.lastResult);
+        XCTAssertEqual(a.engine.lastResult.downloaded, 0u, @"edit %d: %@", i, a.engine.lastResult);
+    }
+}
+
+/* A day's note, typed a few words at a time on one device and synced as it
+   goes, and a line added on the other: the same on both. */
+- (void)testALongNoteTypedAsItSyncsIsTheSameOnBoth {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"10 - S" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    NSString *rest = @"aturday\n\n\nSimpleNotes 0.3.0 released\nmuch faster to navigate\nmuch faster to sync\n"
+                     @"still a bit sluggish when typing in text on Linux\n\nVarious GNUstep patches have been accepted\nXFormsKit changes\n\n"
+                     @"today I finally collected all the garbage in the garage, and now I can start preparing the concrete for resurfacing";
+    for (NSUInteger i = 0; i < rest.length; i += 7) {
+        NSString *piece = [rest substringWithRange:NSMakeRange(i, MIN(7u, rest.length - i))];
+        [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:piece atIndex:t.length attributes:nil]; }];
+        if (i % 70 == 0) [self sync:a];
+    }
+    [self sync:a];
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@"\n\n\nddddd" atIndex:t.length attributes:nil]; }];
+    [self sync:b];
+    [self sync:a];
+    [self sync:b];
+    /* Both typed after "10 - S": both kept, in an order the same on both. */
+    NSString *body = [self onlyNote:a].body;
+    XCTAssertEqualObjects(body, [self onlyNote:b].body);
+    XCTAssertTrue([body hasPrefix:@"10 - S"], @"%@", body);
+    XCTAssertTrue([body containsString:rest], @"%@", body);
+    XCTAssertTrue([body containsString:@"\n\n\nddddd"], @"%@", body);
+    XCTAssertEqual(body.length, 6 + rest.length + 8);
+    XCTAssertGreaterThan([self onlyNote:a].bodyText.length, 1024u, @"a state larger than a shadow keeps");
+}
+
 - (void)testAnEditOutlivesADeletionThatDidNotSeeIt {
     SNNotes *a = [self device], *b = [self device];
     [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"keep me" atIndex:0 attributes:nil]; }];

@@ -882,6 +882,10 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [_notes sync];
 }
 
+- (IBAction)resendAllNotes:(id)sender {
+    [_notes resendAllNotes];
+}
+
 - (IBAction)findNote:(id)sender {
     [self.window makeFirstResponder:_searchField];
 }
@@ -1034,7 +1038,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         item.state = f && (mine ? [own isEqual:mine] : !own) ? NSControlStateValueOn : NSControlStateValueOff;
         return f != nil;
     }
-    if (a == @selector(sync:)) return _notes.serviceRoot && !_notes.syncing;
+    if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];

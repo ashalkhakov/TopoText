@@ -74,6 +74,11 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // On a thread of its own; SNNotesDidChangeNotification when done. Asked
 // for while one runs: once more after it, for what changed meanwhile.
 - (void)sync;
+// Every note's text exchanged with the server again at a sync, now: what
+// each lacks of the other's, both ways. A repair, after a server that
+// dropped text it was sent (ODataKit's, before it merged text sent after
+// it had collected a note's deletions) while saying it had it.
+- (void)resendAllNotes;
 // The same, waited for, on this thread (the main one): for tests and the
 // self-test.
 - (BOOL)syncAndWait:(NSError **)error;
