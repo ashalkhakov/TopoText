@@ -25,7 +25,7 @@ permissions:
 
 env:
   # ODataKit, pinned to a commit: TopoTextSync builds against its ODataSync.
-  ODATAKIT_REF: 2ab40da93163805aa77057f05b0336fc230b23c0
+  ODATAKIT_REF: 6a381a9ced6c7937390c1cdce937f47c00798a71
 
 jobs:
   ########################### macOS / Cocoa, iOS ###########################
@@ -159,10 +159,19 @@ jobs:
       # a nil constant in a predicate prints, and parses back, as nil.
       # gnustep-patches edc2289: a nil argument for %@ compares with nil;
       # 40a2bc8: keep-nib-textfield-bezel retired, merged into Eau's dev;
-      # 4593e60: Eau built at a pinned commit of dev (01be00b).
-      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes.
-      GNUSTEP_PATCHES_REF: 4593e606f92910c520a1c48472708b9d2934eef9
-      FREECOREDATA_REF: 591dfa6eb602929713fbd2e3eaaa828198a3cf1b
+      # 4593e60: Eau built at a pinned commit of dev (01be00b); 239a625:
+      # NSDictionary and NSArray read a binary property list from a file;
+      # 1eda55d: six libs-base fixes retired, merged upstream; 6d99b7c:
+      # more retired as libs-base merged them (its master is built).
+      # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
+      # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
+      # notes to another store (MoveFrom); 338bc7b (#71): an object and its
+      # context let go of what they held (the server's memory); eaf7072
+      # (#72): a context that related objects is let go of; 5247095 (#73):
+      # objects tell their context of their changes (no KVO), and a fetch
+      # reads its rows at once rather than a fault at a time.
+      GNUSTEP_PATCHES_REF: 6d99b7c1df7ad81191de9cd8d7805156f5d4eb91
+      FREECOREDATA_REF: 524709592bf8670dab363d4c00d70eff4aa51e55
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
@@ -327,6 +336,15 @@ jobs:
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
           SN_STORE_ARGS="-StoreType MariaDB -StoreURL mysql://root:notes@127.0.0.1:3306/notes" SN_CHECK_PORT=18081 \
             Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+
+      # A server's notes moved from SQLite to PostgreSQL (MoveFrom), into a
+      # database of their own.
+      - name: SimpleNotes' server moved from SQLite to PostgreSQL
+        working-directory: ${{ github.workspace }}/source/Examples/SimpleNotes
+        run: |
+          . $PREFIX/System/Library/Makefiles/GNUstep.sh
+          docker exec ${{ job.services.postgres.id }} psql -U postgres -c 'CREATE DATABASE moved'
+          Tests/move-and-check.sh ./obj/simplenotes-server -StoreType PostgreSQL -StoreURL postgresql://postgres:notes@127.0.0.1:5432/moved
 
       # Packaged on every commit (as RDLKit's and XFormsKit's CI), so there is
       # always a build to try: named for the commit, kept two weeks. Built on

@@ -5,6 +5,8 @@ PRODUCT_NAME = SimpleNotes
 PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.SimpleNotes.mac
 INFOPLIST_FILE = AppKit/Info.plist
 GENERATE_INFOPLIST_FILE = NO
+// zlib: SNZip (export and import).
+OTHER_LDFLAGS = $(inherited) -lz
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks
 HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/AppKit
 COMBINE_HIDPI_IMAGES = YES

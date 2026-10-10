@@ -1,8 +1,11 @@
 #import "SNiOSControllers.h"
+#import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
 #import "SNModel.h"
+#import "SNTransfer.h"
+#import "SNTransferViewController.h"
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -63,8 +66,18 @@ static NSString *SNDaysLeftText(SNNote *note) {
     SNNotes *_notes;
     NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
     NSArray<NSString *> *_tags;
+    /* The counts, read once a reload (by folder ID, by tag; All Notes'
+       and Recently Deleted's under NSNull and @""), not as each cell is
+       drawn. */
+    NSDictionary *_counts;
     /* The server being signed in to, until it is (then the notes'). */
     SNSignIn *_signIn;
+    SNPeers *_peers;
+    /* Imports waiting for the one going (each with access to its file
+       while it goes), and the export's zip, to save once written. */
+    NSMutableArray<NSURL *> *_imports;
+    NSURL *_importing;
+    BOOL _scoped;
 }
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
@@ -89,10 +102,21 @@ static NSString *SNDaysLeftText(SNNote *note) {
         }],
         [UIAction actionWithTitle:@"New Smart Folder" image:[UIImage systemImageNamed:@"gearshape"] identifier:nil handler:^(UIAction *a) {
             [self newSmartFolder:nil];
-        }] ]];
+        }],
+        /* Notes in and out as Markdown (SNTransfer.h). */
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [UIAction actionWithTitle:@"Import Notes" image:[UIImage systemImageNamed:@"square.and.arrow.down"] identifier:nil handler:^(UIAction *a) {
+                [self importNotes:nil];
+            }],
+            [UIAction actionWithTitle:@"Export All Notes" image:[UIImage systemImageNamed:@"square.and.arrow.up"] identifier:nil handler:^(UIAction *a) {
+                [self exportAllNotes:nil];
+            }] ]] ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
-    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"]
-                                                                             style:UIBarButtonItemStylePlain target:self action:@selector(server:)];
+    self.navigationItem.leftBarButtonItems = @[
+        [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
+                                        target:self action:@selector(server:)],
+        [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"antenna.radiowaves.left.and.right"] style:UIBarButtonItemStylePlain
+                                        target:self action:@selector(showDevicesNearby:)] ];
     SNAddRefresh(self, @selector(refresh:));
     [self reload];
 }
@@ -105,13 +129,24 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)reload {
     _folders = _notes.folderTree;
-    _tags = _notes.tags;
+    NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
+    _tags = [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+    NSMutableDictionary *counts = [tagCounts mutableCopy];
+    for (SNFolder *f in _folders) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
+    counts[[NSNull null]] = @([_notes countOfNotesInFolder:nil]);
+    counts[@""] = @(_notes.countOfDeletedNotes);
+    _counts = counts;
     [self.tableView reloadData];
     SNShowStatus(self, _notes);
 }
 
 - (void)changed:(NSNotification *)n {
     if (!_notes.syncing) [self.refreshControl endRefreshing];
+    /* How far a sync is: the status alone (shown by SNShowStatus). */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        SNShowStatus(self, _notes);
+        return;
+    }
     [self reload];
 }
 
@@ -122,6 +157,63 @@ static NSString *SNDaysLeftText(SNNote *note) {
         return;
     }
     [_notes sync];
+}
+
+/* A folder, a zip or Markdown files, from Files. */
+- (void)importNotes:(id)sender {
+    NSArray *types = @[ UTTypeFolder, UTTypeZIP, UTTypeText, UTTypeHTML ];
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:NO];
+    picker.allowsMultipleSelection = YES;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)picker didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    if (picker.documentPickerMode == UIDocumentPickerModeExportToService) return;
+    if (!_imports) _imports = [NSMutableArray array];
+    [_imports addObjectsFromArray:urls];
+    if (!_importing) [self startNextImport];
+}
+
+/* One import at a time, in its sheet; the next when it is closed. */
+- (void)startNextImport {
+    if (!_imports.count) return;
+    _importing = _imports.firstObject;
+    [_imports removeObjectAtIndex:0];
+    _scoped = [_importing startAccessingSecurityScopedResource];
+    [self runTransfer:[SNTransfer importIntoNotes:_notes fromURL:_importing folder:nil]];
+}
+
+- (void)runTransfer:(SNTransfer *)transfer {
+    SNTransferViewController *sheet = [[SNTransferViewController alloc] initWithTransfer:transfer];
+    sheet.delegate = self;
+    [self presentViewController:sheet animated:YES completion:nil];
+    [transfer start];
+}
+
+- (void)transferViewControllerDidClose:(SNTransferViewController *)controller {
+    SNTransfer *transfer = controller.transfer;
+    [controller dismissViewControllerAnimated:YES completion:^{
+        [self reload];
+        if (transfer.import) {
+            if (self->_scoped) [self->_importing stopAccessingSecurityScopedResource];
+            self->_importing = nil;
+            self->_scoped = NO;
+            [self startNextImport];
+        } else if (!transfer.error && !transfer.cancelled) {
+            /* Written: saved where the user says, in Files. */
+            UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[ transfer.URL ] asCopy:YES];
+            picker.delegate = self;
+            [self presentViewController:picker animated:YES completion:nil];
+        }
+    }];
+}
+
+/* Every note as Markdown, in a zip saved to Files. */
+- (void)exportAllNotes:(id)sender {
+    if (_importing) return;
+    NSURL *zip = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:@"Notes.zip"];
+    [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:zip]];
 }
 
 - (void)newFolder:(id)sender {
@@ -158,6 +250,25 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 - (void)smartFolderViewControllerDidCancel:(SNSmartFolderViewController *)editor {
     [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+#pragma mark devices nearby
+
+- (SNPeers *)peers {
+    if (_peers || !_peersDirectory) return _peers;
+    NSError *error = nil;
+    _peers = [[SNPeers alloc] initWithNotes:_notes directory:_peersDirectory error:&error];
+    _peers.deviceName = [UIDevice currentDevice].name;
+    if (!_peers) SNTell(self, @"Devices nearby cannot be synced with.", error.localizedDescription ?: @"");
+    else if (_notes.serverRemote && !_peers.hasToken) [_peers fetchToken];
+    return _peers;
+}
+
+- (IBAction)showDevicesNearby:(id)sender {
+    SNPeers *peers = [self peers];
+    if (!peers) return;
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:[[SNPeersViewController alloc] initWithPeers:peers]];
+    [self presentViewController:nav animated:YES completion:nil];
 }
 
 - (void)server:(id)sender {
@@ -277,17 +388,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     if (ip.section == SNDeletedSection) {
         c.text = @"Recently Deleted";
         c.image = [UIImage systemImageNamed:@"trash"];
-        count = _notes.countOfDeletedNotes;
+        count = [_counts[@""] unsignedIntegerValue];
     } else if (ip.section == SNTagsSection) {
         NSString *tag = _tags[(NSUInteger)ip.row];
         c.text = [@"#" stringByAppendingString:tag];
         c.image = [UIImage systemImageNamed:@"number"];
-        count = [_notes countOfNotesTagged:tag];
+        count = [_counts[tag] unsignedIntegerValue];
     } else {
         SNFolder *f = ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil;
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
         c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
-        count = [_notes countOfNotesInFolder:f];
+        count = [_counts[f ? (id)f.objectID : (id)[NSNull null]] unsignedIntegerValue];
         depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
     }
     c.secondaryText = [NSString stringWithFormat:@"%lu", (unsigned long)count];
@@ -435,8 +546,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         _groups = deleted.count ? @[ [[SNNoteGroup alloc] initWithTitle:nil notes:deleted] ] : @[];
         self.navigationItem.rightBarButtonItem.enabled = deleted.count > 0;
     } else {
-        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]
-                               sortedBy:[_notes sortOrderForFolder:_tag ? nil : _folder]];
+        /* Each note a fault, read when its cell is shown. */
+        _groups = [_notes groupsInFolder:_tag ? nil : _folder tag:_tag matching:search];
         self.navigationItem.rightBarButtonItems.lastObject.menu = [self viewMenu];
     }
     [self.tableView reloadData];
@@ -494,6 +605,11 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 - (void)changed:(NSNotification *)n {
     if (!_notes.syncing) [self.refreshControl endRefreshing];
+    /* How far a sync is: the status alone (shown by SNShowStatus). */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        SNShowStatus(self, _notes);
+        return;
+    }
     if (_folder && (_folder.isDeleted || !_folder.managedObjectContext)) {
         [self.navigationController popToRootViewControllerAnimated:YES];
         return;
@@ -506,8 +622,10 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     else [self.refreshControl endRefreshing];
 }
 
+/* Searched a moment after the last key, not at each. */
 - (void)updateSearchResultsForSearchController:(UISearchController *)c {
-    [self reload];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reload) object:nil];
+    [self performSelector:@selector(reload) withObject:nil afterDelay:0.25];
 }
 
 - (void)deleteAll:(id)sender {

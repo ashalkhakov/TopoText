@@ -9,6 +9,7 @@
 #import <AppKit/AppKit.h>
 #import "SNCheck.h"
 #import "SNSelfTest.h"
+#import "SNMemory.h"
 
 int main(int argc, const char *argv[]) {
     for (int i = 1; i + 1 < argc; i++)
@@ -19,5 +20,6 @@ int main(int argc, const char *argv[]) {
         }
     for (int i = 1; i + 1 < argc; i++)
         if (!strcmp(argv[i], "--self-test")) SNSelfTestRoot = [NSURL URLWithString:@(argv[i + 1])];
+    SNTuneMemory();
     return NSApplicationMain(argc, argv);
 }

@@ -54,7 +54,7 @@ TopoText_OBJCFLAGS += $(TT_OBJCFLAGS)
 TopoText_LIBRARIES_DEPEND_UPON += -ldispatch
 
 TopoTextSync_NEEDS_GUI = no
-TopoTextSync_OBJC_FILES = Sources/TopoTextSync/TTSyncResolver.m
+TopoTextSync_OBJC_FILES = Sources/TopoTextSync/TTSyncResolver.m Sources/TopoTextSync/TTSyncMerger.m
 TopoTextSync_HEADER_FILES = TopoTextSync.h
 TopoTextSync_HEADER_FILES_DIR = Sources/TopoTextSync/include/TopoTextSync
 TopoTextSync_HEADER_FILES_INSTALL_DIR = TopoTextSync

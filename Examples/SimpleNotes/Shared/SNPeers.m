@@ -5,6 +5,7 @@
 
 NSNotificationName const SNPeersDidChangeNotification = @"SNPeersDidChange";
 const NSUInteger SNPeersPort = 8642;
+NSString * const SNServePeersDefaultsKey = @"SNServePeers";
 
 /* Whom a paired device syncs as here. */
 static NSString * const SNPeerSubject = @"peer";
@@ -45,6 +46,16 @@ NSString *SNLocalAddress(void) {
 @implementation SNPeers {
     NSURL *_directory;
     NSTimer *_expiry;
+    /* Automatic: the timer, the devices due (by thumbprint), the one being
+       synced with and since when, when each was last synced with, which
+       refused until when, when a token was last asked for. */
+    NSTimer *_round;
+    NSMutableArray<NSString *> *_due;
+    NSString *_current;
+    NSDate *_currentSince;
+    NSMutableDictionary<NSString *, NSDate *> *_synced;
+    NSMutableDictionary<NSString *, NSDate *> *_refused;
+    NSDate *_askedForToken;
     ODataSyncPeerServer *_server;
     ODataSyncPeerAdvertiser *_advertiser;
     ODataSyncPeerBrowser *_browser;
@@ -57,6 +68,12 @@ NSString *SNLocalAddress(void) {
     _deviceName = [NSProcessInfo processInfo].hostName;
     _port = SNPeersPort;
     _status = @"";
+    _syncInterval = 300;
+    _changeDelay = 10;
+    _refusalPause = 30 * 60;
+    _due = [NSMutableArray array];
+    _synced = [NSMutableDictionary dictionary];
+    _refused = [NSMutableDictionary dictionary];
     [[NSFileManager defaultManager] createDirectoryAtURL:directory withIntermediateDirectories:YES
                                               attributes:@{ NSFilePosixPermissions: @0700 } error:NULL];
     ODataSyncPeerIdentity *identity = [ODataSyncPeerIdentity identityNamed:notes.engine.replicaID
@@ -151,6 +168,8 @@ NSString *SNLocalAddress(void) {
         [self say:[NSString stringWithFormat:@"No peer token: %@", error.localizedDescription ?: @"no answer."]];
         return;
     }
+    /* Devices that would not take this one before may now. */
+    if (_automatic) [self syncRound];
     [self say:[NSString stringWithFormat:@"A peer token until %@: your devices nearby sync with this one.",
                                          [NSDateFormatter localizedStringFromDate:self.tokenExpires ?: [NSDate distantFuture]
                                                                         dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterShortStyle]]];
@@ -265,6 +284,7 @@ NSString *SNLocalAddress(void) {
 
 - (void)peerBrowser:(ODataSyncPeerBrowser *)browser didFindPeer:(ODataSyncPeerAnnouncement *)peer {
     [self changed];
+    if (_automatic) [self syncRound];
 }
 
 - (void)peerBrowser:(ODataSyncPeerBrowser *)browser didLosePeer:(ODataSyncPeerAnnouncement *)peer {
@@ -307,9 +327,109 @@ NSString *SNLocalAddress(void) {
     return ok;
 }
 
+#pragma mark by itself
+
+- (void)setAutomatic:(BOOL)automatic {
+    if (automatic == _automatic) return;
+    _automatic = automatic;
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    if (!automatic) {
+        [_round invalidate];
+        _round = nil;
+        [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(syncRound) object:nil];
+        [center removeObserver:self name:SNNotesDidChangeNotification object:_notes];
+        [center removeObserver:self name:NSManagedObjectContextDidSaveNotification object:_notes.context];
+        [_due removeAllObjects];
+        return;
+    }
+    [self startBrowsing];
+    /* A sync ending (the server's, or a device's): the next device due.
+       A change saved here: a round, a little after. */
+    [center addObserver:self selector:@selector(notesChanged:) name:SNNotesDidChangeNotification object:_notes];
+    [center addObserver:self selector:@selector(savedHere:) name:NSManagedObjectContextDidSaveNotification object:_notes.context];
+    _round = [NSTimer scheduledTimerWithTimeInterval:_syncInterval target:self selector:@selector(roundDue:) userInfo:nil repeats:YES];
+    [self askForTokenIfDue];
+    [self syncRound];
+}
+
+- (void)roundDue:(NSTimer *)timer {
+    [self syncRound];
+}
+
+- (void)savedHere:(NSNotification *)n {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(syncRound) object:nil];
+    [self performSelector:@selector(syncRound) withObject:nil afterDelay:_changeDelay];
+}
+
+/* Would it take this device: the token (a device of the user's), or a
+   pairing. */
+- (BOOL)takes:(ODataSyncPeerAnnouncement *)peer {
+    return self.hasToken || [self pairingOfPeer:peer] != nil;
+}
+
+/* Every device found that takes this one made due, but one synced with a
+   moment ago, or one that refused lately. */
+- (void)syncRound {
+    for (ODataSyncPeerAnnouncement *peer in self.found) {
+        NSString *thumbprint = peer.thumbprint;
+        if (!thumbprint.length || [_due containsObject:thumbprint] || [thumbprint isEqual:_current] || ![self takes:peer]) continue;
+        if (_refused[thumbprint].timeIntervalSinceNow > 0) continue;
+        if (_synced[thumbprint] && -_synced[thumbprint].timeIntervalSinceNow < MIN(_changeDelay, 5)) continue;
+        [_due addObject:thumbprint];
+    }
+    [self syncNext];
+}
+
+/* The next device due, unless a sync runs (then when it ends). */
+- (void)syncNext {
+    if (_current || _notes.syncing) return;
+    while (_due.count) {
+        NSString *thumbprint = _due.firstObject;
+        [_due removeObjectAtIndex:0];
+        ODataSyncPeerAnnouncement *peer = nil;
+        for (ODataSyncPeerAnnouncement *p in self.found)
+            if ([p.thumbprint isEqual:thumbprint]) peer = p;
+        if (!peer || ![self takes:peer]) continue;
+        _currentSince = [NSDate date];
+        if ([self syncWithPeer:peer]) {
+            _current = thumbprint;
+            return;
+        }
+    }
+}
+
+- (void)notesChanged:(NSNotification *)n {
+    if (_notes.syncing) return;
+    if (_current) {
+        /* It ended: synced (the notes' last sync since it began), or
+           refused (not again for a while). */
+        NSDate *last = _notes.lastSync;
+        if (last && [last compare:_currentSince] != NSOrderedAscending) {
+            _synced[_current] = last;
+            [_refused removeObjectForKey:_current];
+        } else {
+            _refused[_current] = [NSDate dateWithTimeIntervalSinceNow:_refusalPause];
+        }
+        _current = nil;
+    }
+    [self askForTokenIfDue];
+    [self syncNext];
+}
+
+/* None, or running out within a day: asked of the server, hourly at most. */
+- (void)askForTokenIfDue {
+    if (_fetchingToken || !_notes.serverRemote) return;
+    NSDate *expires = self.tokenExpires;
+    if (self.hasToken && (!expires || expires.timeIntervalSinceNow > 24 * 3600)) return;
+    if (_askedForToken && -_askedForToken.timeIntervalSinceNow < 3600) return;
+    _askedForToken = [NSDate date];
+    [self fetchToken];
+}
+
 #pragma mark done
 
 - (void)stop {
+    self.automatic = NO;
     [_expiry invalidate];
     _expiry = nil;
     [_advertiser stop];

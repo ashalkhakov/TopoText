@@ -5,23 +5,32 @@
 #pragma once
 #import <UIKit/UIKit.h>
 #import "SNNotes.h"
+#import "SNTransferViewController.h"
 #import <PhotosUI/PhotosUI.h>
 #import <QuickLook/QuickLook.h>
 #import "SNSmartFolderViewController.h"
 #import "SNSignIn.h"
+#import "SNPeers.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate>
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate, UIDocumentPickerDelegate,
+                                                               SNTransferViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The smart folder form, for a new one (folder nil) or one to edit.
 - (SNSmartFolderViewController *)smartFolderEditorFor:(nullable SNFolder *)folder;
 // The server's sheet's address, signed in to as the server asks (a code
 // for OpenID Connect, a user and password), then synced with.
 - (void)signInToServer:(NSURL *)serviceRoot;
+// Devices Nearby (the antenna button): its files there, beside the store.
+@property (nonatomic, copy, nullable) NSURL *peersDirectory;
+// Made the first time it is asked for (its identity is a key in the
+// keychain: none made for nothing); nil and the alert when it cannot be.
+- (nullable SNPeers *)peers;
+- (IBAction)showDevicesNearby:(nullable id)sender;
 @end
 
 @interface SNNotesViewController : UITableViewController <UISearchResultsUpdating>

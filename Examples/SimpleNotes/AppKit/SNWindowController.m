@@ -3,6 +3,8 @@
 #import "SNModel.h"
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
+#import "SNTransfer.h"
+#import "SNTransferPanel.h"
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -47,6 +49,15 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     NSManagedObjectID *_shownFolder;
     BOOL _showsDeleted;
     NSString *_shownTag;
+    /* An import or export as it goes, and the imports waiting for it (and
+       the folder they go into). */
+    SNTransferPanel *_transferPanel;
+    NSMutableArray<NSURL *> *_imports;
+    NSManagedObjectID *_importsInto;
+    /* The sidebar's counts, as last read (by folder ID, by "#tag", and
+       All Notes' and Recently Deleted's): read once a reload, not each
+       time a row is drawn. */
+    NSDictionary *_counts;
 }
 
 /* What a note dragged onto a folder carries, and a folder dragged into
@@ -60,6 +71,7 @@ static NSString * const SNDeletedItem = @"SNRecentlyDeleted";
 static NSString * const SNTagsItem = @"SNTags";
 /* The Move To submenu, found by its tag (MainMenu.xib). */
 static const NSInteger SNMoveToMenuTag = 7001;
+static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 - (instancetype)initWithNotes:(SNNotes *)notes {
     if (!(self = [super initWithWindowNibName:@"NotesWindow"])) return nil;
@@ -95,10 +107,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
     [_folderTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
     _collapsed = [NSMutableSet set];
     [_noteTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
-    NSMenuItem *moveTo = nil;
+    /* Move To and Move Folder To, filled as they open. */
     for (NSMenuItem *top in [NSApp mainMenu].itemArray)
-        if ((moveTo = (NSMenuItem *)[top.submenu itemWithTag:SNMoveToMenuTag])) break;
-    moveTo.submenu.delegate = self;
+        for (NSNumber *tag in @[ @(SNMoveToMenuTag), @(SNMoveFolderToMenuTag) ])
+            [top.submenu itemWithTag:tag.integerValue].submenu.delegate = self;
     [self reloadFolders];
     [self reloadNotes];
     [self showStatus:_notes.status];
@@ -177,24 +189,36 @@ static const NSInteger SNMoveToMenuTag = 7001;
 
 - (void)reloadFolders {
     _reloading = YES;
-    _topFolders = [_notes foldersInFolder:nil];
+    NSArray<SNFolder *> *tree = _notes.folderTree;
+    NSMutableArray *top = [NSMutableArray array];
     NSMutableDictionary *children = [NSMutableDictionary dictionary];
-    for (SNFolder *f in _notes.folderTree) {
+    NSMutableDictionary *counts = [NSMutableDictionary dictionary];
+    for (SNFolder *f in tree) {
+        counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
         SNFolder *parent = [_notes parentOfFolder:f];
-        if (!parent) continue;
+        if (!parent) {
+            [top addObject:f];
+            continue;
+        }
         NSMutableArray *in = children[parent.objectID] ?: (children[parent.objectID] = [NSMutableArray array]);
         [in addObject:f];
     }
+    _topFolders = top;
     _children = children;
     /* A tag's row keeps its string while the tag is there. */
+    NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
     NSMutableArray *tags = [NSMutableArray array];
-    for (NSString *t in _notes.tags) {
+    for (NSString *t in [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
         NSString *tag = [@"#" stringByAppendingString:t];
         [tags addObject:[self itemForTag:tag] ?: tag];
+        counts[tag] = tagCounts[t];
     }
     _tags = tags;
+    counts[SNAllNotesItem] = @([_notes countOfNotesInFolder:nil]);
+    counts[SNDeletedItem] = @(_notes.countOfDeletedNotes);
+    _counts = counts;
     [_folderTable reloadData];
-    for (SNFolder *f in _notes.folderTree)
+    for (SNFolder *f in tree)
         if (_children[f.objectID] && ![_collapsed containsObject:f.objectID]) [_folderTable expandItem:f];
     if (_tags.count && ![_collapsed containsObject:SNTagsItem]) [_folderTable expandItem:SNTagsItem];
     /* A folder gone (deleted, here or elsewhere), or a tag: All Notes. */
@@ -213,10 +237,9 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if ([self showsDeleted]) {
         _rows = [_notes deletedNotesMatching:search];
     } else {
-        NSArray *notes = _shownTag ? [_notes notesTagged:_shownTag matching:search] : [_notes notesInFolder:[self selectedFolder] matching:search];
+        /* Each note a fault, read when its row is drawn. */
         NSMutableArray *rows = [NSMutableArray array];
-        SNSortOrder order = [_notes sortOrderForFolder:_shownTag ? nil : [self selectedFolder]];
-        for (SNNoteGroup *g in [_notes groupsOfNotes:notes sortedBy:order]) {
+        for (SNNoteGroup *g in [_notes groupsInFolder:_shownTag ? nil : [self selectedFolder] tag:_shownTag matching:search]) {
             if (g.title) [rows addObject:g.title];
             [rows addObjectsFromArray:g.notes];
         }
@@ -238,7 +261,40 @@ static const NSInteger SNMoveToMenuTag = 7001;
     }
 }
 
+/* Notes whose text alone was edited: their rows drawn again, when the list
+   would keep them where they are (by date edited, one edited is first of
+   the pinned, or of the rest under Today). NO: the list is read again. */
+- (BOOL)redrawEdited:(NSSet<NSManagedObjectID *> *)edited {
+    if (_searchField.stringValue.length || [self showsDeleted] || (!_shownTag && [_notes isSmartFolder:[self selectedFolder]])) return NO;
+    SNSortOrder order = [_notes sortOrderForFolder:_shownTag ? nil : [self selectedFolder]];
+    if (order == SNSortByTitle) return NO;
+    NSMutableIndexSet *rows = [NSMutableIndexSet indexSet];
+    for (NSUInteger i = 0; i < _rows.count; i++) {
+        SNNote *note = _rows[i];
+        if (![note isKindOfClass:[SNNote class]] || ![edited containsObject:note.objectID]) continue;
+        if (order == SNSortByDateEdited && i > 0) {
+            id above = _rows[i - 1];
+            if (![above isKindOfClass:[NSString class]]) return NO;
+            if (note.isPinned ? ![above isEqual:@"Pinned"] : !([above isEqual:@"Today"] || [above isEqual:@"Notes"])) return NO;
+        }
+        [rows addIndex:i];
+    }
+    if (rows.count) [_noteTable reloadDataForRowIndexes:rows columnIndexes:[NSIndexSet indexSetWithIndex:0]];
+    return YES;
+}
+
 - (void)notesChanged:(NSNotification *)n {
+    /* How far a sync is, said a few times a second: the status alone. */
+    if ([n.userInfo[@"statusOnly"] boolValue]) {
+        [self showStatus:n.userInfo[@"status"] ?: @""];
+        return;
+    }
+    /* Notes' text alone: their rows, if the list keeps its order. */
+    NSSet *edited = n.userInfo[@"edited"];
+    if (edited && [self redrawEdited:edited]) {
+        [self showStatus:n.userInfo[@"status"] ?: @""];
+        return;
+    }
     [self reloadFolders];
     [self reloadNotes];
     /* An attachment can come after the text that has it; a table's cells
@@ -275,15 +331,15 @@ static const NSInteger SNMoveToMenuTag = 7001;
         return [[NSAttributedString alloc] initWithString:@"Tags" attributes:@{ NSFontAttributeName: [NSFont boldSystemFontOfSize:11],
                                                                                NSForegroundColorAttributeName: [NSColor secondaryLabelColor] }];
     if (item == SNDeletedItem)
-        return [NSString stringWithFormat:@"Recently Deleted  (%lu)", (unsigned long)_notes.countOfDeletedNotes];
+        return [NSString stringWithFormat:@"Recently Deleted  (%lu)", (unsigned long)[_counts[SNDeletedItem] unsignedIntegerValue]];
     if ([item isKindOfClass:[SNFolder class]]) {
         SNFolder *f = item;
         /* A smart folder: a gear before its name, as Apple Notes' icon. */
         return [NSString stringWithFormat:@"%@%@  (%lu)", [_notes isSmartFolder:f] ? @"\u2699\uFE0E " : @"",
-                                          f.name.length ? f.name : @"Untitled", (unsigned long)[_notes countOfNotesInFolder:f]];
+                                          f.name.length ? f.name : @"Untitled", (unsigned long)[_counts[f.objectID] unsignedIntegerValue]];
     }
-    if (item == SNAllNotesItem) return [NSString stringWithFormat:@"All Notes  (%lu)", (unsigned long)[_notes countOfNotesInFolder:nil]];
-    return [NSString stringWithFormat:@"%@  (%lu)", item, (unsigned long)[_notes countOfNotesTagged:[item substringFromIndex:1]]];
+    if (item == SNAllNotesItem) return [NSString stringWithFormat:@"All Notes  (%lu)", (unsigned long)[_counts[SNAllNotesItem] unsignedIntegerValue]];
+    return [NSString stringWithFormat:@"%@  (%lu)", item, (unsigned long)[_counts[item] unsignedIntegerValue]];
 }
 
 - (BOOL)outlineView:(NSOutlineView *)outline shouldSelectItem:(id)item {
@@ -429,7 +485,11 @@ static const NSInteger SNMoveToMenuTag = 7001;
    and Eau's menu bar is told of every change. */
 - (void)menuNeedsUpdate:(NSMenu *)menu {
     if (_fillingMoveTo) return;
-    NSArray<NSArray *> *items = [self moveToItems];
+    BOOL folders = NO;
+    for (NSMenuItem *top in [NSApp mainMenu].itemArray)
+        if ([top.submenu itemWithTag:SNMoveFolderToMenuTag].submenu == menu) folders = YES;
+    NSArray<NSArray *> *items = folders ? [self moveFolderToItems] : [self moveToItems];
+    SEL action = folders ? @selector(moveFolderToFolder:) : @selector(moveNoteToFolder:);
     NSMutableArray *shown = [NSMutableArray array];
     for (NSMenuItem *item in menu.itemArray) {
         if (item.isSeparatorItem) continue;
@@ -439,13 +499,37 @@ static const NSInteger SNMoveToMenuTag = 7001;
     _fillingMoveTo = YES;
     [menu removeAllItems];
     for (NSArray *i in items) {
-        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:i[0] action:@selector(moveNoteToFolder:) keyEquivalent:@""];
+        NSMenuItem *item = (NSMenuItem *)[menu addItemWithTitle:i[0] action:action keyEquivalent:@""];
         item.target = self;
         if (i[1] != [NSNull null]) item.representedObject = i[1];
         if ([i[2] boolValue]) item.state = NSControlStateValueOn;
         if (i == items.firstObject && items.count > 1) [menu addItem:[NSMenuItem separatorItem]];
     }
     _fillingMoveTo = NO;
+}
+
+/* The folder chosen, into another (not itself, not one in it, not a smart
+   one) or to the top: what dragging it does, for where dragging does not
+   work (GNUstep's sidebar). */
+- (NSArray<NSArray *> *)moveFolderToItems {
+    SNFolder *folder = [self selectedFolder];
+    SNFolder *parent = folder ? [_notes parentOfFolder:folder] : nil;
+    NSMutableArray *items = [NSMutableArray array];
+    [items addObject:@[ @"Top Level", [NSNull null], @(folder && !parent) ]];
+    for (SNFolder *f in _notes.folderTree) {
+        if ([_notes isSmartFolder:f] || f == folder || (folder && [_notes folder:f isInFolder:folder])) continue;
+        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+        [items addObject:@[ [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"], f, @(parent == f) ]];
+    }
+    return items;
+}
+
+- (IBAction)moveFolderToFolder:(id)sender {
+    SNFolder *folder = [self selectedFolder];
+    if (folder && [_notes moveFolder:folder toFolder:[sender representedObject]]) {
+        [self reloadFolders];
+        [self chooseItem:folder];
+    }
 }
 
 - (IBAction)moveNoteToFolder:(id)sender {
@@ -530,8 +614,10 @@ static const NSInteger SNMoveToMenuTag = 7001;
     return NO;
 }
 
+/* Searched a moment after the last key, not at each. */
 - (IBAction)searchChanged:(id)sender {
-    [self reloadNotes];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reloadNotes) object:nil];
+    [self performSelector:@selector(reloadNotes) withObject:nil afterDelay:0.25];
 }
 
 #pragma mark the note
@@ -677,6 +763,57 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (![panel runModal]) return;
     [_notes renameFolder:f to:panel.name];
     [_notes setFilter:panel.filter ofFolder:f];
+}
+
+- (IBAction)importNotes:(id)sender {
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.canChooseDirectories = YES;
+    panel.canChooseFiles = YES;
+    panel.allowsMultipleSelection = YES;
+    panel.message = @"A folder of Markdown files, a zip of one (Trilium's export, say), or Markdown files.";
+    panel.prompt = @"Import";
+    if ([panel runModal] != NSModalResponseOK) return;
+    if (!_imports) _imports = [NSMutableArray array];
+    [_imports addObjectsFromArray:panel.URLs];
+    SNFolder *into = [_notes isSmartFolder:[self selectedFolder]] ? nil : [self selectedFolder];
+    _importsInto = into.objectID;
+    if (!_transferPanel) [self startNextImport];
+}
+
+/* One import at a time, in its panel; the next when it is closed. */
+- (void)startNextImport {
+    if (!_imports.count) return;
+    NSURL *url = _imports.firstObject;
+    [_imports removeObjectAtIndex:0];
+    SNFolder *into = _importsInto ? (SNFolder *)[_notes.context existingObjectWithID:_importsInto error:NULL] : nil;
+    [self runTransfer:[SNTransfer importIntoNotes:_notes fromURL:url folder:into]];
+}
+
+- (void)runTransfer:(SNTransfer *)transfer {
+    _transferPanel = [[SNTransferPanel alloc] initWithTransfer:transfer];
+    _transferPanel.delegate = self;
+    [_transferPanel showWindow:nil];
+    [transfer start];
+}
+
+- (void)transferPanelDidClose:(SNTransferPanel *)panel {
+    _transferPanel = nil;
+    [self reloadFolders];
+    [self reloadNotes];
+    [self startNextImport];
+}
+
+- (IBAction)exportAllNotes:(id)sender {
+    if (_transferPanel) {
+        [_transferPanel showWindow:nil];
+        return;
+    }
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    panel.nameFieldStringValue = @"Notes.zip";
+    panel.message = @"Every note as Markdown, in a zip (or, the name without .zip, a folder).";
+    panel.prompt = @"Export";
+    if ([panel runModal] != NSModalResponseOK || !panel.URL) return;
+    [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:panel.URL]];
 }
 
 - (IBAction)renameFolder:(id)sender {
@@ -885,6 +1022,7 @@ static const NSInteger SNMoveToMenuTag = 7001;
     if (a == @selector(recoverNote:)) return [self selectedNote].deletedAt != nil;
     if (a == @selector(emptyRecentlyDeleted:)) return _notes.countOfDeletedNotes > 0;
     if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
+    if (a == @selector(moveFolderToFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
     if (a == @selector(editSmartFolder:)) return [_notes isSmartFolder:[self selectedFolder]];
     if (a == @selector(sortFolderByDefault:) || a == @selector(sortFolderByDateEdited:) || a == @selector(sortFolderByDateCreated:) ||

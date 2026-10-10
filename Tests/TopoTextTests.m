@@ -340,6 +340,19 @@ static NSString *TTHex(NSData *d) {
     XCTAssertNil([TTVersion versionWithData:[NSData data] error:NULL]);
 }
 
+/* What two copies have both seen: each replica's lower clock; one only one
+   has seen, neither has. */
+- (void)testVersionMeet {
+    TopoText *a = TTText(5, @"abc"), *b = [a copyWithReplica:6];
+    [b insertString:@"de" atIndex:3 attributes:nil];
+    [a insertString:@"x" atIndex:0 attributes:nil];
+    TTVersion *both = [a.version versionByMeetingVersion:b.version];
+    XCTAssertEqual([both clockForReplica:5], 3u, @"b has seen a's first three");
+    XCTAssertEqual([both clockForReplica:6], 0u, @"a has seen none of b's");
+    XCTAssertEqualObjects(both, [b.version versionByMeetingVersion:a.version]);
+    XCTAssertTrue([a.version includesVersion:both] && [b.version includesVersion:both]);
+}
+
 #pragma mark paragraphs
 
 static NSSet *TTListKeys(void) { return [NSSet setWithObjects:@"list", @"checked", nil]; }

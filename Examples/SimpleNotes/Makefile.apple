@@ -17,7 +17,7 @@ INC = -IShared -IServer -I$(GENERATED) -I$(ROOT)/Sources/TopoText/include -I$(RO
 LIBS = -L$(TOPOTEXT_BUILD) -lTopoTextSync -lTopoText -Wl,-rpath,$(TOPOTEXT_BUILD) \
 	-F$(ODATAKIT_FRAMEWORKS) -Wl,-rpath,$(abspath $(ODATAKIT_FRAMEWORKS)) \
 	-framework ODataSync -framework ODataService -framework HTTPServerKit -framework ODataIncrementalStore \
-	-framework OTelKit -framework ODataKit -framework CoreData -framework Foundation
+	-framework OTelKit -framework ODataKit -framework CoreData -framework Foundation -lz
 # The model's classes' properties, generated as Xcode generates them.
 GENERATED = $(BUILD)/Generated
 MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m \
@@ -26,7 +26,7 @@ MODEL = Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m
 MODEL_FILES := $(shell find SimpleNotes.xcdatamodeld -type f | sed 's/ /\\ /g')
 # The rich text and tables, and AppKit's part of them (SNTextSystem).
 SHARED = $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNTableGrid.m \
-	AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m
+	Shared/SNMarkdown.m Shared/SNZip.m Shared/SNTransfer.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m
 DEVELOPER := $(shell xcode-select -p)
 XCTEST_FRAMEWORKS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/Library/Frameworks
 XCTEST_LIBS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/usr/lib
@@ -53,11 +53,11 @@ $(BUILD)/simplenotes-server: Server/SNServer.m Server/SNNotebooks.m $(MODEL) lib
 $(BUILD)/sn-check: Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m libraries
 	$(CC) $(FLAGS) $(INC) Tests/sn-check.m Shared/SNCheck.m $(MODEL) Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m $(LIBS) -o $@
 
-$(BUILD)/SimpleNotesTests.xctest: Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m Tests/SNSignInTests.m Server/SNNotebooks.m Shared/SNSignIn.m Shared/SNPeers.m AppKit/SNSecretStore.m $(SHARED) $(BUILD)/SimpleNotes.momd libraries
+$(BUILD)/SimpleNotesTests.xctest: Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m Tests/SNSignInTests.m Tests/SNTransferTests.m Server/SNNotebooks.m Shared/SNSignIn.m Shared/SNPeers.m AppKit/SNSecretStore.m $(SHARED) $(BUILD)/SimpleNotes.momd libraries
 	@mkdir -p $@/Contents/MacOS $@/Contents/Resources
 	rm -rf $@/Contents/Resources/SimpleNotes.momd && cp -R $(BUILD)/SimpleNotes.momd $@/Contents/Resources/
 	printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleExecutable</key><string>SimpleNotesTests</string><key>CFBundleIdentifier</key><string>io.github.ashalkhakov.SimpleNotesTests</string><key>CFBundlePackageType</key><string>BNDL</string></dict></plist>\n' > $@/Contents/Info.plist
-	$(CC) $(FLAGS) $(INC) -bundle Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m Tests/SNSignInTests.m Server/SNNotebooks.m Shared/SNSignIn.m Shared/SNPeers.m AppKit/SNSecretStore.m $(SHARED) $(LIBS) -framework AppKit -framework Security \
+	$(CC) $(FLAGS) $(INC) -bundle Tests/SNNotesTests.m Tests/SNTextBindingTests.m Tests/SNMigrationTests.m Tests/SNSignInTests.m Tests/SNTransferTests.m Server/SNNotebooks.m Shared/SNSignIn.m Shared/SNPeers.m AppKit/SNSecretStore.m $(SHARED) $(LIBS) -framework AppKit -framework Security \
 	  -F$(XCTEST_FRAMEWORKS) -framework XCTest -Wl,-rpath,$(XCTEST_FRAMEWORKS) -Wl,-rpath,$(XCTEST_LIBS) \
 	  -o $@/Contents/MacOS/SimpleNotesTests
 
@@ -66,6 +66,7 @@ test: $(BUILD)/SimpleNotesTests.xctest
 
 check: test all $(BUILD)/sn-check
 	Tests/serve-and-check.sh $(BUILD)/simplenotes-server sh -c '$(BUILD)/sn-check "$$0" $(BUILD)/SimpleNotes.momd'
+	Tests/move-and-check.sh $(BUILD)/simplenotes-server
 
 
 clean:

@@ -15,14 +15,14 @@ OBJC = clang
 
 BUNDLE_NAME = SimpleNotesTests
 SimpleNotesTests_NEEDS_GUI = yes
-SimpleNotesTests_OBJC_FILES = SNNotesTests.m SNTextBindingTests.m SNMigrationTests.m SNSignInTests.m ../Server/SNNotebooks.m ../Shared/SNSignIn.m ../Shared/SNPeers.m ../AppKit/SNSecretStore.m \
+SimpleNotesTests_OBJC_FILES = SNNotesTests.m SNTextBindingTests.m SNMigrationTests.m SNSignInTests.m SNTransferTests.m ../Server/SNNotebooks.m ../Shared/SNSignIn.m ../Shared/SNPeers.m ../AppKit/SNSecretStore.m \
 	../Shared/SNModel.m ../Shared/SNNote.m ../Shared/SNFolder.m ../Shared/SNAttachment.m ../Shared/SNNotes.m ../Shared/SNSmartFilter.m ../Shared/SNResolver.m ../Shared/SNRichText.m ../Shared/SNMigration.m \
-	../Shared/SNTableGrid.m ../AppKit/SNTextSystem.m ../AppKit/SNTableGrid+System.m
+	../Shared/SNTableGrid.m ../Shared/SNMarkdown.m ../Shared/SNZip.m ../Shared/SNTransfer.m ../AppKit/SNTextSystem.m ../AppKit/SNTableGrid+System.m
 SimpleNotesTests_INCLUDE_DIRS = -I../Shared -I../Server
 SimpleNotesTests_OBJCFLAGS = -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 -fconstant-string-class=NSConstantString \
 	-fobjc-exceptions -Wall -Wno-unused-parameter
 SimpleNotesTests_BUNDLE_LIBS += -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
-	-lOTelKit -lODataKit -lCoreData -lXCTest -lgnustep-gui -ldispatch
+	-lOTelKit -lODataKit -lCoreData -lXCTest -lgnustep-gui -ldispatch -lz
 SimpleNotesTests_XCDATAMODELD_FILES = ../SimpleNotes.xcdatamodeld
 SimpleNotesTests_COREDATA_CODEGEN = yes
 include $(GNUSTEP_MAKEFILES)/coredata-model.make

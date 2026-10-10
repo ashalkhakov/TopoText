@@ -17,7 +17,7 @@ ARG SDK=odatakit-sdk:latest
 # FreeCoreData, rebuilt over the sdk's: a commit of it, or a checkout of
 # one's own (--build-context freecoredata=../FreeCoreData).
 FROM alpine/git AS freecoredata-git
-ARG FREECOREDATA_REF=591dfa6eb602929713fbd2e3eaaa828198a3cf1b
+ARG FREECOREDATA_REF=524709592bf8670dab363d4c00d70eff4aa51e55
 RUN git clone -q https://github.com/ashalkhakov/FreeCoreData.git /src && cd /src && git checkout -q "$FREECOREDATA_REF"
 FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /
@@ -28,7 +28,7 @@ COPY --from=freecoredata-git /src /
 # Foundation again, at this pin, which may be ahead of the sdk's.
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GNUSTEP_PATCHES_REF=4593e606f92910c520a1c48472708b9d2934eef9
+ARG GNUSTEP_PATCHES_REF=6d99b7c1df7ad81191de9cd8d7805156f5d4eb91
 RUN apt-get update && apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
       libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev libfreetype-dev libfontconfig1-dev \
       libxrender-dev libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \

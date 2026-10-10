@@ -17,6 +17,22 @@ static NSArray<NSString *> *SNStoreFiles(NSURL *url) {
     return @[ url.path, [url.path stringByAppendingString:@"-wal"], [url.path stringByAppendingString:@"-shm"] ];
 }
 
+/* A version's model as the store was made: with the bookkeeping its users
+   add, less what the bookkeeping has gained since the store was made (an
+   entity the store has none of: ODataSync's ODSMergeSeen, say), which the
+   migration then adds. */
+static NSManagedObjectModel *SNVersionAsStored(NSManagedObjectModel *version, Class<SNBookkeeper> bookkeeper, NSDictionary *metadata) {
+    NSSet *own = [NSSet setWithArray:[version.entities valueForKey:@"name"]];
+    [bookkeeper addBookkeepingToModel:version configuration:nil];
+    NSDictionary *hashes = metadata[NSStoreModelVersionHashesKey];
+    if (![hashes isKindOfClass:[NSDictionary class]]) return version;
+    NSMutableArray *kept = [NSMutableArray array];
+    for (NSEntityDescription *entity in version.entities)
+        if ([own containsObject:entity.name] || hashes[entity.name]) [kept addObject:entity];
+    if (kept.count != version.entities.count) version.entities = kept;
+    return version;
+}
+
 BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error) {
     if (![[NSFileManager defaultManager] fileExistsAtPath:storeURL.path]) return YES;
     NSDictionary *options = @{ NSPersistentHistoryTrackingKey: @YES };
@@ -34,8 +50,8 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
 
     NSManagedObjectModel *source = nil;
     for (NSManagedObjectModel *version in SNModelVersions(momdURL)) {
-        [bookkeeper addBookkeepingToModel:version configuration:nil];
-        if ([version isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = version;
+        NSManagedObjectModel *stored = SNVersionAsStored(version, bookkeeper, metadata);
+        if ([stored isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = stored;
     }
     if (!source) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreIncompatibleVersionHashError
@@ -62,5 +78,54 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     }
     for (NSUInteger i = 0; i < from.count; i++)
         if ([fm fileExistsAtPath:from[i]] && ![fm moveItemAtPath:from[i] toPath:to[i] error:error]) return NO;
+    return YES;
+}
+
+/* Whether the store at url has no rows of model's (opened, then closed). */
+static BOOL SNStoreIsEmpty(NSPersistentStoreCoordinator *coordinator, NSManagedObjectModel *model, NSString *type, NSURL *url,
+                           NSDictionary *options, BOOL *empty, NSError **error) {
+    NSPersistentStore *store = [coordinator addPersistentStoreWithType:type configuration:nil URL:url options:options error:error];
+    if (!store) return NO;
+    NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+    context.persistentStoreCoordinator = coordinator;
+    __block BOOL none = YES;
+    [context performBlockAndWait:^{
+        for (NSEntityDescription *entity in model.entities) {
+            if (entity.isAbstract) continue;
+            NSFetchRequest *fetch = [NSFetchRequest fetchRequestWithEntityName:entity.name];
+            fetch.includesSubentities = NO;
+            if ([context countForFetchRequest:fetch error:NULL] > 0) {
+                none = NO;
+                break;
+            }
+        }
+        [context reset];
+    }];
+    *empty = none;
+    return [coordinator removePersistentStore:store error:error];
+}
+
+BOOL SNMoveStore(NSManagedObjectModel *model, NSString *fromType, NSURL *from, NSDictionary *fromOptions,
+                 NSString *toType, NSURL *to, NSDictionary *toOptions, BOOL *moved, NSError **error) {
+    *moved = NO;
+    NSPersistentStoreCoordinator *coordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:model];
+    /* No store at to yet: moved into a new one (which FreeCoreData fills a
+       batch at a time, and destroys again if the copy fails). One there
+       already is opened to see whether it has anything in it. */
+    BOOL there = [NSPersistentStoreCoordinator metadataForPersistentStoreOfType:toType URL:to options:toOptions error:NULL] != nil;
+    if (there) {
+        BOOL empty = NO;
+        if (!SNStoreIsEmpty(coordinator, model, toType, to, toOptions, &empty, error)) return NO;
+        if (!empty) return YES;
+    }
+    NSPersistentStore *source = [coordinator addPersistentStoreWithType:fromType configuration:nil URL:from options:fromOptions error:error];
+    if (!source) return NO;
+    NSPersistentStore *made = [coordinator migratePersistentStore:source toURL:to options:toOptions withType:toType error:error];
+    if (!made) {
+        [coordinator removePersistentStore:source error:NULL];
+        return NO;
+    }
+    [coordinator removePersistentStore:made error:NULL];
+    *moved = YES;
     return YES;
 }

@@ -57,6 +57,8 @@ typedef NS_ENUM(NSInteger, TopoTextError) {
 - (uint64_t)clockForReplica:(TTReplica)replica;
 - (BOOL)includesVersion:(TTVersion *)other;
 - (TTVersion *)versionByMergingVersion:(TTVersion *)other;
+/* What both have seen: each replica's lower clock (one only one has, neither). */
+- (TTVersion *)versionByMeetingVersion:(TTVersion *)other;
 @end
 
 typedef NS_ENUM(NSInteger, TTEditKind) {

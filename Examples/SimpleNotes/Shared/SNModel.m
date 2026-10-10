@@ -71,6 +71,10 @@ NSArray<NSValue *> *SNTagRangesInText(NSString *text) {
     return ranges;
 }
 
+NSString *SNCount(NSUInteger n) {
+    return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
+}
+
 NSArray<NSString *> *SNTagsInText(NSString *text) {
     NSMutableOrderedSet *tags = [NSMutableOrderedSet orderedSet];
     for (NSValue *v in SNTagRangesInText(text ?: @"")) {
@@ -121,4 +125,18 @@ NSURL *SNURLOfLink(NSString *text) {
     if (!t.length) return nil;
     if ([t rangeOfString:@"://"].location == NSNotFound && ![t hasPrefix:@"mailto:"]) t = [@"https://" stringByAppendingString:t];
     return [NSURL URLWithString:t];
+}
+
+@implementation SNNoteMerger
+- (void)mergedAttribute:(NSAttributeDescription *)attribute ofObject:(NSManagedObject *)object {
+    [super mergedAttribute:attribute ofObject:object];
+    id body = [object valueForKey:@"body"];
+    if (![object.entity.attributesByName objectForKey:@"title"] || ![body isKindOfClass:[NSString class]]) return;
+    NSString *title = SNTitleOfBody(body);
+    if (![[object valueForKey:@"title"] isEqual:title]) [object setValue:title forKey:@"title"];
+}
+@end
+
+void SNRegisterMergers(ODataSyncEngine *engine) {
+    [engine setMerger:[[SNNoteMerger alloc] init] forName:TTSyncMergerName];
 }

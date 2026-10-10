@@ -11,7 +11,10 @@ server, `simplenotes-server`, which serves them over OData.
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
 and [ODataSync](https://github.com/ashalkhakov/ODataKit/tree/master/Source/ODataSync)
-merges it through `TTSyncResolver`. The note is not settled for one side.
+moves it as a merged attribute: only what the other side lacks goes over the
+wire, and text deleted on every device is eventually forgotten (its
+tombstones collected), so a note doesn't grow for ever. The note is not
+settled for one side.
 
 | The AppKit app, on GNUstep (the Eau theme) | On iOS |
 |---|---|
@@ -81,7 +84,9 @@ notes; the folders in it appear under it in the sidebar.
 
 - **On the Mac and GNUstep**, **New Folder** makes the folder inside the
   folder chosen (or at the top when none is). Drag a folder onto another to
-  move it in, or onto All Notes to move it to the top.
+  move it in, or onto All Notes to move it to the top; or choose
+  **File > Move Folder To** (which also works where dragging in the
+  sidebar doesn't, as on GNUstep for now).
 - **On iOS**, swipe a folder and choose **Move**.
 - **Deleting a folder** deletes the folders in it too. All their notes go to
   Recently Deleted.
@@ -212,6 +217,65 @@ rule by rule (`SNResolver`), rather than keeping one device's whole set:
 - Tags merge as a set: a tag added on either device is added, and a tag
   removed on either device is removed.
 
+## Export and import
+
+**File > Export All Notes…** (on iOS, **Export All Notes** in the folder
+list's + menu, saved to Files) writes every note as Markdown, in a zip. On
+the Mac and GNUstep, a name given without `.zip` writes a folder instead.
+The layout:
+
+- **Folders** become folders. Notes in no folder sit at the top. Smart
+  folders and Recently Deleted are left out.
+- **Each note** is `<title>.md`, dated when it was last edited.
+- **Images and files** are written to `_attachments/<title>/` beside the
+  note, and linked from it.
+- **Tables** become GFM tables.
+- **Formatting** maps both ways (`SNMarkdown.h`):
+
+| In the note | In Markdown |
+|---|---|
+| Title, heading, subheading | `#`, `##`, `###` |
+| Monospaced | a fenced code block |
+| Bulleted, dashed, numbered list | `*`, `-`, `1.` |
+| Checklist | `- [ ]`, `- [x]` |
+| Indent | four spaces per level |
+| Bold, italic, strikethrough | `**`, `*`, `~~` |
+| Underline | `<u>` |
+
+Both run in the background, with a window that shows how far they've got
+("Importing 1,240 of 25,000 notes…") and a Stop button; the notes can be
+read and edited meanwhile. Imported notes are saved a few hundred at a
+time, so a large import uses little memory, appears as it goes, and what
+was imported before a Stop (or a failure) is kept. When it's done, the
+window says what happened and lists anything left out (the rest goes to
+the log). On iOS, the same shows in a sheet. The sync that sends an
+import to the server says how far it is too, in the status line:
+"Sending 3,000 of 25,000 changes…", then "Merging … notes' text…".
+
+**File > Import Notes…** reads such an export back. It also reads other
+apps' exports:
+
+- **A folder of Markdown**, or a zip of one (Obsidian's vault, Joplin's or
+  Bear's Markdown export). Each `.md`, `.txt` or `.html` file becomes a
+  note, and folders with notes in them become folders.
+- **Trilium's export**, Markdown or HTML (its default). Trilium's
+  `!!!meta.json` gives each note's title and type. A note with notes under
+  it becomes a folder, and its own text becomes a note in that folder.
+  Code notes become monospaced notes; image and file notes become notes
+  holding them. Clones are imported once. Canvases, relation maps and
+  other note types are skipped.
+
+What import also does:
+
+- **Images and files** a note links to are attached to it, if they're in
+  the export.
+- **GFM tables** become tables.
+- **Where notes go:** everything goes into a new folder named after what
+  was imported. When that is a single folder (Trilium's export of one note
+  and those under it, or a zip of one folder), that folder is the one made,
+  not one more around it. A single Markdown file goes straight into the
+  chosen folder instead.
+
 ## Model versions
 
 `SimpleNotes.xcdatamodeld` holds every version of the model:
@@ -283,6 +347,11 @@ addition:
   Delta links need persistent history. FreeCoreData's SQL stores keep it on
   GNUstep, but not on Apple's Core Data, so a server on macOS uses SQLite.
 - `StoreURL Temporary` is a throwaway store, for trying things out.
+- `MoveFrom` moves the notes from another store into this one: a SQLite
+  file, or a database's URL as `StoreURL` takes it (its type comes from the
+  scheme, or from `MoveFromType`). It copies only while this store is
+  still empty, so the setting can stay in place afterwards. See [Moving to
+  another database](#moving-to-another-database).
 - `AllowAnonymous NO` refuses requests that don't say who they're from,
   once a sign-in is set.
 - `AllowAnonymousMetadata NO` refuses `$metadata` too. By default anyone may
@@ -332,6 +401,36 @@ docker run -p 8080:8080 \
   -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://notes:secret@db:5432/notes \
   ghcr.io/ashalkhakov/simplenotes-server
 ```
+
+### Moving to another database
+
+A server can start on SQLite and move to PostgreSQL or MariaDB later. Make
+an empty database, then start the server on it with `MoveFrom` naming the
+old store:
+
+```sh
+docker run -p 8080:8080 -v notes:/data \
+  -e SN_STORE_TYPE=PostgreSQL -e SN_STORE_URL=postgresql://notes:secret@db:5432/notes \
+  -e SN_MOVE_FROM=/data/notes.sqlite \
+  ghcr.io/ashalkhakov/simplenotes-server
+```
+
+At start, while the new database has nothing in it, the server copies
+everything into it: notes, folders, attachments, owners, and ODataSync's
+records of deletions and of what each device has seen. The log says
+`the notes moved here from …`. The old store is left as it was, so you can
+go back to it.
+
+Persistent history isn't copied. Instead, it begins again with the copy,
+and every delta link given before the move answers 410. Each device then
+reads its notes again at its next sync, and sends whatever it hadn't sent
+yet. Peer tokens keep working: the peer key beside the SQLite file comes
+along, unless `PeerKey` names one.
+
+Once the database has notes, `MoveFrom` does nothing (the log says
+`nothing moved`), so it's safe to leave it set or to remove it. A move
+between other types works the same way, for example `MoveFrom
+postgresql://…` with `StoreType MariaDB`.
 
 Behind a reverse proxy (Nginx Proxy Manager, Caddy, Traefik), forward a
 host to the container's port 8080, and give the address users reach as
@@ -444,10 +543,14 @@ This runs four things:
   apart, a deletion against an edit, an open editor merged while its own
   typing is kept, folders moved into each other apart, tags, sorting and
   grouping, migrations from each older version, and the text view's
-  binding both ways.
+  binding both ways. Notes are exported as Markdown and imported back with
+  their folders and attachments, and a Trilium export is imported.
 - **Two devices through the server, over HTTP**
   (`Tests/serve-and-check.sh`, `SimpleNotes --check`). With `SN_STORE_ARGS`,
-  the server stores in PostgreSQL or MariaDB instead.
+  the server stores in PostgreSQL or MariaDB instead. Then the server's
+  notes move to another store (`Tests/move-and-check.sh`): it must serve the
+  same notes and folders, answer 410 to a delta link from before, and not
+  move them twice. CI moves them from SQLite to PostgreSQL.
 - **The AppKit app driven from within** (`SimpleNotes --self-test`, under
   `xvfb-run` where there's no display). A note is chosen in the list, text
   is typed into the window's text view, and Bold is sent up the responder
@@ -531,23 +634,24 @@ stays where the item was.
 
 ## Devices nearby
 
-Sync › Devices Nearby… (on the desktop) syncs your notes directly with
-your other devices on the same network, without the server
-(ODataSync's peer sync).
+Sync › Devices Nearby… on the desktop, and the antenna button over the
+folder list on iOS, sync your notes directly with your other devices on
+the same network, without the server (ODataSync's peer sync). On iOS
+the notes are served while SimpleNotes is open.
 
-- **Serve my notes to devices nearby** makes this computer one the others
-  can reach. It's advertised over Bonjour (Avahi on Linux), served over TLS,
-  and stays on across launches.
+- **Sync with my devices nearby** (on iOS, **Sync with Devices Nearby**)
+  makes this device one the others can reach: advertised over Bonjour
+  (Avahi on Linux) and served over TLS. It also syncs by itself with each
+  device found that takes this one: when the device appears, about ten
+  seconds after you change something, and every five minutes. Devices
+  sync one at a time, between server syncs. A device that refuses is tried
+  again after half an hour. The setting stays on across launches.
+- **Sync** in the list syncs with a device right away.
+- The peer token renews by itself while the server is reachable, when it's
+  missing or runs out within a day.
 - A device syncs with another by one of two things. A **peer token** comes
   from your server while you're signed in, and lasts a day; your devices
   then trust each other even offline. **Pairing** is for a device that
   shares no server with this one: Show Pairing Code on one, Pair With
   Code… on the other (the code is good once, for two minutes).
 - Edits made apart merge as they do through the server.
-
-## Not yet
-
-- **Devices nearby on iOS.** The iOS app syncs through the server only.
-- **Collecting tombstones.** TopoText can (`collectTombstonesSeenBy:`), given
-  the version every device has seen. SimpleNotes doesn't track that yet; the
-  server could, once devices send deltas rather than whole notes.

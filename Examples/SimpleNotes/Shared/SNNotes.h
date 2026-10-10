@@ -31,7 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 // On the main thread: something changed (a save, a sync, the server), the
 // views read again. userInfo: "status" (text), "synced" (YES after a sync
-// that brought or sent something).
+// that brought or sent something), "statusOnly" (YES when only the status
+// changed, as a sync goes, or one that brought nothing: nothing to read
+// again), "edited" (a save of notes' text alone, their tags the same: the
+// set of their IDs; the lists and the sidebar stand, but for their rows).
 FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 
 @interface SNNotes : NSObject
@@ -158,6 +161,9 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // The notes tagged so, sorted; whose text has text in it (nil: all).
 - (NSArray<SNNote *> *)notesTagged:(NSString *)tag matching:(nullable NSString *)text;
 - (NSUInteger)countOfNotesTagged:(NSString *)tag;
+// Every tag and how many notes have it, in one pass over the notes: for a
+// list of them all (-countOfNotesTagged: is a pass each).
+- (NSDictionary<NSString *, NSNumber *> *)tagCounts;
 
 #pragma mark Sorting and grouping
 
@@ -182,6 +188,12 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes;
 // The same, the notes sorted by order (a folder's own).
 - (NSArray<SNNoteGroup *> *)groupsOfNotes:(NSArray<SNNote *> *)notes sortedBy:(SNSortOrder)order;
+// A list as a window shows it, in its groups: a folder's (nil: All Notes)
+// or a tag's, whose text has text in it (nil: all). By a date, only the
+// notes' IDs are read for it, sorted and grouped by the store: each note is
+// a fault, read when it is first shown. (By title, a tag's or a smart
+// folder's: every note read, as -notesInFolder:matching: reads them.)
+- (NSArray<SNNoteGroup *> *)groupsInFolder:(nullable SNFolder *)folder tag:(nullable NSString *)tag matching:(nullable NSString *)text;
 
 #pragma mark Changing (saved at once)
 
@@ -204,10 +216,15 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (void)recoverNote:(SNNote *)note;
 // Gone for good, everywhere: from Recently Deleted (Delete Immediately).
 - (void)deleteNoteImmediately:(SNNote *)note;
-// Every note in Recently Deleted, gone for good.
+// Every note in Recently Deleted, gone for good: off the main thread, a
+// batch at a time, said in the status; Recently Deleted shows none at once.
 - (void)emptyRecentlyDeleted;
+// Notes being deleted for good, off the main thread (Recently Deleted
+// emptied, or notes deleted SNRecentlyDeletedDays ago gone).
+@property (nonatomic, readonly, getter=isRemoving) BOOL removing;
 // The notes deleted more than SNRecentlyDeletedDays before now, gone for
-// good; done when the notes open and after each sync. How many.
+// good, here and now; how many. (When the notes open and after each sync,
+// those are deleted off the main thread.)
 - (NSUInteger)removeNotesDeletedBefore:(NSDate *)date;
 - (void)setNote:(SNNote *)note pinned:(BOOL)pinned;
 // Into another folder (nil: none); one in Recently Deleted is recovered so.

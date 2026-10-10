@@ -123,10 +123,27 @@ CA
                                     <action selector="deleteFolder:" target="-1" id="SNm-ac-207"/>
                                 </connections>
                             </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-930"/>
+                            <menuItem title="Import Notes…" id="SNm-mi-931">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="importNotes:" target="-1" id="SNm-ac-931"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Export All Notes…" id="SNm-mi-932">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="exportAllNotes:" target="-1" id="SNm-ac-932"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-210"/>
                             <menuItem title="Move To" tag="7001" id="SNm-mi-211">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="Move To" id="SNm-mn-211"/>
+                            </menuItem>
+                            <menuItem title="Move Folder To" tag="7002" id="SNm-mi-933">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Move Folder To" id="SNm-mn-933"/>
                             </menuItem>
                             <menuItem title="Recover Note" id="SNm-mi-212">
                                 <modifierMask key="keyEquivalentModifierMask"/>

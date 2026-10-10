@@ -11,6 +11,45 @@
 #import "SNPeers.h"
 #import <ODataIncrementalStore/ODataConfiguration.h>
 
+/* A device nearby as the browser would say it is, made here. */
+@interface SNTestAnnouncement : ODataSyncPeerAnnouncement
+@property (nonatomic, copy) NSString *givenName;
+@end
+
+@implementation SNTestAnnouncement
+- (NSString *)name { return _givenName; }
+- (NSString *)thumbprint { return [@"thumbprint-" stringByAppendingString:_givenName]; }
+- (NSString *)replica { return _givenName; }
+- (NSString *)host { return @"127.0.0.1"; }
+- (NSUInteger)port { return 1; }
+- (NSURL *)serviceRoot { return [NSURL URLWithString:[NSString stringWithFormat:@"https://127.0.0.1:1/sync/%@/", _givenName]]; }
+@end
+
+/* SNPeers with its devices found given, a token or not, and its syncs
+   with them run against the server instead (or one that cannot be
+   reached, for a device that refuses): what it syncs with, and when. */
+@interface SNTestPeers : SNPeers
+@property (nonatomic, copy) NSArray<ODataSyncPeerAnnouncement *> *given;
+@property (nonatomic) BOOL token;
+@property (nonatomic, copy) NSSet<NSString *> *refusing;
+@property (nonatomic, strong) NSMutableArray<NSString *> *syncedWith;
+@end
+
+@interface SNPeers (Browsing)
+- (void)peerBrowser:(nullable ODataSyncPeerBrowser *)browser didFindPeer:(ODataSyncPeerAnnouncement *)peer;
+@end
+
+@implementation SNTestPeers
+- (NSArray *)found { return _given ?: @[]; }
+- (void)startBrowsing {}
+- (BOOL)hasToken { return _token; }
+- (BOOL)syncWithPeer:(ODataSyncPeerAnnouncement *)peer {
+    [_syncedWith addObject:peer.name];
+    ODataSyncRemote *remote = [_refusing containsObject:peer.name] ? [ODataSyncRemote peerWithServiceRoot:peer.serviceRoot] : self.notes.serverRemote;
+    return [self.notes syncWithRemote:remote named:peer.name];
+}
+@end
+
 @interface SNNotesTests : XCTestCase <SNNoteEditorDelegate>
 @end
 
@@ -40,6 +79,7 @@
                                                 options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
 }
 
 - (void)tearDown {
@@ -171,6 +211,33 @@
     XCTAssertEqualObjects([self onlyNote:a].body, @"zero one two three");
 }
 
+/* The text moves as deltas (a merged attribute): typed and deleted on two
+   devices, the same everywhere, its title too; once both have seen the
+   deletion, its tombstones are collected, at the server and on them. */
+- (void)testTheTextMovesAsDeltasAndDeletionsAreCollected {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"Plans\nbuy milk and eggs" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t deleteCharactersInRange:NSMakeRange(14, 9)]; }];  /* " and eggs" */
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@"Weekend " atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [self sync:a];
+    for (SNNotes *d in @[ a, b ]) {
+        XCTAssertEqualObjects([self onlyNote:d].body, @"Weekend Plans\nbuy milk");
+        XCTAssertEqualObjects([self onlyNote:d].title, @"Weekend Plans");
+    }
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    c.persistentStoreCoordinator = _server;
+    NSManagedObject *atServer = [[c executeFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteEntity] error:NULL] firstObject];
+    XCTAssertEqualObjects([atServer valueForKey:@"body"], @"Weekend Plans\nbuy milk", @"the server's plain copy, set again");
+    XCTAssertEqualObjects([atServer valueForKey:@"title"], @"Weekend Plans");
+    TopoText *serverText = [TopoText textWithData:[atServer valueForKey:@"bodyText"] replica:0 error:NULL];
+    XCTAssertEqual(serverText.tombstoneCount, 0u, @"both devices saw the deletion: collected");
+    XCTAssertEqual([self onlyNote:a].text.tombstoneCount, 0u, @"and on the device");
+}
+
 - (void)testAFolderDeletedSendsItsNotesToRecentlyDeleted {
     SNNotes *a = [self device], *b = [self device];
     SNFolder *work = [a addFolderNamed:@"Work"];
@@ -260,7 +327,11 @@
     [b deleteNoteImmediately:[b deletedNotesMatching:nil].firstObject];
     XCTAssertEqual(b.countOfDeletedNotes, 2u);
     [b emptyRecentlyDeleted];
+    XCTAssertEqual(b.countOfDeletedNotes, 0u, @"none shown at once");
+    XCTAssertTrue(b.removing);
+    while (b.removing) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
     XCTAssertEqual(b.countOfDeletedNotes, 0u);
+    XCTAssertEqualObjects(b.status, @"2 notes deleted.");
     [self sync:b];
     [self sync:a];
     XCTAssertEqual(a.countOfDeletedNotes, 0u);
@@ -464,6 +535,47 @@
     a.sortOrder = SNSortByTitle;
     XCTAssertEqualObjects([[a notesInFolder:nil matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry", @"Date", @"Elder" ]));
     a.sortOrder = was;
+}
+
+/* A list as the window shows it, grouped by the store (only the notes' IDs
+   read): as SNGroupNotes groups the notes. */
+- (void)testTheStoreGroupsAListAsTheNotesWould {
+    SNNotes *a = [self device];
+    NSDate *now = [NSDate date];
+    NSMutableArray *notes = [NSMutableArray array];
+    NSArray *made = @[ @[ @"Banana", @0, @5 ], @[ @"apple", @1, @0 ], @[ @"Cherry", @3, @2 ], @[ @"Date", @20, @1 ], @[ @"Elder", @400, @400 ],
+                       @[ @"Fig", @45, @45 ], @[ @"Grape", @800, @800 ] ];
+    for (NSArray *m in made) {
+        SNNote *n = [a addNoteInFolder:nil];
+        n.title = m[0];
+        n.body = [m[0] stringByAppendingString:@" body"];
+        n.edited = [now dateByAddingTimeInterval:-[m[1] integerValue] * 86400.0];
+        n.created = [now dateByAddingTimeInterval:-[m[2] integerValue] * 86400.0];
+        [notes addObject:n];
+    }
+    SNNote *undated = [a addNoteInFolder:nil];
+    undated.title = @"Undated";
+    undated.edited = nil;
+    [notes addObject:undated];
+    [a setNote:notes[3] pinned:YES];
+    SNSortOrder was = a.sortOrder;
+    for (NSNumber *order in @[ @(SNSortByDateEdited), @(SNSortByDateCreated) ]) {
+        a.sortOrder = (SNSortOrder)order.integerValue;
+        XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:nil]],
+                              [self titlesOf:SNGroupNotes(notes, a.sortOrder, YES, [NSDate date])], @"sorted by %@", order);
+    }
+    a.groupsByDate = NO;
+    XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:nil]],
+                          [self titlesOf:SNGroupNotes(notes, a.sortOrder, NO, [NSDate date])], @"not grouped");
+    a.groupsByDate = YES;
+    a.sortOrder = was;
+    /* Searched: those it finds, grouped the same way. */
+    NSArray *found = [notes filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"body CONTAINS[c] 'e body'"]];
+    XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:@"e body"]],
+                          [self titlesOf:SNGroupNotes(found, a.sortOrder, YES, [NSDate date])]);
+    /* Read when shown, not before. */
+    [a.context reset];
+    XCTAssertTrue([a groupsInFolder:nil tag:nil matching:nil].lastObject.notes.firstObject.isFault, @"a fault until shown");
 }
 
 /* A folder sorted its own way (View > Sort Folder By), on every device;
@@ -687,6 +799,7 @@
     _service.allowsAnonymousRequests = YES;   /* as the server's AllowAnonymous */
     SNServeNotebookPerUser(_service);
     _histories = [[ODataSyncService alloc] initWithService:_service];
+    SNRegisterMergers(_histories.engine);
     return key;
 }
 
@@ -755,7 +868,11 @@
 #pragma mark devices nearby
 
 - (void)waitUntil:(BOOL (^)(void))done {
-    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:10];
+    [self waitUntil:done for:10];
+}
+
+- (void)waitUntil:(BOOL (^)(void))done for:(NSTimeInterval)seconds {
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:seconds];
     while (!done() && [until timeIntervalSinceNow] > 0)
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
 }
@@ -791,6 +908,77 @@
     XCTAssertEqualObjects([self onlyNote:b].body, @"Paris: pack bags, book hotel");
     [open close];
     XCTAssertEqual(a.engine.issues.count + b.engine.issues.count, 0u);
+}
+
+/* A sync says how far it is: the changes being sent, of how many. */
+- (void)testASyncSaysHowFarItIs {
+    SNNotes *a = [self device];
+    [self sync:a];
+    for (NSUInteger i = 0; i < 60; i++) [a addNoteInFolder:nil];
+    NSMutableArray<NSString *> *said = [NSMutableArray array];
+    id observer = [[NSNotificationCenter defaultCenter] addObserverForName:SNNotesDidChangeNotification object:a queue:nil
+                                                                usingBlock:^(NSNotification *n) { [said addObject:n.userInfo[@"status"] ?: @""]; }];
+    [a sync];
+    [self waitUntil:^BOOL { return !a.syncing; }];
+    [[NSNotificationCenter defaultCenter] removeObserver:observer];
+    XCTAssertTrue([said containsObject:@"Sending 60 of 60 changes…"], @"%@", said);
+    XCTAssertTrue([said.lastObject hasPrefix:@"Synced"], @"%@", said);
+}
+
+/* Devices nearby synced with by themselves (automatic): none without a
+   token or a pairing; one as it is found; again a moment after a change
+   here; one that refused, not again for a while; nothing once it is off. */
+- (void)testDevicesNearbyAreSyncedWithByThemselves {
+    SNNotes *a = [self device];
+    [self sync:a];
+    NSURL *directory = [[self temporaryStore] URLByAppendingPathExtension:@"peers"];
+    [_files addObject:directory];
+    NSError *error = nil;
+    SNTestPeers *peers = [[SNTestPeers alloc] initWithNotes:a directory:directory error:&error];
+    XCTAssertNotNil(peers, @"%@", error);
+    peers.syncedWith = [NSMutableArray array];
+    peers.changeDelay = 0.2;
+    peers.syncInterval = 1000;
+    peers.refusalPause = 1000;
+    SNTestAnnouncement *mine = [[SNTestAnnouncement alloc] init], *stranger = [[SNTestAnnouncement alloc] init];
+    mine.givenName = @"Mine";
+    stranger.givenName = @"Stranger";
+    peers.given = @[ mine ];
+
+    peers.automatic = YES;
+    [self waitUntil:^BOOL { return NO; } for:0.5];
+    XCTAssertEqualObjects(peers.syncedWith, @[], @"no token, no pairing: not synced with");
+
+    peers.token = YES;
+    [peers peerBrowser:nil didFindPeer:mine];
+    [self waitUntil:^BOOL { return peers.syncedWith.count == 1 && !a.syncing; }];
+    XCTAssertEqualObjects(peers.syncedWith, @[ @"Mine" ], @"synced with as it is found");
+
+    [a addNoteInFolder:nil];
+    [self waitUntil:^BOOL { return peers.syncedWith.count == 2 && !a.syncing; }];
+    XCTAssertEqualObjects(peers.syncedWith, (@[ @"Mine", @"Mine" ]), @"again, a moment after a change here");
+
+    peers.refusing = [NSSet setWithObject:@"Stranger"];
+    peers.given = @[ mine, stranger ];
+    [peers peerBrowser:nil didFindPeer:stranger];
+    [self waitUntil:^BOOL { return [peers.syncedWith containsObject:@"Stranger"] && !a.syncing; }];
+    XCTAssertTrue([peers.syncedWith containsObject:@"Stranger"]);
+    [self waitUntil:^BOOL { return NO; } for:0.5];
+    NSUInteger before = peers.syncedWith.count;
+    [a addNoteInFolder:nil];
+    [self waitUntil:^BOOL { return peers.syncedWith.count > before && !a.syncing; }];
+    NSUInteger strangers = 0;
+    for (NSString *name in peers.syncedWith) strangers += [name isEqual:@"Stranger"];
+    XCTAssertEqual(strangers, 1u, @"one that refused is not tried again soon: %@", peers.syncedWith);
+    XCTAssertEqualObjects(peers.syncedWith.lastObject, @"Mine");
+
+    peers.automatic = NO;
+    before = peers.syncedWith.count;
+    [a addNoteInFolder:nil];
+    [self waitUntil:^BOOL { return NO; } for:0.5];
+    XCTAssertEqual(peers.syncedWith.count, before, @"off: not synced with");
+    [peers stop];
+    [peers.trust.identity removeWithError:NULL];
 }
 
 /* The server signs peer tokens with a key it keeps; a signed-in device

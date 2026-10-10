@@ -37,7 +37,7 @@
                     <button fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="SNd-bt-serve">
                         <rect key="frame" x="20" y="460" width="480" height="18"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                        <buttonCell key="cell" type="check" title="Serve my notes to devices nearby" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="SNd-bc-serve">
+                        <buttonCell key="cell" type="check" title="Sync with my devices nearby" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="SNd-bc-serve">
                             <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                             <font key="font" metaFont="system"/>
                         </buttonCell>

@@ -44,7 +44,7 @@ ENV PREFIX=/opt/gnustep \
 
 # The stack: gnustep-patches' build, at CI's pin.
 FROM toolchain AS stack
-ARG GNUSTEP_PATCHES_REF=4593e606f92910c520a1c48472708b9d2934eef9
+ARG GNUSTEP_PATCHES_REF=6d99b7c1df7ad81191de9cd8d7805156f5d4eb91
 RUN set -e; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
@@ -54,8 +54,8 @@ RUN set -e; \
 
 # FreeCoreData and ODataKit, at CI's pins.
 FROM stack AS libraries
-ARG FREECOREDATA_REF=591dfa6eb602929713fbd2e3eaaa828198a3cf1b
-ARG ODATAKIT_REF=2ab40da93163805aa77057f05b0336fc230b23c0
+ARG FREECOREDATA_REF=524709592bf8670dab363d4c00d70eff4aa51e55
+ARG ODATAKIT_REF=6a381a9ced6c7937390c1cdce937f47c00798a71
 SHELL ["/bin/bash", "-c"]
 RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \
