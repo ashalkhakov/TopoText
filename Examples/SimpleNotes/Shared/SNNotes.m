@@ -161,8 +161,11 @@ NSString *SNDateText(NSDate *date) {
     NSString *_syncingWith;
     /* A sync asked for while one ran: what changed meanwhile, sent after. */
     BOOL _syncAgain;
-    /* Saved by another context of the store's, not shown yet. */
+    /* Saved by another context of the store's, not shown yet: the objects
+       it changed, and whether it made or deleted any. */
     BOOL _changedElsewhere;
+    NSMutableSet<NSManagedObjectID *> *_updatedElsewhere;
+    BOOL _madeOrDeletedElsewhere;
     /* Notes being deleted for good, off the main thread; all of Recently
        Deleted's (emptying). */
     NSUInteger _removing;
@@ -323,6 +326,14 @@ NSString *SNDateText(NSDate *date) {
     if (came) [self say:status synced:moved];
     else [self sayOnly:status];
     if (again) [self sync];
+    /* Saved by another while it ran (a peer, an import): read again with
+       the rest above, so shown whole. */
+    BOOL elsewhere;
+    @synchronized (self) {
+        elsewhere = _updatedElsewhere.count || _madeOrDeletedElsewhere;
+        if (elsewhere) _madeOrDeletedElsewhere = YES;
+    }
+    if (elsewhere && !_syncing) [self showChangesMadeElsewhere];
 }
 
 /* How far the sync is, in its status: "Sending 3,000 of 25,000 changes…".
@@ -359,13 +370,24 @@ NSString *SNDateText(NSDate *date) {
 - (void)storeDidSave:(NSNotification *)n {
     NSManagedObjectContext *saved = n.object;
     if (saved == _context || saved.persistentStoreCoordinator != _coordinator) return;
-    BOOL ours = NO;
-    for (NSString *key in @[ NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey ])
+    /* What a sync of ours saves as it goes: shown when it finishes (what
+       came, said then). */
+    NSString *author = [saved respondsToSelector:@selector(transactionAuthor)] ? saved.transactionAuthor : nil;
+    if (_syncing && [author hasPrefix:@"ODataSync."]) return;
+    NSArray *entities = @[ SNNoteEntity, SNFolderEntity, SNAttachmentEntity ];
+    NSMutableSet *updated = [NSMutableSet set];
+    BOOL madeOrDeleted = NO;
+    for (NSString *key in @[ NSInsertedObjectsKey, NSDeletedObjectsKey ])
         for (NSManagedObject *o in n.userInfo[key])
-            if ([@[ SNNoteEntity, SNFolderEntity, SNAttachmentEntity ] containsObject:o.entity.name]) ours = YES;
-    if (!ours) return;
+            if ([entities containsObject:o.entity.name]) madeOrDeleted = YES;
+    for (NSManagedObject *o in n.userInfo[NSUpdatedObjectsKey])
+        if ([entities containsObject:o.entity.name]) [updated addObject:o.objectID];
+    if (!madeOrDeleted && !updated.count) return;
     /* Once for many saves close together. */
     @synchronized (self) {
+        if (!_updatedElsewhere) _updatedElsewhere = [NSMutableSet set];
+        [_updatedElsewhere unionSet:updated];
+        _madeOrDeletedElsewhere = _madeOrDeletedElsewhere || madeOrDeleted;
         if (_changedElsewhere) return;
         _changedElsewhere = YES;
     }
@@ -374,15 +396,53 @@ NSString *SNDateText(NSDate *date) {
     });
 }
 
+/* What a list or the sidebar shows of a note. */
+- (NSDictionary *)shownValuesOf:(NSManagedObject *)note {
+    NSMutableDictionary *values = [NSMutableDictionary dictionary];
+    for (NSString *key in @[ @"title", @"body", @"folder", @"pinned", @"deletedAt", @"created", [self editedKey] ])
+        if (note.entity.propertiesByName[key]) values[key] = [note valueForKey:key] ?: [NSNull null];
+    return values;
+}
+
 - (void)showChangesMadeElsewhere {
+    NSSet<NSManagedObjectID *> *updated;
+    BOOL whole;
     @synchronized (self) {
         _changedElsewhere = NO;
+        /* A sync of ours: shown when it finishes. */
+        if (_syncing) return;
+        updated = [_updatedElsewhere copy] ?: [NSSet set];
+        [_updatedElsewhere removeAllObjects];
+        whole = _madeOrDeletedElsewhere;
+        _madeOrDeletedElsewhere = NO;
     }
-    /* A sync of ours shows them when it finishes. */
-    if (_syncing) return;
-    for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
+    /* Notes this side has read, changed in their text alone (their tags
+       the same), or in nothing shown (a sync's bookkeeping): those notes
+       read again, and their rows drawn again. Else, anything: all of it. */
+    NSMutableSet *edited = [NSMutableSet set];
+    for (NSManagedObjectID *objectID in updated) {
+        if (whole) break;
+        NSManagedObject *o = [_context objectRegisteredForID:objectID];
+        if (!o || o.isFault || ![o.entity.name isEqual:SNNoteEntity]) {
+            whole = YES;
+            break;
+        }
+        NSDictionary *before = [self shownValuesOf:o];
+        [_context refreshObject:o mergeChanges:YES];
+        NSDictionary *after = [self shownValuesOf:o];
+        if ([before isEqual:after]) continue;
+        for (NSString *key in before)
+            if (![before[key] isEqual:after[key]] && ![@[ @"title", @"body", [self editedKey] ] containsObject:key]) whole = YES;
+        id was = before[@"body"], now = after[@"body"];
+        NSSet *tagsBefore = [NSSet setWithArray:SNTagsInText([was isKindOfClass:[NSString class]] ? was : @"")];
+        if (![tagsBefore isEqualToSet:[NSSet setWithArray:SNTagsInText([now isKindOfClass:[NSString class]] ? now : @"")]]) whole = YES;
+        [edited addObject:objectID];
+    }
+    if (whole)
+        for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
     for (SNNoteEditor *e in _editors.allObjects) [e flush];
-    [self say:_status synced:YES];
+    if (whole) [self say:_status synced:YES];
+    else if (edited.count) [self say:_status synced:YES edited:edited];
 }
 
 #pragma mark syncing one remote

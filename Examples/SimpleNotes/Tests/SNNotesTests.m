@@ -57,6 +57,8 @@
     NSMutableArray<NSURL *> *_files;
     /* What an open editor was told was merged into it. */
     NSMutableArray<TTEdit *> *_merged;
+    /* What SNNotesDidChangeNotification said (its userInfo). */
+    NSMutableArray<NSDictionary *> *_told;
     ODataService *_service;
     ODataSyncService *_histories;
     NSPersistentStoreCoordinator *_server;
@@ -180,6 +182,47 @@
         XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"edit %d: %@", i, a.engine.lastResult);
         XCTAssertEqual(a.engine.lastResult.downloaded, 0u, @"edit %d: %@", i, a.engine.lastResult);
     }
+}
+
+- (void)notesDidChange:(NSNotification *)n {
+    [_told addObject:n.userInfo];
+}
+
+/* Saved by another context of the store's (a sync's bookkeeping, a peer):
+   nothing said for what no list shows, the rows for text alone, all of it
+   for the rest. */
+- (void)testChangesMadeElsewhereAreShownByWhatTheyChanged {
+    SNNotes *a = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    [self edit:note on:a with:^(TopoText *t) { [t insertString:@"Plans #home" atIndex:0 attributes:nil]; }];
+    (void)note.title;  /* read here, as a list's row reads it */
+    NSMutableArray *told = _told = [NSMutableArray array];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notesDidChange:) name:SNNotesDidChangeNotification object:a];
+    void (^elsewhere)(NSDictionary *) = ^(NSDictionary *values) {
+        [told removeAllObjects];
+        NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        c.persistentStoreCoordinator = a.context.persistentStoreCoordinator;
+        NSManagedObjectID *objectID = note.objectID;
+        [c performBlockAndWait:^{
+            NSManagedObject *o = [c existingObjectWithID:objectID error:NULL];
+            for (NSString *key in values) [o setValue:values[key] forKey:key];
+            [c save:NULL];
+        }];
+        NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.5];
+        while (until.timeIntervalSinceNow > 0) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    };
+    elsewhere(@{ @"versions": @"x.1" });
+    XCTAssertEqual(told.count, 0u, @"nothing shown changed: %@", told);
+    elsewhere(@{ @"body": @"Plans for Sunday #home", @"title": @"Plans for Sunday" });
+    XCTAssertEqual(told.count, 1u);
+    XCTAssertEqualObjects(told.firstObject[@"edited"], [NSSet setWithObject:note.objectID], @"the row: %@", told);
+    XCTAssertEqualObjects(note.title, @"Plans for Sunday", @"read again here");
+    elsewhere(@{ @"body": @"Plans #garden" });
+    XCTAssertEqual(told.count, 1u);
+    XCTAssertNil(told.firstObject[@"edited"], @"a tag changed: all of it");
+    elsewhere(@{ @"pinned": @YES });
+    XCTAssertNil(told.firstObject[@"edited"], @"pinned: all of it");
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:SNNotesDidChangeNotification object:a];
 }
 
 /* Send All Notes Again, where all agree: every note's text exchanged, off
