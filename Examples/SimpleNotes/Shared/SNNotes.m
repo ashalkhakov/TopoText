@@ -513,6 +513,9 @@ NSString *SNDateText(NSDate *date) {
     if (!_serviceRoot || _syncing) return;
     [self prepareToSync];
     [self sayOnly:@"Getting every note ready to send again…"];
+    /* What was refused goes again too (a text a server could not take as
+       a delta goes as a whole, after a try). */
+    for (ODataSyncIssue *issue in _engine.issues) [_engine retryIssue:issue];
     /* Off the main thread: a note at a time, thousands of them. */
     ODataSyncEngine *engine = _engine;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{

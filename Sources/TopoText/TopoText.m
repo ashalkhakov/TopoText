@@ -803,7 +803,7 @@ static TTRun *TTPendingRun(NSDictionary<NSNumber *, NSArray<TTRun *> *> *pending
         while (c < end) {
             NSUInteger off;
             TTRun *run = [self runWithReplica:rec->_r clock:c offset:&off] ?: TTPendingRun(pending, rec->_r, c);
-            if (!run && [self isCollectedReplica:rec->_r clock:c]) {
+            if (!run && ([self isCollectedReplica:rec->_r clock:c] || [p.collected[@(rec->_r)] containsIndex:(NSUInteger)c])) {
                 /* Gone here: nothing to merge into it. */
                 c++;
                 continue;
@@ -818,8 +818,39 @@ static TTRun *TTPendingRun(NSDictionary<NSNumber *, NSArray<TTRun *> *> *pending
     return YES;
 }
 
+/* Deleted characters placed after one collected here (or after another
+   such): nowhere to place them, and nothing to show, so they are taken as
+   collected here too. A copy that had not collected yet typed after a
+   deletion every copy had seen, then deleted that too. (One not deleted
+   has nowhere to go: -checkPayload: still refuses it.) */
+- (void)dropOrphans:(TTPayload *)p {
+    NSMutableDictionary<NSNumber *, NSMutableIndexSet *> *orphans = [NSMutableDictionary dictionary], *coming = [NSMutableDictionary dictionary];
+    NSMutableArray<TTRun *> *kept = [NSMutableArray array];
+    for (TTRun *rec in p.inserts)
+        [coming[@(rec->_r)] ?: (coming[@(rec->_r)] = [NSMutableIndexSet indexSet]) addIndexesInRange:NSMakeRange((NSUInteger)rec->_c, rec->_len)];
+    for (TTRun *rec in p.inserts) {
+        /* Its origin collected here, and not coming back with it (a whole
+           state brings what it collected, deleted, to place by); or such a
+           one itself. */
+        BOOL gone = rec->_or && ![self knowsReplica:rec->_or clock:rec->_oc] &&
+                    (([self isCollectedReplica:rec->_or clock:rec->_oc] && ![coming[@(rec->_or)] containsIndex:(NSUInteger)rec->_oc]) ||
+                     [orphans[@(rec->_or)] containsIndex:(NSUInteger)rec->_oc]);
+        if (!gone || !rec->_deleted) {
+            [kept addObject:rec];
+            continue;
+        }
+        NSRange ids = NSMakeRange((NSUInteger)rec->_c, rec->_len);
+        [orphans[@(rec->_r)] ?: (orphans[@(rec->_r)] = [NSMutableIndexSet indexSet]) addIndexesInRange:ids];
+        [coming[@(rec->_r)] removeIndexesInRange:ids];
+        if (!p.collected) p.collected = [NSMutableDictionary dictionary];
+        [p.collected[@(rec->_r)] ?: (p.collected[@(rec->_r)] = [NSMutableIndexSet indexSet]) addIndexesInRange:ids];
+    }
+    if (orphans.count) p.inserts = kept;
+}
+
 - (NSArray<TTEdit *> *)applyData:(NSData *)data error:(NSError **)error {
     TTPayload *p = TTDecodePayload(data, error);
+    if (p) [self dropOrphans:p];
     if (!p || ![self checkPayload:p error:error]) return nil;
     NSMutableArray *edits = [NSMutableArray array];
     if (!_runs.count && !p.updates.count) {
