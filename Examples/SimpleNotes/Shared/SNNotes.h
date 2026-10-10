@@ -77,6 +77,12 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // The same, waited for, on this thread (the main one): for tests and the
 // self-test.
 - (BOOL)syncAndWait:(NSError **)error;
+// Every note's text exchanged with the server again (each note noted off
+// the main thread, then a sync): what each lacks of the other's, both
+// ways. A repair, after a server that dropped text it was sent (ODataKit's,
+// before it merged text sent after it had collected a note's deletions)
+// while saying it had it.
+- (void)resendAllNotes;
 // The server's remote (nil: none): what a peer token is asked of.
 @property (nonatomic, readonly, nullable) ODataSyncRemote *serverRemote;
 // One remote alone (a peer met now and then; the server stays the one

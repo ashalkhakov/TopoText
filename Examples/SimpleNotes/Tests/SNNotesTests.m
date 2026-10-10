@@ -57,6 +57,8 @@
     NSMutableArray<NSURL *> *_files;
     /* What an open editor was told was merged into it. */
     NSMutableArray<TTEdit *> *_merged;
+    /* What SNNotesDidChangeNotification said (its userInfo). */
+    NSMutableArray<NSDictionary *> *_told;
     ODataService *_service;
     ODataSyncService *_histories;
     NSPersistentStoreCoordinator *_server;
@@ -166,6 +168,112 @@
         XCTAssertEqualObjects(n.title, @"Paris Trip", @"the title, of the merged body");
     }
     XCTAssertEqualObjects([self onlyNote:a].bodyText, [self onlyNote:b].bodyText);
+}
+
+/* Typed into on one device, synced after each pause: no conflict, there
+   being no other writer. */
+- (void)testTypingOnOneDeviceMeetsNoConflict {
+    SNNotes *a = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"10 - Saturday" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    for (int i = 0; i < 3; i++) {
+        [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:@"\nmore" atIndex:t.length attributes:nil]; }];
+        [self sync:a];
+        XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"edit %d: %@", i, a.engine.lastResult);
+        XCTAssertEqual(a.engine.lastResult.downloaded, 0u, @"edit %d: %@", i, a.engine.lastResult);
+    }
+}
+
+- (void)notesDidChange:(NSNotification *)n {
+    [_told addObject:n.userInfo];
+}
+
+/* Saved by another context of the store's (a sync's bookkeeping, a peer):
+   nothing said for what no list shows, the rows for text alone, all of it
+   for the rest. */
+- (void)testChangesMadeElsewhereAreShownByWhatTheyChanged {
+    SNNotes *a = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    [self edit:note on:a with:^(TopoText *t) { [t insertString:@"Plans #home" atIndex:0 attributes:nil]; }];
+    (void)note.title;  /* read here, as a list's row reads it */
+    NSMutableArray *told = _told = [NSMutableArray array];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(notesDidChange:) name:SNNotesDidChangeNotification object:a];
+    void (^elsewhere)(NSDictionary *) = ^(NSDictionary *values) {
+        [told removeAllObjects];
+        NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        c.persistentStoreCoordinator = a.context.persistentStoreCoordinator;
+        NSManagedObjectID *objectID = note.objectID;
+        [c performBlockAndWait:^{
+            NSManagedObject *o = [c existingObjectWithID:objectID error:NULL];
+            for (NSString *key in values) [o setValue:values[key] forKey:key];
+            [c save:NULL];
+        }];
+        NSDate *until = [NSDate dateWithTimeIntervalSinceNow:0.5];
+        while (until.timeIntervalSinceNow > 0) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    };
+    elsewhere(@{ @"versions": @"x.1" });
+    XCTAssertEqual(told.count, 0u, @"nothing shown changed: %@", told);
+    elsewhere(@{ @"body": @"Plans for Sunday #home", @"title": @"Plans for Sunday" });
+    XCTAssertEqual(told.count, 1u);
+    XCTAssertEqualObjects(told.firstObject[@"edited"], [NSSet setWithObject:note.objectID], @"the row: %@", told);
+    XCTAssertEqualObjects(note.title, @"Plans for Sunday", @"read again here");
+    elsewhere(@{ @"body": @"Plans #garden" });
+    XCTAssertEqual(told.count, 1u);
+    XCTAssertNil(told.firstObject[@"edited"], @"a tag changed: all of it");
+    elsewhere(@{ @"pinned": @YES });
+    XCTAssertNil(told.firstObject[@"edited"], @"pinned: all of it");
+    [[NSNotificationCenter defaultCenter] removeObserver:self name:SNNotesDidChangeNotification object:a];
+}
+
+/* Send All Notes Again, where all agree: every note's text exchanged, off
+   the main thread then in a sync, and nothing changed by it. */
+- (void)testSendingAllNotesAgainChangesNothingThatAgrees {
+    SNNotes *a = [self device], *b = [self device];
+    for (NSString *s in @[ @"one", @"two", @"three" ])
+        [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:s atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [a resendAllNotes];
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:30];
+    while ((a.syncing || a.lastSync == nil || [a.status hasPrefix:@"Getting"]) && until.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    [self sync:a];
+    XCTAssertEqual(a.pendingCount, 0u);
+    XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"%@", a.engine.lastResult);
+    [self sync:b];
+    NSArray *want = @[ @"one", @"three", @"two" ];
+    XCTAssertEqualObjects([[[a notesInFolder:nil matching:nil] valueForKey:@"body"] sortedArrayUsingSelector:@selector(compare:)], want);
+    XCTAssertEqualObjects([[[b notesInFolder:nil matching:nil] valueForKey:@"body"] sortedArrayUsingSelector:@selector(compare:)], want);
+}
+
+/* A day's note, typed a few words at a time on one device and synced as it
+   goes, and a line added on the other: the same on both. */
+- (void)testALongNoteTypedAsItSyncsIsTheSameOnBoth {
+    SNNotes *a = [self device], *b = [self device];
+    [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"10 - S" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    NSString *rest = @"aturday\n\n\nSimpleNotes 0.3.0 released\nmuch faster to navigate\nmuch faster to sync\n"
+                     @"still a bit sluggish when typing in text on Linux\n\nVarious GNUstep patches have been accepted\nXFormsKit changes\n\n"
+                     @"today I finally collected all the garbage in the garage, and now I can start preparing the concrete for resurfacing";
+    for (NSUInteger i = 0; i < rest.length; i += 7) {
+        NSString *piece = [rest substringWithRange:NSMakeRange(i, MIN(7u, rest.length - i))];
+        [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:piece atIndex:t.length attributes:nil]; }];
+        if (i % 70 == 0) [self sync:a];
+    }
+    [self sync:a];
+    [self edit:[self onlyNote:b] on:b with:^(TopoText *t) { [t insertString:@"\n\n\nddddd" atIndex:t.length attributes:nil]; }];
+    [self sync:b];
+    [self sync:a];
+    [self sync:b];
+    /* Both typed after "10 - S": both kept, in an order the same on both. */
+    NSString *body = [self onlyNote:a].body;
+    XCTAssertEqualObjects(body, [self onlyNote:b].body);
+    XCTAssertTrue([body hasPrefix:@"10 - S"], @"%@", body);
+    XCTAssertTrue([body containsString:rest], @"%@", body);
+    XCTAssertTrue([body containsString:@"\n\n\nddddd"], @"%@", body);
+    XCTAssertEqual(body.length, 6 + rest.length + 8);
+    XCTAssertGreaterThan([self onlyNote:a].bodyText.length, 1024u, @"a state larger than a shadow keeps");
 }
 
 - (void)testAnEditOutlivesADeletionThatDidNotSeeIt {
