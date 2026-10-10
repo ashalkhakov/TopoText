@@ -182,6 +182,27 @@
     }
 }
 
+/* Send All Notes Again, where all agree: every note's text exchanged, off
+   the main thread then in a sync, and nothing changed by it. */
+- (void)testSendingAllNotesAgainChangesNothingThatAgrees {
+    SNNotes *a = [self device], *b = [self device];
+    for (NSString *s in @[ @"one", @"two", @"three" ])
+        [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:s atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self sync:b];
+    [a resendAllNotes];
+    NSDate *until = [NSDate dateWithTimeIntervalSinceNow:30];
+    while ((a.syncing || a.lastSync == nil || [a.status hasPrefix:@"Getting"]) && until.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    [self sync:a];
+    XCTAssertEqual(a.pendingCount, 0u);
+    XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"%@", a.engine.lastResult);
+    [self sync:b];
+    NSArray *want = @[ @"one", @"three", @"two" ];
+    XCTAssertEqualObjects([[[a notesInFolder:nil matching:nil] valueForKey:@"body"] sortedArrayUsingSelector:@selector(compare:)], want);
+    XCTAssertEqualObjects([[[b notesInFolder:nil matching:nil] valueForKey:@"body"] sortedArrayUsingSelector:@selector(compare:)], want);
+}
+
 /* A day's note, typed a few words at a time on one device and synced as it
    goes, and a line added on the other: the same on both. */
 - (void)testALongNoteTypedAsItSyncsIsTheSameOnBoth {

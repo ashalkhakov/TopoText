@@ -452,12 +452,17 @@ NSString *SNDateText(NSDate *date) {
 - (void)resendAllNotes {
     if (!_serviceRoot || _syncing) return;
     [self prepareToSync];
-    NSError *error = nil;
-    if (![_engine exchangeAllMergedAttributesWithError:&error]) {
-        [self say:[NSString stringWithFormat:@"Not sent again: %@", error.localizedDescription ?: @"the notes could not be read."] synced:NO];
-        return;
-    }
-    [self sync];
+    [self sayOnly:@"Getting every note ready to send again…"];
+    /* Off the main thread: a note at a time, thousands of them. */
+    ODataSyncEngine *engine = _engine;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError *error = nil;
+        BOOL ok = [engine exchangeAllMergedAttributesWithError:&error];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!ok) [self say:[NSString stringWithFormat:@"Not sent again: %@", error.localizedDescription ?: @"the notes could not be read."] synced:NO];
+            else [self sync];
+        });
+    });
 }
 
 - (BOOL)syncAndWait:(NSError **)error {
