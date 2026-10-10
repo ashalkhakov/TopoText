@@ -47,10 +47,6 @@ static NSString *SNJoin(NSString *dir, NSString *name) {
     return dir.length ? [dir stringByAppendingFormat:@"/%@", name] : name;
 }
 
-static NSString *SNCount(NSUInteger n) {
-    return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
-}
-
 static NSString *SNStringOfData(NSData *data) {
     NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
                       ?: [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];

@@ -327,7 +327,11 @@
     [b deleteNoteImmediately:[b deletedNotesMatching:nil].firstObject];
     XCTAssertEqual(b.countOfDeletedNotes, 2u);
     [b emptyRecentlyDeleted];
+    XCTAssertEqual(b.countOfDeletedNotes, 0u, @"none shown at once");
+    XCTAssertTrue(b.removing);
+    while (b.removing) [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
     XCTAssertEqual(b.countOfDeletedNotes, 0u);
+    XCTAssertEqualObjects(b.status, @"2 notes deleted.");
     [self sync:b];
     [self sync:a];
     XCTAssertEqual(a.countOfDeletedNotes, 0u);
@@ -531,6 +535,47 @@
     a.sortOrder = SNSortByTitle;
     XCTAssertEqualObjects([[a notesInFolder:nil matching:nil] valueForKey:@"title"], (@[ @"apple", @"Banana", @"Cherry", @"Date", @"Elder" ]));
     a.sortOrder = was;
+}
+
+/* A list as the window shows it, grouped by the store (only the notes' IDs
+   read): as SNGroupNotes groups the notes. */
+- (void)testTheStoreGroupsAListAsTheNotesWould {
+    SNNotes *a = [self device];
+    NSDate *now = [NSDate date];
+    NSMutableArray *notes = [NSMutableArray array];
+    NSArray *made = @[ @[ @"Banana", @0, @5 ], @[ @"apple", @1, @0 ], @[ @"Cherry", @3, @2 ], @[ @"Date", @20, @1 ], @[ @"Elder", @400, @400 ],
+                       @[ @"Fig", @45, @45 ], @[ @"Grape", @800, @800 ] ];
+    for (NSArray *m in made) {
+        SNNote *n = [a addNoteInFolder:nil];
+        n.title = m[0];
+        n.body = [m[0] stringByAppendingString:@" body"];
+        n.edited = [now dateByAddingTimeInterval:-[m[1] integerValue] * 86400.0];
+        n.created = [now dateByAddingTimeInterval:-[m[2] integerValue] * 86400.0];
+        [notes addObject:n];
+    }
+    SNNote *undated = [a addNoteInFolder:nil];
+    undated.title = @"Undated";
+    undated.edited = nil;
+    [notes addObject:undated];
+    [a setNote:notes[3] pinned:YES];
+    SNSortOrder was = a.sortOrder;
+    for (NSNumber *order in @[ @(SNSortByDateEdited), @(SNSortByDateCreated) ]) {
+        a.sortOrder = (SNSortOrder)order.integerValue;
+        XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:nil]],
+                              [self titlesOf:SNGroupNotes(notes, a.sortOrder, YES, [NSDate date])], @"sorted by %@", order);
+    }
+    a.groupsByDate = NO;
+    XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:nil]],
+                          [self titlesOf:SNGroupNotes(notes, a.sortOrder, NO, [NSDate date])], @"not grouped");
+    a.groupsByDate = YES;
+    a.sortOrder = was;
+    /* Searched: those it finds, grouped the same way. */
+    NSArray *found = [notes filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"body CONTAINS[c] 'e body'"]];
+    XCTAssertEqualObjects([self titlesOf:[a groupsInFolder:nil tag:nil matching:@"e body"]],
+                          [self titlesOf:SNGroupNotes(found, a.sortOrder, YES, [NSDate date])]);
+    /* Read when shown, not before. */
+    [a.context reset];
+    XCTAssertTrue([a groupsInFolder:nil tag:nil matching:nil].lastObject.notes.firstObject.isFault, @"a fault until shown");
 }
 
 /* A folder sorted its own way (View > Sort Folder By), on every device;

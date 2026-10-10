@@ -79,5 +79,7 @@ FOUNDATION_EXPORT NSURL *_Nullable SNURLOfLink(NSString *text);
 // The tags in text, lowercase (one tag whatever its case), each once, in
 // order, without their #.
 FOUNDATION_EXPORT NSArray<NSString *> *SNTagsInText(NSString *text);
+// A count as the status says it: 25,000.
+FOUNDATION_EXPORT NSString *SNCount(NSUInteger n);
 
 NS_ASSUME_NONNULL_END

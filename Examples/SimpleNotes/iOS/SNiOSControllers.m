@@ -546,8 +546,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         _groups = deleted.count ? @[ [[SNNoteGroup alloc] initWithTitle:nil notes:deleted] ] : @[];
         self.navigationItem.rightBarButtonItem.enabled = deleted.count > 0;
     } else {
-        _groups = [_notes groupsOfNotes:_tag ? [_notes notesTagged:_tag matching:search] : [_notes notesInFolder:_folder matching:search]
-                               sortedBy:[_notes sortOrderForFolder:_tag ? nil : _folder]];
+        /* Each note a fault, read when its cell is shown. */
+        _groups = [_notes groupsInFolder:_tag ? nil : _folder tag:_tag matching:search];
         self.navigationItem.rightBarButtonItems.lastObject.menu = [self viewMenu];
     }
     [self.tableView reloadData];
@@ -622,8 +622,10 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     else [self.refreshControl endRefreshing];
 }
 
+/* Searched a moment after the last key, not at each. */
 - (void)updateSearchResultsForSearchController:(UISearchController *)c {
-    [self reload];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reload) object:nil];
+    [self performSelector:@selector(reload) withObject:nil afterDelay:0.25];
 }
 
 - (void)deleteAll:(id)sender {

@@ -237,10 +237,9 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if ([self showsDeleted]) {
         _rows = [_notes deletedNotesMatching:search];
     } else {
-        NSArray *notes = _shownTag ? [_notes notesTagged:_shownTag matching:search] : [_notes notesInFolder:[self selectedFolder] matching:search];
+        /* Each note a fault, read when its row is drawn. */
         NSMutableArray *rows = [NSMutableArray array];
-        SNSortOrder order = [_notes sortOrderForFolder:_shownTag ? nil : [self selectedFolder]];
-        for (SNNoteGroup *g in [_notes groupsOfNotes:notes sortedBy:order]) {
+        for (SNNoteGroup *g in [_notes groupsInFolder:_shownTag ? nil : [self selectedFolder] tag:_shownTag matching:search]) {
             if (g.title) [rows addObject:g.title];
             [rows addObjectsFromArray:g.notes];
         }
@@ -262,9 +261,37 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
 }
 
+/* Notes whose text alone was edited: their rows drawn again, when the list
+   would keep them where they are (by date edited, one edited is first of
+   the pinned, or of the rest under Today). NO: the list is read again. */
+- (BOOL)redrawEdited:(NSSet<NSManagedObjectID *> *)edited {
+    if (_searchField.stringValue.length || [self showsDeleted] || (!_shownTag && [_notes isSmartFolder:[self selectedFolder]])) return NO;
+    SNSortOrder order = [_notes sortOrderForFolder:_shownTag ? nil : [self selectedFolder]];
+    if (order == SNSortByTitle) return NO;
+    NSMutableIndexSet *rows = [NSMutableIndexSet indexSet];
+    for (NSUInteger i = 0; i < _rows.count; i++) {
+        SNNote *note = _rows[i];
+        if (![note isKindOfClass:[SNNote class]] || ![edited containsObject:note.objectID]) continue;
+        if (order == SNSortByDateEdited && i > 0) {
+            id above = _rows[i - 1];
+            if (![above isKindOfClass:[NSString class]]) return NO;
+            if (note.isPinned ? ![above isEqual:@"Pinned"] : !([above isEqual:@"Today"] || [above isEqual:@"Notes"])) return NO;
+        }
+        [rows addIndex:i];
+    }
+    if (rows.count) [_noteTable reloadDataForRowIndexes:rows columnIndexes:[NSIndexSet indexSetWithIndex:0]];
+    return YES;
+}
+
 - (void)notesChanged:(NSNotification *)n {
     /* How far a sync is, said a few times a second: the status alone. */
     if ([n.userInfo[@"statusOnly"] boolValue]) {
+        [self showStatus:n.userInfo[@"status"] ?: @""];
+        return;
+    }
+    /* Notes' text alone: their rows, if the list keeps its order. */
+    NSSet *edited = n.userInfo[@"edited"];
+    if (edited && [self redrawEdited:edited]) {
         [self showStatus:n.userInfo[@"status"] ?: @""];
         return;
     }
@@ -587,8 +614,10 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     return NO;
 }
 
+/* Searched a moment after the last key, not at each. */
 - (IBAction)searchChanged:(id)sender {
-    [self reloadNotes];
+    [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(reloadNotes) object:nil];
+    [self performSelector:@selector(reloadNotes) withObject:nil afterDelay:0.25];
 }
 
 #pragma mark the note

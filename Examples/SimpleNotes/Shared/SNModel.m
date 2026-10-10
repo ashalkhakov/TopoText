@@ -71,6 +71,10 @@ NSArray<NSValue *> *SNTagRangesInText(NSString *text) {
     return ranges;
 }
 
+NSString *SNCount(NSUInteger n) {
+    return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
+}
+
 NSArray<NSString *> *SNTagsInText(NSString *text) {
     NSMutableOrderedSet *tags = [NSMutableOrderedSet orderedSet];
     for (NSValue *v in SNTagRangesInText(text ?: @"")) {

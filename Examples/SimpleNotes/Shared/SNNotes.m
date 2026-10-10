@@ -5,6 +5,8 @@
 
 NSNotificationName const SNNotesDidChangeNotification = @"SNNotesDidChange";
 const NSInteger SNRecentlyDeletedDays = 30;
+/* Notes deleted for good a save at a time. */
+static const NSUInteger SNRemoveBatch = 200;
 
 NSInteger SNDaysLeft(SNNote *note) {
     if (!note.deletedAt) return SNRecentlyDeletedDays;
@@ -72,6 +74,36 @@ static NSString *SNDateGroupTitle(NSDate *date, NSDate *now) {
     return [f stringFromDate:date];
 }
 
+/* Where a list grouped by date can change heading (SNDateGroupTitle's
+   edges), latest first, down to the year of oldest. */
+static NSArray<NSDate *> *SNDateGroupEdges(NSDate *now, NSDate *oldest) {
+    NSCalendar *cal = [NSCalendar currentCalendar];
+    NSDateComponents *c = [cal components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:now];
+    NSDate *today = [cal dateFromComponents:c];
+    NSMutableArray *edges = [NSMutableArray arrayWithObject:today];
+    NSDateComponents *back = [[NSDateComponents alloc] init];
+    for (NSNumber *days in @[ @-1, @-7, @-30 ]) {
+        back.day = days.integerValue;
+        [edges addObject:[cal dateByAddingComponents:back toDate:today options:0]];
+    }
+    NSDateComponents *first = [[NSDateComponents alloc] init];
+    first.day = 1;
+    first.year = c.year;
+    for (NSInteger month = c.month; month >= 1; month--) {
+        first.month = month;
+        [edges addObject:[cal dateFromComponents:first]];
+    }
+    first.month = 1;
+    NSInteger last = [cal components:NSCalendarUnitYear fromDate:oldest].year;
+    for (NSInteger year = c.year - 1; year >= last; year--) {
+        first.year = year;
+        [edges addObject:[cal dateFromComponents:first]];
+    }
+    return [edges sortedArrayUsingComparator:^NSComparisonResult(NSDate *a, NSDate *b) {
+        return [b compare:a];
+    }];
+}
+
 NSArray<SNNoteGroup *> *SNGroupNotes(NSArray<SNNote *> *notes, SNSortOrder order, BOOL byDate, NSDate *now) {
     NSArray *sorted = SNSortNotes(notes, order);
     NSMutableArray *groups = [NSMutableArray array];
@@ -131,6 +163,10 @@ NSString *SNDateText(NSDate *date) {
     BOOL _syncAgain;
     /* Saved by another context of the store's, not shown yet. */
     BOOL _changedElsewhere;
+    /* Notes being deleted for good, off the main thread; all of Recently
+       Deleted's (emptying). */
+    NSUInteger _removing;
+    BOOL _emptying;
     NSTimer *_timer;
 }
 
@@ -194,9 +230,15 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (void)say:(NSString *)status synced:(BOOL)synced {
+    [self say:status synced:synced edited:nil];
+}
+
+/* A save of notes' text alone (edited): those notes' IDs said with it. */
+- (void)say:(NSString *)status synced:(BOOL)synced edited:(NSSet<NSManagedObjectID *> *)edited {
     _status = [status copy];
-    [[NSNotificationCenter defaultCenter] postNotificationName:SNNotesDidChangeNotification object:self
-                                                      userInfo:@{ @"status": _status, @"synced": @(synced) }];
+    NSMutableDictionary *info = [NSMutableDictionary dictionaryWithDictionary:@{ @"status": _status, @"synced": @(synced) }];
+    if (edited) info[@"edited"] = edited;
+    [[NSNotificationCenter defaultCenter] postNotificationName:SNNotesDidChangeNotification object:self userInfo:info];
 }
 
 /* The status alone changed (a sync begun, how far it is): nothing for
@@ -272,11 +314,14 @@ NSString *SNDateText(NSDate *date) {
     }
     _lastSync = [NSDate date];
     BOOL moved = result.downloaded || result.removed || result.uploaded;
+    /* Nothing came: nothing here to read again. */
+    BOOL came = result.downloaded || result.removed || result.conflicts;
     NSUInteger waiting = [self pendingCount];
     NSString *status = [NSString stringWithFormat:@"Synced %@.", SNDateText(_lastSync)];
     if (waiting) status = [status stringByAppendingFormat:@" %lu change%@ waiting.", (unsigned long)waiting, waiting == 1 ? @"" : @"s"];
     if (_engine.issues.count) status = [status stringByAppendingFormat:@" %lu refused.", (unsigned long)_engine.issues.count];
-    [self say:status synced:moved];
+    if (came) [self say:status synced:moved];
+    else [self sayOnly:status];
     if (again) [self sync];
 }
 
@@ -285,19 +330,16 @@ NSString *SNDateText(NSDate *date) {
 - (void)syncEngine:(ODataSyncEngine *)engine didProgress:(ODataSyncProgress *)progress {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!self->_syncing) return;
-        NSString *(^count)(NSUInteger) = ^NSString *(NSUInteger n) {
-            return [NSNumberFormatter localizedStringFromNumber:@(n) numberStyle:NSNumberFormatterDecimalStyle];
-        };
         NSString *what = nil;
         switch (progress.phase) {
             case ODataSyncPhaseReceiving:
-                if (progress.completed) what = [NSString stringWithFormat:@"Receiving changes: %@ so far…", count(progress.completed)];
+                if (progress.completed) what = [NSString stringWithFormat:@"Receiving changes: %@ so far…", SNCount(progress.completed)];
                 break;
             case ODataSyncPhaseSending:
-                if (progress.total) what = [NSString stringWithFormat:@"Sending %@ of %@ changes…", count(progress.completed), count(progress.total)];
+                if (progress.total) what = [NSString stringWithFormat:@"Sending %@ of %@ changes…", SNCount(progress.completed), SNCount(progress.total)];
                 break;
             case ODataSyncPhaseMerging:
-                if (progress.total) what = [NSString stringWithFormat:@"Merging %@ of %@ notes' text…", count(progress.completed), count(progress.total)];
+                if (progress.total) what = [NSString stringWithFormat:@"Merging %@ of %@ notes' text…", SNCount(progress.completed), SNCount(progress.total)];
                 break;
         }
         if (!what) return;
@@ -440,6 +482,23 @@ NSString *SNDateText(NSDate *date) {
     f.predicate = predicate;
     f.sortDescriptors = sort;
     return [_context executeFetchRequest:f error:NULL] ?: @[];
+}
+
+/* The notes the predicate takes, sorted by the store: their IDs alone
+   read, each note a fault until it is shown. */
+- (NSArray<SNNote *> *)faultsOf:(NSPredicate *)predicate sortedBy:(NSArray *)sort {
+    NSFetchRequest *f = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
+    f.predicate = predicate;
+    f.sortDescriptors = sort;
+    f.resultType = NSManagedObjectIDResultType;
+    NSMutableArray *notes = [NSMutableArray array];
+    for (NSManagedObjectID *i in [_context executeFetchRequest:f error:NULL] ?: @[]) [notes addObject:[_context objectWithID:i]];
+    return notes;
+}
+
+- (NSString *)editedKey {
+    NSEntityDescription *note = _coordinator.managedObjectModel.entitiesByName[SNNoteEntity];
+    return note.attributesByName[@"edited"] ? @"edited" : @"updated";
 }
 
 - (NSArray<SNFolder *> *)folders {
@@ -654,6 +713,76 @@ NSString *SNDateText(NSDate *date) {
     return n == NSNotFound ? 0 : n;
 }
 
+static NSPredicate *SNAnd(NSPredicate *a, NSPredicate *b) {
+    return a ? [NSCompoundPredicate andPredicateWithSubpredicates:@[ a, b ]] : b;
+}
+
+- (NSArray<SNNoteGroup *> *)groupsInFolder:(SNFolder *)folder tag:(NSString *)tag matching:(NSString *)text {
+    SNSortOrder order = [self sortOrderForFolder:tag ? nil : folder];
+    if (tag || order == SNSortByTitle || [self isSmartFolder:folder])
+        return [self groupsOfNotes:tag ? [self notesTagged:tag matching:text] : [self notesInFolder:folder matching:text] sortedBy:order];
+    /* Sorted as SNCompareNotes sorts: the pinned, then the rest, each the
+       latest first (the store puts no date last, as distantPast). */
+    NSString *key = order == SNSortByDateCreated ? @"created" : [self editedKey];
+    NSArray *sort = @[ [NSSortDescriptor sortDescriptorWithKey:key ascending:NO] ];
+    NSPredicate *base = [self predicateForFolder:folder matching:text deleted:NO];
+    NSArray *pinned = [self faultsOf:SNAnd(base, [NSPredicate predicateWithFormat:@"pinned == YES"]) sortedBy:sort];
+    NSPredicate *unpinned = SNAnd(base, [NSPredicate predicateWithFormat:@"pinned == nil OR pinned == NO"]);
+    NSArray *rest = [self faultsOf:unpinned sortedBy:sort];
+    NSMutableArray *groups = [NSMutableArray array];
+    if (pinned.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:@"Pinned" notes:pinned]];
+    if (!self.groupsByDate) {
+        if (rest.count) [groups addObject:[[SNNoteGroup alloc] initWithTitle:pinned.count ? @"Notes" : nil notes:rest]];
+        return groups;
+    }
+    /* Where each heading's notes end: found by halves, a few notes read
+       for it (let go again after). Neighbours of one heading are one. */
+    NSMutableArray *read = [NSMutableArray array];
+    NSUInteger dated = [self indexIn:rest from:0 key:key before:nil read:read];
+    NSDate *now = [NSDate date];
+    NSString *title = nil;
+    NSUInteger start = 0, end = 0;
+    if (dated) {
+        NSDate *oldest = [self dateOf:rest[dated - 1] key:key read:read];
+        for (NSDate *edge in SNDateGroupEdges(now, oldest)) {
+            NSUInteger upTo = [self indexIn:rest from:end key:key before:edge read:read];
+            if (upTo <= end) continue;
+            NSString *t = SNDateGroupTitle(edge, now);
+            if (![t isEqualToString:title]) {
+                if (end > start) [groups addObject:[[SNNoteGroup alloc] initWithTitle:title notes:[rest subarrayWithRange:NSMakeRange(start, end - start)]]];
+                title = t;
+                start = end;
+            }
+            end = upTo;
+        }
+        if (end > start) [groups addObject:[[SNNoteGroup alloc] initWithTitle:title notes:[rest subarrayWithRange:NSMakeRange(start, end - start)]]];
+    }
+    if (rest.count > dated)
+        [groups addObject:[[SNNoteGroup alloc] initWithTitle:SNDateGroupTitle(nil, now) notes:[rest subarrayWithRange:NSMakeRange(dated, rest.count - dated)]]];
+    for (NSManagedObject *o in read) [_context refreshObject:o mergeChanges:NO];
+    return groups;
+}
+
+/* A note's date, read; a fault read for it, kept to be let go. */
+- (NSDate *)dateOf:(SNNote *)note key:(NSString *)key read:(NSMutableArray *)read {
+    if (note.isFault) [read addObject:note];
+    return [note valueForKey:key];
+}
+
+/* In notes sorted latest first (no date last), from start on: the first
+   whose date is before edge (nil: the first with none). */
+- (NSUInteger)indexIn:(NSArray<SNNote *> *)notes from:(NSUInteger)start key:(NSString *)key before:(NSDate *)edge read:(NSMutableArray *)read {
+    NSUInteger lo = start, hi = notes.count;
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        NSDate *date = [self dateOf:notes[mid] key:key read:read];
+        BOOL before = edge ? (!date || [date compare:edge] == NSOrderedAscending) : !date;
+        if (before) hi = mid;
+        else lo = mid + 1;
+    }
+    return lo;
+}
+
 - (NSUInteger)countOfNotesInFolder:(SNFolder *)folder {
     if ([self isSmartFolder:folder]) return [self notesInFolder:folder matching:nil].count;
     return [self count:[self predicateForFolder:folder matching:nil deleted:NO]];
@@ -726,29 +855,55 @@ NSString *SNDateText(NSDate *date) {
 }
 
 - (NSArray<SNNote *> *)deletedNotesMatching:(NSString *)text {
-    NSArray *notes = [self fetch:SNNoteEntity where:[self predicateForFolder:nil matching:text deleted:YES] sortedBy:nil];
-    return [notes sortedArrayUsingComparator:^NSComparisonResult(SNNote *a, SNNote *b) {
-        return [b.deletedAt compare:a.deletedAt];
-    }];
+    /* Being emptied: none, at once. */
+    if (_emptying) return @[];
+    return [self faultsOf:[self predicateForFolder:nil matching:text deleted:YES]
+                 sortedBy:@[ [NSSortDescriptor sortDescriptorWithKey:@"deletedAt" ascending:NO] ]];
 }
 
 - (NSUInteger)countOfDeletedNotes {
+    if (_emptying) return 0;
     return [self count:[self predicateForFolder:nil matching:nil deleted:YES]];
 }
 
 #pragma mark changing
 
+/* What a save is to change, when it is notes' text alone and their tags
+   stay: those notes' IDs (nil: anything else). */
+- (NSSet<NSManagedObjectID *> *)notesOnlyEdited {
+    if (_context.insertedObjects.count || _context.deletedObjects.count) return nil;
+    NSSet *text = [NSSet setWithObjects:@"title", @"body", @"bodyText", [self editedKey], nil];
+    NSMutableSet *edited = [NSMutableSet set];
+    for (NSManagedObject *o in _context.updatedObjects) {
+        if (![o isKindOfClass:[SNNote class]]) return nil;
+        NSDictionary *changed = o.changedValues;
+        if (![[NSSet setWithArray:changed.allKeys] isSubsetOfSet:text]) return nil;
+        if (changed[@"body"]) {
+            id was = [o committedValuesForKeys:@[ @"body" ]][@"body"];
+            NSSet *before = [NSSet setWithArray:SNTagsInText([was isKindOfClass:[NSString class]] ? was : @"")];
+            if (![before isEqualToSet:[NSSet setWithArray:SNTagsInText(((SNNote *)o).body ?: @"")]]) return nil;
+        }
+        [edited addObject:o.objectID];
+    }
+    return edited;
+}
+
 - (void)saveNow {
     _savePending = NO;
     if (!_context.hasChanges) return;
+    NSSet *edited = [self notesOnlyEdited];
     NSError *error = nil;
     if (![_context save:&error]) {
         NSLog(@"SimpleNotes: not saved: %@", error);
         [self say:[NSString stringWithFormat:@"Not saved: %@", error.localizedDescription] synced:NO];
         return;
     }
-    [self say:_status synced:NO];
-    /* A little after a change, it goes to the server. */
+    [self say:_status synced:NO edited:edited];
+    [self syncSoon];
+}
+
+/* A little after a change, it goes to the server. */
+- (void)syncSoon {
     if (_serviceRoot && _syncInterval > 0) {
         [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sync) object:nil];
         [self performSelector:@selector(sync) withObject:nil afterDelay:3];
@@ -859,12 +1014,75 @@ NSString *SNDateText(NSDate *date) {
     [self save];
 }
 
+- (BOOL)isRemoving {
+    return _removing > 0;
+}
+
 - (void)emptyRecentlyDeleted {
-    for (SNNote *n in [self deletedNotesMatching:nil]) {
-        [self closeEditorsOf:n];
-        [_context deleteObject:n];
+    if (_emptying || ![self countOfDeletedNotes]) return;
+    _emptying = YES;
+    [self removeNotesWhere:[self predicateForFolder:nil matching:nil deleted:YES]];
+    /* Shown empty now. */
+    [self say:_status synced:NO];
+}
+
+/* Notes gone for good, many maybe: off the main thread, by a context of
+   the store's own, a batch at a time, how far said as it goes. The views
+   read them gone as it saves (-storeDidSave:). */
+- (void)removeNotesWhere:(NSPredicate *)predicate {
+    for (SNNoteEditor *e in _editors.allObjects) {
+        NSManagedObject *n = [_context existingObjectWithID:e.noteID error:NULL];
+        if (n && [predicate evaluateWithObject:n]) [e close];
     }
     [self save];
+    _removing++;
+    [self sayOnly:@"Deleting notes…"];
+    NSPersistentStoreCoordinator *coordinator = _coordinator;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        context.persistentStoreCoordinator = coordinator;
+        context.undoManager = nil;
+        __block NSError *error = nil;
+        __block NSUInteger removed = 0;
+        [context performBlockAndWait:^{
+            NSFetchRequest *f = [NSFetchRequest fetchRequestWithEntityName:SNNoteEntity];
+            f.predicate = predicate;
+            f.resultType = NSManagedObjectIDResultType;
+            NSArray *ids = [context executeFetchRequest:f error:&error] ?: @[];
+            while (removed < ids.count && !error) {
+                @autoreleasepool {
+                    NSRange batch = NSMakeRange(removed, MIN(SNRemoveBatch, ids.count - removed));
+                    for (NSManagedObjectID *i in [ids subarrayWithRange:batch]) [context deleteObject:[context objectWithID:i]];
+                    NSError *failed = nil;
+                    if (![context save:&failed]) {
+                        error = failed ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreSaveError userInfo:nil];
+                        break;
+                    }
+                    [context reset];
+                    removed = NSMaxRange(batch);
+                }
+                NSString *what = [NSString stringWithFormat:@"Deleting %@ of %@ notes…", SNCount(removed), SNCount(ids.count)];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [self sayOnly:what];
+                });
+            }
+        }];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self finishRemoving:removed error:error];
+        });
+    });
+}
+
+- (void)finishRemoving:(NSUInteger)removed error:(NSError *)error {
+    if (--_removing == 0) _emptying = NO;
+    for (NSManagedObject *o in _context.registeredObjects.allObjects) [_context refreshObject:o mergeChanges:YES];
+    if (error) {
+        NSLog(@"SimpleNotes: not deleted: %@", error);
+        [self say:[NSString stringWithFormat:@"Not deleted: %@", error.localizedDescription] synced:NO];
+        return;
+    }
+    [self say:[NSString stringWithFormat:@"%@ note%@ deleted.", SNCount(removed), removed == 1 ? @"" : @"s"] synced:NO];
+    [self syncSoon];
 }
 
 - (NSUInteger)removeNotesDeletedBefore:(NSDate *)date {
@@ -878,8 +1096,12 @@ NSString *SNDateText(NSDate *date) {
     return expired.count;
 }
 
+/* Those deleted 30 days ago and more: gone, off the main thread. */
 - (void)removeExpiredNotes {
-    [self removeNotesDeletedBefore:[NSDate dateWithTimeIntervalSinceNow:-(NSTimeInterval)SNRecentlyDeletedDays * 86400]];
+    if (!_deletes) return;
+    NSDate *date = [NSDate dateWithTimeIntervalSinceNow:-(NSTimeInterval)SNRecentlyDeletedDays * 86400];
+    NSPredicate *expired = [NSPredicate predicateWithFormat:@"deletedAt != nil AND deletedAt < %@", date];
+    if ([self count:expired]) [self removeNotesWhere:expired];
 }
 
 - (void)setNote:(SNNote *)note pinned:(BOOL)pinned {
