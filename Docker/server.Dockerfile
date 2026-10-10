@@ -44,7 +44,7 @@ ENV PREFIX=/opt/gnustep \
 
 # The stack: gnustep-patches' build, at CI's pin.
 FROM toolchain AS stack
-ARG GNUSTEP_PATCHES_REF=1eda55d84efa24990a54b67bbbd6e3b785fc1ba9
+ARG GNUSTEP_PATCHES_REF=6d99b7c1df7ad81191de9cd8d7805156f5d4eb91
 RUN set -e; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
