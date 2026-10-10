@@ -162,7 +162,9 @@ jobs:
       # 4593e60: Eau built at a pinned commit of dev (01be00b); 239a625:
       # NSDictionary and NSArray read a binary property list from a file;
       # 1eda55d: six libs-base fixes retired, merged upstream; 6d99b7c:
-      # more retired as libs-base merged them (its master is built).
+      # more retired as libs-base merged them (its master is built);
+      # d7eccc9: #815 and #977 retired, merged upstream (#815 no longer
+      # applied to libs-base master), action-sender-lifetime withdrawn.
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
       # notes to another store (MoveFrom); 338bc7b (#71): an object and its
@@ -170,7 +172,7 @@ jobs:
       # (#72): a context that related objects is let go of; 5247095 (#73):
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
-      GNUSTEP_PATCHES_REF: 6d99b7c1df7ad81191de9cd8d7805156f5d4eb91
+      GNUSTEP_PATCHES_REF: d7eccc94b2eeb1811a226e36aeb662ba17b20c03
       FREECOREDATA_REF: 524709592bf8670dab363d4c00d70eff4aa51e55
     defaults:
       run:
