@@ -96,7 +96,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)moveCheckedToBottom:(nullable id)sender;
 - (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
+// Edit > Find > Search: the notes' search field.
 - (IBAction)findNote:(nullable id)sender;
+// Edit > Find's actions in the note (Find…, Find and Replace…, Find Next,
+// ...), from wherever the window's focus is (the notes' list): the note's
+// text view takes them, as when it has the focus.
+- (IBAction)performFindPanelAction:(nullable id)sender;
+- (IBAction)findAndReplace:(nullable id)sender;
+- (IBAction)centerSelectionInVisibleArea:(nullable id)sender;
 // Format > Add Link… (a link on the selection, or the one at the insertion
 // point changed), and File > Copy Link to Note (simplenotes://note/<id>,
 // pasted as a link it opens the note).

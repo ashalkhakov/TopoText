@@ -96,6 +96,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     /* Undo is the binding's: by the characters' ids, so it survives a
        sync's edits; the text view's own (by positions) would not. */
     _textView.allowsUndo = NO;
+    [_textView useFindInterface];
     _textView.textContainerInset = NSMakeSize(14, 14);
     _textView.textContainer.widthTracksTextView = YES;
     /* The whole pane is the note's: a click below its last line is in it
@@ -920,6 +921,21 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self.window makeFirstResponder:_searchField];
 }
 
+- (IBAction)performFindPanelAction:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView performFindPanelAction:sender];
+}
+
+- (IBAction)findAndReplace:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView findAndReplace:sender];
+}
+
+- (IBAction)centerSelectionInVisibleArea:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView centerSelectionInVisibleArea:sender];
+}
+
 #pragma mark links
 
 /* On the selection; with none, on the link the insertion point is in. */
@@ -1070,6 +1086,8 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
+    if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
     if (a == @selector(moveCheckedToBottom:))

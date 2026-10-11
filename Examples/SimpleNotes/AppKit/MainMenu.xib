@@ -202,10 +202,49 @@ CA
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-308"/>
-                            <menuItem title="Find" keyEquivalent="f" id="SNm-mi-309">
-                                <connections>
-                                    <action selector="findNote:" target="-1" id="SNm-ac-309"/>
-                                </connections>
+                            <menuItem title="Find" id="SNm-mi-309">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Find" id="SNm-mn-309">
+                                    <items>
+                                        <menuItem title="Search" keyEquivalent="f" id="SNm-mi-310">
+                                            <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="findNote:" target="-1" id="SNm-ac-310"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find…" keyEquivalent="f" tag="1" id="SNm-mi-311">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-311"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find and Replace…" id="SNm-mi-312">
+                                            <connections>
+                                                <action selector="findAndReplace:" target="-1" id="SNm-ac-312"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find Next" keyEquivalent="g" tag="2" id="SNm-mi-313">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-313"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find Previous" keyEquivalent="g" tag="3" id="SNm-mi-314">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-314"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Use Selection for Find" keyEquivalent="e" tag="7" id="SNm-mi-315">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-315"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Jump to Selection" keyEquivalent="j" id="SNm-mi-316">
+                                            <connections>
+                                                <action selector="centerSelectionInVisibleArea:" target="-1" id="SNm-ac-316"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                         </items>
                     </menu>

@@ -2,7 +2,7 @@
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
 with headings, lists and checklists, links, images and tables, tags,
-search, pinning, sorting and grouping by date, Recently Deleted, and moving
+search, find and replace in a note, pinning, sorting and grouping by date, Recently Deleted, and moving
 notes between folders. It runs
 on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
 Every note is kept on the device and works offline. Notes sync with a
@@ -95,6 +95,24 @@ Two devices can each move a folder into the other while apart. When they
 sync, the folders would be inside each other. Each device then breaks the
 loop at the folder whose ID sorts first, which shows at the top level. Every
 device does the same, so nothing is lost and all show the same tree.
+
+## Find and Replace
+
+**Edit > Find** has Apple Notes' items:
+
+- **Search** (⌥⌘F) goes to the search field, which searches every note.
+- **Find…** (⌘F), **Find and Replace…**, **Find Next** (⌘G), **Find
+  Previous** (⇧⌘G), **Use Selection for Find** (⌘E) and **Jump to
+  Selection** (⌘J) work in the open note. On macOS they use the find bar
+  over the note. On GNUstep they use its Find panel, which includes
+  Replace.
+
+On iOS 16 and later, **Find in Note** in the note's ••• menu opens the
+system's find navigator, and so does ⌘F on a hardware keyboard. Replace is
+offered there when the note can be edited, so not in Recently Deleted.
+
+A replacement is an ordinary edit of the note's text: it syncs and merges
+like typing.
 
 ## Links
 

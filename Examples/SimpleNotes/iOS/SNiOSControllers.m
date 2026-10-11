@@ -878,6 +878,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [self makeFormatMenus];
     _textView.textContainerInset = UIEdgeInsetsMake(12, 12, 12, 12);
     _textView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    if (@available(iOS 16.0, *)) _textView.findInteractionEnabled = YES;
     [_formatBar sizeToFit];
     _textView.inputAccessoryView = _formatBar;
     _grids = [[SNTableGrids alloc] initWithBinding:_binding notes:_notes];
@@ -899,9 +900,27 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     _textView.editable = !deleted;
     /* A table's cells can have been typed into elsewhere. */
     [_grids reload];
-    self.navigationItem.rightBarButtonItem = deleted
-        ? [[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]
-        : nil;
+    NSMutableArray *items = [NSMutableArray arrayWithObject:[self noteMenuItem]];
+    if (deleted) [items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]];
+    self.navigationItem.rightBarButtonItems = items;
+}
+
+/* The note's ... menu (Apple Notes' too): Find in Note. */
+- (UIBarButtonItem *)noteMenuItem {
+    NSMutableArray *actions = [NSMutableArray array];
+    if (@available(iOS 16.0, *)) [actions addObject:SNMenuAction(@"Find in Note", [UIImage systemImageNamed:@"magnifyingglass"], @selector(findInNote:), self)];
+    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
+                                                              menu:[UIMenu menuWithTitle:@"" children:actions]];
+    item.accessibilityLabel = @"More";
+    return item;
+}
+
+/* The system's find navigator, over the keyboard: Replace too, in a note
+   that can be written (what it replaces is an edit of the text, which the
+   binding takes as typing); a hardware keyboard's Command-F opens it as
+   well. */
+- (IBAction)findInNote:(id)sender {
+    if (@available(iOS 16.0, *)) [_textView.findInteraction presentFindNavigatorShowingReplace:NO];
 }
 
 - (void)recover:(id)sender {

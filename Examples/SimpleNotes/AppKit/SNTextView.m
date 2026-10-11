@@ -63,6 +63,31 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
     [self.textContainer replaceLayoutManager:[[SNListLayoutManager alloc] init]];
 }
 
+- (void)useFindInterface {
+#ifdef GNUSTEP
+    self.usesFindPanel = YES;
+#else
+    self.usesFindBar = YES;
+    self.incrementalSearchingEnabled = YES;
+#endif
+}
+
+- (IBAction)findAndReplace:(id)sender {
+    NSMenuItem *action = [[NSMenuItem alloc] init];
+#ifdef GNUSTEP
+    action.tag = NSFindPanelActionShowFindPanel;
+    [self performFindPanelAction:action];
+#else
+    action.tag = NSTextFinderActionShowReplaceInterface;
+    [self performTextFinderAction:action];
+#endif
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    if (item.action == @selector(findAndReplace:)) return self.isEditable;
+    return [super validateMenuItem:item];
+}
+
 - (void)mouseDown:(NSEvent *)event {
     SNListLayoutManager *lm = (SNListLayoutManager *)self.layoutManager;
     id<SNTextViewDelegate> delegate = (id<SNTextViewDelegate>)self.delegate;

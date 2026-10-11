@@ -74,6 +74,18 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         tv.selectedRange = NSMakeRange(0, 9);
         [editor bold:nil];
         SNSay([[tv.textStorage attribute:@"SNBold" atIndex:0 effectiveRange:NULL] boolValue], @"Bold from the format bar");
+        /* Find in Note: the system's find navigator, and a replace as it
+           makes one (UITextSearching), into the note's text. */
+        if (@available(iOS 16.0, *)) {
+            [editor findInNote:nil];
+            SNWait(2, ^BOOL { return tv.findInteraction.isFindNavigatorVisible; });
+            SNSay(tv.findInteraction.isFindNavigatorVisible, @"Find in Note shows the find navigator");
+            [tv.findInteraction dismissFindNavigator];
+            NSRange eggs = [tv.text rangeOfString:@"eggs"];
+            UITextPosition *from = [tv positionFromPosition:tv.beginningOfDocument offset:(NSInteger)eggs.location];
+            UITextRange *found = [tv textRangeFromPosition:from toPosition:[tv positionFromPosition:from offset:(NSInteger)eggs.length]];
+            [tv replaceFoundTextInRange:found inDocument:nil withText:@"free-range eggs"];
+        }
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
         [notes sync];
@@ -88,6 +100,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([other syncAndWait:&error], [NSString stringWithFormat:@"a second device syncs%@", error ? [@": " stringByAppendingString:error.localizedDescription] : @""]);
         SNNote *there = [other notesInFolder:nil matching:@"Groceries"].firstObject;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
+        if (@available(iOS 16.0, *)) SNSay([there.body containsString:@"milk, free-range eggs, bread"], @"and what was replaced");
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
 
         /* A checklist: two lines made one from the format bar, the first
@@ -400,7 +413,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNEditorViewController *deleted = [[SNEditorViewController alloc] initWithNotes:notes note:groceries];
         [navigation pushViewController:deleted animated:NO];
         SNWait(0.5, ^BOOL { return NO; });
-        SNSay(!deleted.textView.editable && deleted.navigationItem.rightBarButtonItem != nil, @"read only, with Recover");
+        SNSay(!deleted.textView.editable && [deleted.navigationItem.rightBarButtonItems.lastObject.title isEqual:@"Recover"], @"read only, with Recover");
         [deleted recover:nil];
         [navigation popToRootViewControllerAnimated:NO];
         [notes sync];

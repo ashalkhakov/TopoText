@@ -121,6 +121,17 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         /* From the text view up, as the menu's Bold goes when the window is
            key (an app started from a terminal may have no key window). */
         SNSay([tv tryToPerform:@selector(toggleBold:) with:nil], @"Bold goes up the responder chain");
+        /* Find and Replace: Edit > Find > Find… for the note, and a Replace
+           All as the find bar (the Find panel on GNUstep) does one: asked,
+           replaced, told. */
+        NSMenuItem *findItem = [[NSMenuItem alloc] initWithTitle:@"Find…" action:@selector(performFindPanelAction:) keyEquivalent:@"f"];
+        findItem.tag = NSFindPanelActionShowFindPanel;
+        SNSay([window validateMenuItem:findItem] && [tv respondsToSelector:@selector(findAndReplace:)], @"Find… for the note");
+        NSRange eggs = [tv.string rangeOfString:@"eggs"];
+        if ([tv shouldChangeTextInRanges:@[ [NSValue valueWithRange:eggs] ] replacementStrings:@[ @"free-range eggs" ]]) {
+            [tv.textStorage replaceCharactersInRange:eggs withString:@"free-range eggs"];
+            [tv didChangeText];
+        }
         /* Written a moment after the last keystroke, then synced. */
         SNWait(2, ^BOOL { return NO; });
         [notes sync];
@@ -137,6 +148,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNNote *there = nil;
         for (SNNote *n in [other notesInFolder:nil matching:@"Groceries"]) there = n;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
+        SNSay([there.body containsString:@"milk, free-range eggs, bread"], @"and what was replaced");
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
 
         /* A checklist: two lines made one from the Format menu, the first

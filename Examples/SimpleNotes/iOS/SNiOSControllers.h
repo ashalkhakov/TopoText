@@ -119,6 +119,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)indent:(nullable id)sender;
 - (IBAction)outdent:(nullable id)sender;
+// Find in Note (the ... menu): the system's find navigator, Replace in it
+// too (iOS 16 and later).
+- (IBAction)findInNote:(nullable id)sender;
 // A note in Recently Deleted, recovered (the button over it).
 - (IBAction)recover:(nullable id)sender;
 @end
