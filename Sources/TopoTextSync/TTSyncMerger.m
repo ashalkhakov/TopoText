@@ -22,7 +22,9 @@ static TTVersion *TTVersionOfData(NSData *data) {
 
 - (NSData *)deltaOfState:(NSData *)state sinceVersion:(NSData *)version {
     TopoText *text = TTTextOfState(state);
-    if (!text) return [NSData data];
+    /* No state it reads (a delta, say): no answer, which the caller fails
+       on, not an empty delta, which it would take as nothing to send. */
+    if (!text) return nil;
     TTVersion *since = TTVersionOfData(version);
     /* Nothing that copy lacks: an empty delta. */
     if ([since includesVersion:text.version]) return [NSData data];

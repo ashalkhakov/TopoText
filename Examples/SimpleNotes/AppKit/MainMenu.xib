@@ -453,6 +453,12 @@ CA
                                     <action selector="sync:" target="-1" id="SNm-ac-501"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Send All Notes Again" id="SNm-mi-504">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="resendAllNotes:" target="-1" id="SNm-ac-504"/>
+                                </connections>
+                            </menuItem>
                             <menuItem title="Sync…" id="SNm-mi-502">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>

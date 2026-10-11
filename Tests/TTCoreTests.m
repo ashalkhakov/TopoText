@@ -117,6 +117,32 @@ static void TTTypeBackwards(TopoText *t, NSString *s, NSUInteger at) {
     XCTAssertEqualObjects(b.string, a.string);
 }
 
+/* Typed and deleted after a deletion every copy had seen, by one that had
+   not collected it yet, and sent as a delta to one that had: nowhere to
+   place it, and nothing to show, so taken as collected there too. */
+- (void)testADeletionAfterOneCollectedElsewhereIsTakenAsCollected {
+    TopoText *a = [TopoText textWithReplica:1];
+    [a insertString:@"abc" atIndex:0 attributes:nil];
+    TopoText *b = [a copyWithReplica:2];
+    [b deleteCharactersInRange:NSMakeRange(2, 1)];   /* c, at the end */
+    [a mergeText:b];
+    XCTAssertEqual([a collectTombstonesSeenBy:b.version], 1u, @"both have seen it");
+    TTVersion *seen = a.version;
+    [b insertString:@"X" atIndex:2 attributes:nil];  /* after c's tombstone */
+    [b deleteCharactersInRange:NSMakeRange(2, 1)];
+    NSError *error = nil;
+    XCTAssertNotNil([a applyData:[b deltaSinceVersion:seen] error:&error], @"%@", error);
+    XCTAssertEqualObjects(a.string, @"ab");
+    XCTAssertTrue([a.version includesVersion:b.version], @"and seen");
+    /* Typed after it and kept: no place for it in a delta; the whole state
+       brings c back (deleted) to place it by. */
+    [b insertString:@"Y" atIndex:2 attributes:nil];
+    XCTAssertNil([a applyData:[b deltaSinceVersion:a.version] error:&error]);
+    XCTAssertEqual(error.code, TopoTextErrorMissingHistory);
+    XCTAssertNotNil([a applyData:b.data error:&error], @"%@", error);
+    XCTAssertEqualObjects(a.string, @"abY");
+}
+
 /* Three copies editing at random, collecting what all have seen now and
    then: still one text. */
 - (void)testCollectingAmongRandomEditsConverges {
