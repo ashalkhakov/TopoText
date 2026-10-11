@@ -14,6 +14,7 @@
 #   SN_STORE_TYPE    SQLite (default), PostgreSQL, MySQL, MariaDB
 #   SN_SERVICE_ROOT  the public URL it is reached at (behind a proxy)
 #   SN_PORT          8080
+#   SN_MAX_PAGE_SIZE rows a response at most (25): what one holds is built in memory
 #   ...and every other of HTTPServerKit's (HS_ settings, SN_ here).
 #
 # Not Alpine: GNUstep's runtime (libobjc2, libdispatch, gnustep-base) is
