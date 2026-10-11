@@ -1,6 +1,6 @@
 // Where the notes are kept (SyncPanel.xib, Sync… in the menu): on this
 // computer only, with a warning that nothing syncs or is backed up; or
-// synced with a server, signed in as it asks (SNSignIn: nothing, a user and
+// synced with a server, signed in as it asks (ODataSignIn: nothing, a user and
 // password, or OpenID Connect by a code entered in a browser).
 
 #import <AppKit/AppKit.h>
@@ -12,10 +12,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol SNSyncPanelDelegate <NSObject>
 // OK: the server chosen (nil: this computer only), and its sign-in.
-- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(nullable NSURL *)serviceRoot signIn:(nullable SNSignIn *)signIn;
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(nullable NSURL *)serviceRoot signIn:(nullable ODataSignIn *)signIn;
 @end
 
-@interface SNSyncPanel : NSWindowController <SNSignInDelegate, NSTextFieldDelegate>
+@interface SNSyncPanel : NSWindowController <ODataSignInDelegate, NSTextFieldDelegate>
 @property (nonatomic, strong) IBOutlet NSButton *localButton;
 @property (nonatomic, strong) IBOutlet NSButton *serverButton;
 @property (nonatomic, strong) IBOutlet NSTextField *warningLabel;
@@ -33,8 +33,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithServer:(nullable NSURL *)serviceRoot;
 @property (nonatomic, weak, nullable) id<SNSyncPanelDelegate> delegate;
 // Where the sign-in's tokens are kept (default: SNSecretStore).
-@property (nonatomic, strong) id<SNSecretStoring> secrets;
-@property (nonatomic, readonly, nullable) SNSignIn *signIn;
+@property (nonatomic, strong) id<ODataSecretStoring> secrets;
+@property (nonatomic, readonly, nullable) ODataSignIn *signIn;
 
 - (IBAction)keepLocal:(nullable id)sender;
 - (IBAction)syncWithServer:(nullable id)sender;

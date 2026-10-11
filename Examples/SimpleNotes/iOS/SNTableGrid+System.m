@@ -1,11 +1,12 @@
 // The table grid's cells on UIKit: UITextViews; Tab to the next and, on a
 // hardware keyboard, Shift-Tab to the one before; a bar over the keyboard
 // with the table's actions and Next Cell, a cell's edit menu with them too.
-// The actions are UICommands, sent up the responder chain: the cell typed
-// in, then its grid. A link tapped in a cell is followed as one in the note.
+// The table's actions are sent to the grid, those that format to the cell
+// typed in and on up the responder chain (SNMenuAction). A link tapped in a cell is followed as one in the note.
 
 #import "SNTableGrid+System.h"
 #import "SNUndoTextView.h"
+#import "SNMenuAction.h"
 
 @interface SNTableGrid (UIKit) <UITextViewDelegate, UIGestureRecognizerDelegate>
 @end
@@ -17,7 +18,17 @@
 
 @implementation SNTableGrid (System)
 
+/* Those the grid can do as it opens (a row deleted only if there are
+   others, ...). */
 - (UIMenu *)tableMenu {
+    __weak SNTableGrid *weakSelf = self;
+    UIDeferredMenuElement *actions = [UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
+        completion([weakSelf tableMenuElements]);
+    }];
+    return [UIMenu menuWithTitle:@"Table" children:@[ actions ]];
+}
+
+- (NSArray<UIMenuElement *> *)tableMenuElements {
     NSMutableArray *groups = [NSMutableArray array], *group = [NSMutableArray array];
     for (NSArray *action in [SNTableGrid tableActions]) {
         if (!action.count) {
@@ -25,10 +36,11 @@
             group = [NSMutableArray array];
             continue;
         }
-        [group addObject:[UICommand commandWithTitle:action[0] image:nil action:NSSelectorFromString(action[1]) propertyList:nil]];
+        SEL sel = NSSelectorFromString(action[1]);
+        if ([self canDo:sel]) [group addObject:SNMenuAction(action[0], nil, sel, self)];
     }
     [groups addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:group]];
-    return [UIMenu menuWithTitle:@"Table" children:groups];
+    return groups;
 }
 
 - (void)systemSetUp {
@@ -47,11 +59,11 @@
     /* A cell's characters formatted: the editor's actions, which format the
        text typed in, a cell's too. */
     UIMenu *format = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
-        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
-        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
-        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil],
-        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
+        SNMenuAction(@"Bold", [UIImage systemImageNamed:@"bold"], @selector(bold:), nil),
+        SNMenuAction(@"Italic", [UIImage systemImageNamed:@"italic"], @selector(italic:), nil),
+        SNMenuAction(@"Underline", [UIImage systemImageNamed:@"underline"], @selector(underline:), nil),
+        SNMenuAction(@"Strikethrough", [UIImage systemImageNamed:@"strikethrough"], @selector(strikethrough:), nil),
+        SNMenuAction(@"Add Link", [UIImage systemImageNamed:@"link"], @selector(addLink:), nil) ]];
     UIBarButtonItem *formatItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"textformat"] menu:format];
     formatItem.accessibilityLabel = @"Format";
     UIBarButtonItem *space = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];

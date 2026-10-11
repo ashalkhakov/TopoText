@@ -47,9 +47,19 @@
 }
 
 - (void)tearDown {
-    for (NSURL *url in _files)
+    for (NSURL *url in _files) {
         for (NSString *suffix in @[ @"", @"-wal", @"-shm", @".old", @"-wal.old", @"-shm.old" ])
             [[NSFileManager defaultManager] removeItemAtPath:[url.path stringByAppendingString:suffix] error:NULL];
+        [[NSFileManager defaultManager] removeItemAtPath:[self filesBeside:url] error:NULL];
+        [[NSFileManager defaultManager] removeItemAtPath:[[self filesBeside:url] stringByAppendingString:@".old"] error:NULL];
+    }
+}
+
+/* Where a store keeps the Binary values it keeps outside it (Apple's
+   layout, which FreeCoreData's follows). */
+- (NSString *)filesBeside:(NSURL *)store {
+    NSString *name = [NSString stringWithFormat:@".%@_SUPPORT", store.lastPathComponent.stringByDeletingPathExtension];
+    return [store.path.stringByDeletingLastPathComponent stringByAppendingPathComponent:name];
 }
 
 - (SNNotes *)deviceAt:(NSURL *)store model:(NSURL *)model {
@@ -152,6 +162,55 @@
     XCTAssertTrue(SNMigrateStore(store, _momd, [ODataSyncEngine class], &error));
     XCTAssertEqualObjects([[NSFileManager defaultManager] attributesOfItemAtPath:store.path error:NULL].fileModificationDate, before);
     XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[store.path stringByAppendingString:@".old"]]);
+}
+
+/* A device's store made before ODataSync let synced files be kept beside
+   the store (a flag in the entities' version hashes): migrated, its files
+   moved out of it, read back whole. */
+- (void)testAStoreFromBeforeFilesWereKeptBesideItIsMigrated {
+    NSURL *store = [self temporaryStore];
+    NSMutableData *file = [NSMutableData dataWithLength:300 * 1024];
+    for (NSUInteger i = 0; i < file.length; i++) ((uint8_t *)file.mutableBytes)[i] = (uint8_t)(i * 31);
+    @autoreleasepool {
+        NSManagedObjectModel *before = SNModelAt(_momd);
+        [ODataSyncEngine addBookkeepingToModel:before configuration:nil];
+        for (NSEntityDescription *entity in before.entities)
+            for (NSPropertyDescription *property in entity.properties)
+                if ([property isKindOfClass:[NSAttributeDescription class]])
+                    ((NSAttributeDescription *)property).allowsExternalBinaryDataStorage = NO;
+        NSPersistentStoreCoordinator *c = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:before];
+        NSError *error = nil;
+        XCTAssertNotNil([c addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:store
+                                              options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
+        NSManagedObjectContext *context = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        context.persistentStoreCoordinator = c;
+        [context performBlockAndWait:^{
+            NSManagedObject *note = [NSEntityDescription insertNewObjectForEntityForName:SNNoteEntity inManagedObjectContext:context];
+            [note setValue:@"N1" forKey:@"id"];
+            [note setValue:@"With a file" forKey:@"body"];
+            [note setValue:@"With a file" forKey:@"title"];
+            NSManagedObject *a = [NSEntityDescription insertNewObjectForEntityForName:SNAttachmentEntity inManagedObjectContext:context];
+            [a setValue:@"A1" forKey:@"id"];
+            [a setValue:SNAttachmentKindFile forKey:@"kind"];
+            [a setValue:@"application/octet-stream" forKey:@"type"];
+            [a setValue:file forKey:@"data"];
+            [a setValue:note forKey:@"note"];
+            NSError *e = nil;
+            XCTAssertTrue([context save:&e], @"%@", e);
+        }];
+    }
+    XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:[self filesBeside:store]], @"in the store, before");
+
+    NSError *error = nil;
+    XCTAssertTrue(SNMigrateStore(store, _momd, [ODataSyncEngine class], &error), @"%@", error);
+    SNNotes *updated = [self deviceAt:store model:_momd];
+    NSEntityDescription *attachment = updated.context.persistentStoreCoordinator.managedObjectModel.entitiesByName[SNAttachmentEntity];
+    NSAttributeDescription *data = attachment.attributesByName[@"data"];
+    XCTAssertTrue(data.allowsExternalBinaryDataStorage, @"the current model keeps files beside the store");
+    XCTAssertEqualObjects([updated attachmentWithID:@"A1"].data, file, @"read back whole");
+    XCTAssertEqualObjects([updated noteWithID:@"N1"].body, @"With a file");
+    NSArray *kept = [[NSFileManager defaultManager] subpathsAtPath:[self filesBeside:store]];
+    XCTAssertGreaterThan(kept.count, 0u, @"moved beside the store");
 }
 
 /* A server's store made before its bookkeeping gained an entity (ODataSync's

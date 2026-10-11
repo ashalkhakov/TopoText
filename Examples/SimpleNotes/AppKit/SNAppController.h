@@ -10,6 +10,10 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
 @interface SNAppController : NSObject <NSApplicationDelegate>
+// Shown while a store of an older version is brought up to this one
+// (UpdatePanel.xib).
+@property (nonatomic, strong, nullable) IBOutlet NSPanel *updatePanel;
+@property (nonatomic, weak, nullable) IBOutlet NSProgressIndicator *updateBar;
 - (IBAction)chooseServer:(nullable id)sender;
 - (IBAction)showNotes:(nullable id)sender;
 // Devices Nearby… (SNPeersWindow).

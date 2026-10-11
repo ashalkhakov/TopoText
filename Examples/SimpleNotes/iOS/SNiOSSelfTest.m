@@ -195,6 +195,17 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNWait(3, ^BOOL { return we.formatBar.window != nil; });
         SNSay(we.formatBar.window != nil && [grid textViewAtRow:0 column:0].inputAccessoryView.window == nil,
               @"from a cell into the note: the note's bar over the keyboard");
+        /* The bar's Aa menu, from the bar (in the keyboard's window, whose
+           responder chain has nothing of the app's): Title, then Body. */
+        if (@available(iOS 16.0, *)) {
+            UIMenu *styles = (UIMenu *)we.styleItem.menu.children.firstObject;
+            UIAction *title = (UIAction *)styles.children.firstObject, *body = (UIAction *)styles.children[3];
+            wtv.selectedRange = NSMakeRange(0, 0);
+            [title performWithSender:we.styleItem target:nil];
+            NSString *style = [wtv.textStorage attribute:@"SNStyle" atIndex:0 effectiveRange:NULL];
+            SNSay([style isEqual:SNStyleTitle], [NSString stringWithFormat:@"Title from the bar over the keyboard (%@)", style]);
+            [body performWithSender:we.styleItem target:nil];
+        }
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             /* The bar over the keyboard is in the keyboard's window, which
@@ -288,14 +299,28 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         UITableViewController *root = (UITableViewController *)navigation.viewControllers.firstObject;
         [root viewWillAppear:NO];
         UITableView *ft = root.tableView;
-        NSMutableArray *folders = [NSMutableArray array];
+        NSMutableArray *(^folderRows)(void) = ^NSMutableArray *{
+            NSMutableArray *rows = [NSMutableArray array];
+            for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
+                UITableViewCell *c = [root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]];
+                [rows addObject:[NSString stringWithFormat:@"%ld %@", (long)c.indentationLevel,
+                                                           ((UIListContentConfiguration *)c.contentConfiguration).text]];
+            }
+            return rows;
+        };
+        /* Work starts closed; its chevron opens it, Projects under it. */
+        NSMutableArray *closed = folderRows();
+        UIButton *chevron = nil;
         for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
             UITableViewCell *c = [root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]];
-            [folders addObject:[NSString stringWithFormat:@"%ld %@", (long)c.indentationLevel,
-                                                          ((UIListContentConfiguration *)c.contentConfiguration).text]];
+            if ([((UIListContentConfiguration *)c.contentConfiguration).text isEqual:@"Work"]) chevron = (UIButton *)c.accessoryView;
         }
-        SNSay([folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
-              [NSString stringWithFormat:@"Projects under Work (%@)", [folders componentsJoinedByString:@", "]]);
+        [chevron sendActionsForControlEvents:UIControlEventTouchUpInside];
+        NSMutableArray *folders = folderRows();
+        SNSay([closed containsObject:@"0 Work"] && ![closed containsObject:@"1 Projects"] && [chevron isKindOfClass:[UIButton class]] &&
+                  [folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
+              [NSString stringWithFormat:@"Projects under Work, shown once Work is opened (%@; then %@)",
+                                         [closed componentsJoinedByString:@", "], [folders componentsJoinedByString:@", "]]);
         SNSay([ft numberOfRowsInSection:3] == 3, @"the tags listed");
         /* The server's sheet: a server that asks for no sign-in, learnt from
            its $metadata, synced with as it is. */

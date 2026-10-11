@@ -58,12 +58,12 @@ NSURL *SNServiceRootOf(NSString *typed) {
 
 /* The sign-in of the address typed: the one made already, or a new one
    (what it keeps, the Keychain's, comes with it). */
-- (SNSignIn *)signInForTyped {
+- (ODataSignIn *)signInForTyped {
     NSURL *root = SNServiceRootOf(_serverField.stringValue);
     if (!root) return nil;
     if (![_signIn.serviceRoot isEqual:root]) {
         [_signIn cancel];
-        _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:_secrets];
+        _signIn = SNSignInTo(root, _secrets);
         _signIn.delegate = self;
         _showingCode = NO;
     }
@@ -74,17 +74,17 @@ NSURL *SNServiceRootOf(NSString *typed) {
     BOOL server = [self syncs];
     _warningLabel.hidden = server;
     _serverField.enabled = server;
-    SNSignIn *s = server ? [self signInForTyped] : nil;
+    ODataSignIn *s = server ? [self signInForTyped] : nil;
     NSString *status = @"";
     if (server && !s) status = @"Type the server's address.";
-    else if (s.kind == SNSignInNone) status = @"This server asks for no sign-in.";
+    else if (s.kind == ODataSignInNone) status = @"This server asks for no sign-in.";
     else if (s.signedIn) status = s.userName.length ? [NSString stringWithFormat:@"Signed in as %@.", s.userName] : @"Signed in.";
     else if (s && _failure.length) status = [NSString stringWithFormat:@"Not signed in: %@", _failure];
     else if (s) status = @"Not signed in.";
     _statusLabel.stringValue = status;
     _statusLabel.toolTip = status;
     _signInButton.enabled = s && !s.signedIn && !_showingCode;
-    _signOutButton.enabled = s.signedIn && s.kind != SNSignInNone;
+    _signOutButton.enabled = s.signedIn && s.kind != ODataSignInNone;
     for (NSView *v in @[ _codeHintLabel, _pageLabel, _codeLabel, _openPageButton, _waitingLabel ]) v.hidden = !_showingCode;
 }
 
@@ -96,18 +96,18 @@ NSURL *SNServiceRootOf(NSString *typed) {
 
 - (IBAction)signIn:(id)sender {
     _failure = nil;
-    SNSignIn *s = [self signInForTyped];
+    ODataSignIn *s = [self signInForTyped];
     if (!s) {
         NSBeep();
         return;
     }
-    if (s.kind == SNSignInUnknown) {
+    if (s.kind == ODataSignInUnknown) {
         _signInWhenLearnt = YES;
         _statusLabel.stringValue = @"Asking the server how to sign in…";
         [s learn];
         return;
     }
-    if (s.kind == SNSignInPassword) {
+    if (s.kind == ODataSignInPassword) {
         NSString *user = SNAskForText(@"Sign In", @"User name:", @"");
         if (!user.length) return;
         NSString *password = SNAskForText(@"Sign In", [NSString stringWithFormat:@"Password for %@:", user], @"");
@@ -128,11 +128,11 @@ NSURL *SNServiceRootOf(NSString *typed) {
     if (_page) [[NSWorkspace sharedWorkspace] openURL:_page];
 }
 
-- (void)signInDidLearn:(SNSignIn *)signIn {
+- (void)signInDidLearn:(ODataSignIn *)signIn {
     [self refresh];
     if (_signInWhenLearnt) {
         _signInWhenLearnt = NO;
-        if (signIn.kind != SNSignInNone) [self signIn:nil];
+        if (signIn.kind != ODataSignInNone) [self signIn:nil];
     }
     if (_okWhenLearnt) {
         _okWhenLearnt = NO;
@@ -140,7 +140,7 @@ NSURL *SNServiceRootOf(NSString *typed) {
     }
 }
 
-- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
+- (void)signIn:(ODataSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
     _showingCode = YES;
     _page = completePage ?: page;
     _codeLabel.stringValue = code;
@@ -150,12 +150,12 @@ NSURL *SNServiceRootOf(NSString *typed) {
     [self openPage:nil];
 }
 
-- (void)signInDidFinish:(SNSignIn *)signIn {
+- (void)signInDidFinish:(ODataSignIn *)signIn {
     _showingCode = NO;
     [self refresh];
 }
 
-- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
+- (void)signIn:(ODataSignIn *)signIn didFail:(NSError *)error {
     _showingCode = NO;
     _failure = error.localizedDescription;
     _signInWhenLearnt = _okWhenLearnt = NO;
@@ -185,7 +185,7 @@ NSURL *SNServiceRootOf(NSString *typed) {
         [self close];
         return;
     }
-    SNSignIn *s = [self signInForTyped];
+    ODataSignIn *s = [self signInForTyped];
     if (!s) {
         NSAlert *alert = [[NSAlert alloc] init];
         alert.messageText = @"That is not a server's address.";
@@ -193,7 +193,7 @@ NSURL *SNServiceRootOf(NSString *typed) {
         [alert beginSheetModalForWindow:self.window completionHandler:nil];
         return;
     }
-    if (s.kind == SNSignInUnknown) {
+    if (s.kind == ODataSignInUnknown) {
         _okWhenLearnt = YES;
         _statusLabel.stringValue = @"Asking the server how to sign in…";
         [s learn];

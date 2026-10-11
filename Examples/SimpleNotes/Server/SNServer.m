@@ -33,6 +33,13 @@
 //   Port, Localhost, AccessLog, and every other HTTPServerKit setting
 //                (HSApplication.h); sign-in too: TrustedUserHeader for a
 //                proxy that signs users in, or JWTIssuer and JWTAudience
+//   MaxPageBytes  at most this many bytes of JSON a response, the rest a
+//                next link away (default ODataKit's, 4 MB): what one holds
+//                is built in memory, and a new device's first sync reads
+//                every note and file (all in one response, the user's took
+//                the server over a gigabyte)
+//   MaxPageSize  at most this many rows a response too (default: no limit
+//                but the bytes')
 //   AllowAnonymous  NO: a request that names no one is refused, once a
 //                sign-in is set (default YES, for trying it out)
 //   AllowAnonymousMetadata  NO: $metadata too is refused to one not
@@ -64,7 +71,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"MoveFrom", @"MoveFromType", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"MoveFrom", @"MoveFromType", @"ServiceRoot", @"MaxPageBytes", @"MaxPageSize", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -207,6 +214,10 @@ static NSURL *SNURL(id value) {
                                                             (unsigned long)c.port]];
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
+    /* Pages, whatever a client asks for: what one response holds is built
+       whole in memory. In bytes (ODataKit's 4 MB) unless set otherwise. */
+    if ([c setting:@"MaxPageBytes"]) _service.maxPageBytes = (NSUInteger)MAX(0.0, [c number:@"MaxPageBytes" otherwise:0]);
+    if ([c setting:@"MaxPageSize"]) _service.maxPageSize = (NSUInteger)MAX(0.0, [c number:@"MaxPageSize" otherwise:0]);
     /* Moved: the history began again with the copy, so every delta link
        given before answers 410, and each device reads its notes again. */
     if (moved && ![_service pruneHistoryBeforeDate:[NSDate date] error:&failure]) {
@@ -214,7 +225,7 @@ static NSURL *SNURL(id value) {
         return NO;
     }
     /* How to sign in ($metadata's Authorization), to a device not signed
-       in yet: SNSignIn reads it there. AllowAnonymousMetadata NO turns it
+       in yet: ODataSignIn reads it there. AllowAnonymousMetadata NO turns it
        off (ODataServiceModule reads it). */
     _service.allowsAnonymousMetadata = YES;
     /* Devices not yet updated write in their model's version: each version

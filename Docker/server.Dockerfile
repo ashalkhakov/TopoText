@@ -14,6 +14,8 @@
 #   SN_STORE_TYPE    SQLite (default), PostgreSQL, MySQL, MariaDB
 #   SN_SERVICE_ROOT  the public URL it is reached at (behind a proxy)
 #   SN_PORT          8080
+#   SN_MAX_PAGE_BYTES  JSON a response at most (4 MB): what one holds is built in memory
+#   SN_MAX_PAGE_SIZE   rows a response at most (default: no limit but the bytes')
 #   ...and every other of HTTPServerKit's (HS_ settings, SN_ here).
 #
 # Not Alpine: GNUstep's runtime (libobjc2, libdispatch, gnustep-base) is
@@ -54,8 +56,8 @@ RUN set -e; \
 
 # FreeCoreData and ODataKit, at CI's pins.
 FROM stack AS libraries
-ARG FREECOREDATA_REF=524709592bf8670dab363d4c00d70eff4aa51e55
-ARG ODATAKIT_REF=917f5c850dd83b675c73f6433901e411c2b2bb4f
+ARG FREECOREDATA_REF=5bfd5a87179cff43e0a8a55622fc00f01951c88a
+ARG ODATAKIT_REF=de46fce3540bd20ddb36907c869f526aa4f96db1
 SHELL ["/bin/bash", "-c"]
 RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \

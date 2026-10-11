@@ -11,7 +11,7 @@
 #import "SNSignIn.h"
 
 /* Kept in memory, as the Keychain would keep them. */
-@interface SNMemorySecrets : NSObject <SNSecretStoring>
+@interface SNMemorySecrets : NSObject <ODataSecretStoring>
 @property (nonatomic, strong) NSMutableDictionary *all;
 @end
 
@@ -28,10 +28,12 @@
 @end
 
 /* The server and the identity provider, answering as they would. */
-@interface SNFakeSignIn : SNSignIn
+@interface SNFakeSignIn : ODataSignIn
 @property (nonatomic, strong) ODataService *service;
 @property (nonatomic, copy) NSDictionary *key;
 @property (nonatomic) NSInteger polls, refreshes;
+/* Token polls lost on the way (no answer: the connection lost), first. */
+@property (nonatomic) NSInteger lost;
 @property (nonatomic, copy) NSString *challenge;
 @end
 
@@ -73,11 +75,19 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
                                                           @"verification_uri": @"https://id.test/activate",
                                                           @"verification_uri_complete": @"https://id.test/activate?user_code=WDJB-MJHT",
                                                           @"interval": @0.05, @"expires_in": @60 } options:0 error:NULL];
+    } else if ([url hasSuffix:@"/token"] && [form containsString:@"device_code"] && _lost > 0) {
+        _lost--;
+        NSError *cut = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNetworkConnectionLost
+                                       userInfo:@{ NSLocalizedDescriptionKey: @"The network connection was lost." }];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            done(nil, nil, cut);
+        });
+        return;
     } else if ([url hasSuffix:@"/token"] && [form containsString:@"device_code"]) {
         /* Pending once (the user still signing in), then the tokens; for
            the verifier of the challenge only. */
         NSString *verifier = SNFormValue(form, @"code_verifier");
-        if (!verifier || ![SNChallengeOfVerifier(verifier) isEqual:_challenge]) {
+        if (!verifier || ![ODataSignInChallengeOfVerifier(verifier) isEqual:_challenge]) {
             status = 400;
             body = [NSJSONSerialization dataWithJSONObject:@{ @"error": @"invalid_grant", @"error_description": @"PKCE verification failed" }
                                                    options:0 error:NULL];
@@ -103,7 +113,7 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
 
 @end
 
-@interface SNSignInTests : XCTestCase <SNSignInDelegate>
+@interface SNSignInTests : XCTestCase <ODataSignInDelegate>
 @end
 
 @implementation SNSignInTests {
@@ -154,13 +164,14 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
 }
 
-- (void)signInDidLearn:(SNSignIn *)signIn { _learnt = YES; }
-- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage { _code = code; }
-- (void)signInDidFinish:(SNSignIn *)signIn { _finished = YES; }
-- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error { _failed = error; }
+- (void)signInDidLearn:(ODataSignIn *)signIn { _learnt = YES; }
+- (void)signIn:(ODataSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage { _code = code; }
+- (void)signInDidFinish:(ODataSignIn *)signIn { _finished = YES; }
+- (void)signIn:(ODataSignIn *)signIn didFail:(NSError *)error { _failed = error; }
 
-- (SNFakeSignIn *)signInWith:(id<SNSecretStoring>)secrets {
+- (SNFakeSignIn *)signInWith:(id<ODataSecretStoring>)secrets {
     SNFakeSignIn *s = [[SNFakeSignIn alloc] initWithServiceRoot:[NSURL URLWithString:@"http://notes.test/odata/"] secrets:secrets];
+    s.clientID = SNSignInClientID;
     s.service = _service;
     s.key = _key;
     s.delegate = self;
@@ -175,11 +186,11 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     SNSecretStore *store = [[SNSecretStore alloc] init];
     NSString *account = [@"https://test.invalid/" stringByAppendingString:[NSProcessInfo processInfo].globallyUniqueString];
     NSDictionary *tokens = @{ @"access": @"a.b.c", @"refresh": @"r", @"expires": @(1791451581.5), @"name": @"alice",
-                              @"kind": @(SNSignInOpenID), @"issuer": @"https://id.test/realms/home" };
+                              @"kind": @(ODataSignInOpenID), @"issuer": @"https://id.test/realms/home" };
     XCTAssertTrue([store setSecrets:tokens forAccount:account]);
     XCTAssertEqualObjects([store secretsForAccount:account], tokens, @"read back by this store");
     XCTAssertEqualObjects([[[SNSecretStore alloc] init] secretsForAccount:account], tokens, @"and by the next launch's");
-    SNSignIn *s = [[SNSignIn alloc] initWithServiceRoot:[NSURL URLWithString:account] secrets:store];
+    ODataSignIn *s = [[ODataSignIn alloc] initWithServiceRoot:[NSURL URLWithString:account] secrets:store];
     XCTAssertTrue(s.signedIn, @"signed in by what was kept");
     XCTAssertEqualObjects(s.userName, @"alice");
     [store setSecrets:nil forAccount:account];
@@ -189,17 +200,29 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
 
 /* RFC 7636's own example: the challenge of its verifier. */
 - (void)testPKCEChallenge {
-    XCTAssertEqualObjects(SNChallengeOfVerifier(@"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), @"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    XCTAssertEqualObjects(ODataSignInChallengeOfVerifier(@"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), @"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
 }
 
 - (void)testTheServerSaysHowToSignIn {
-    SNSignIn *s = [self signInWith:[[SNMemorySecrets alloc] init]];
+    ODataSignIn *s = [self signInWith:[[SNMemorySecrets alloc] init]];
     [s learn];
     [self waitFor:&_learnt];
     XCTAssertNil(_failed);
-    XCTAssertEqual(s.kind, SNSignInOpenID);
+    XCTAssertEqual(s.kind, ODataSignInOpenID);
     XCTAssertEqualObjects(s.issuer.absoluteString, @"https://id.test");
     XCTAssertFalse(s.signedIn);
+}
+
+/* Polls lost on the way (iOS cut them while the app waited behind the
+   sign-in page): asked again, and signed in all the same. */
+- (void)testAPollLostOnTheWayIsAskedAgain {
+    SNFakeSignIn *s = [self signInWith:[[SNMemorySecrets alloc] init]];
+    s.lost = 2;
+    [s begin];
+    [self waitFor:&_finished];
+    XCTAssertNil(_failed, @"%@", _failed);
+    XCTAssertTrue(s.signedIn);
+    XCTAssertEqual(s.lost, 0);
 }
 
 /* The device flow: a code shown, signed in elsewhere, tokens kept; a sync
@@ -215,7 +238,7 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     XCTAssertTrue(s.signedIn);
     XCTAssertEqualObjects(s.userName, @"alice");
     /* Kept: another sign-in for the same server is signed in already. */
-    SNSignIn *again = [self signInWith:secrets];
+    ODataSignIn *again = [self signInWith:secrets];
     XCTAssertTrue(again.signedIn);
     XCTAssertEqualObjects(again.userName, @"alice");
 

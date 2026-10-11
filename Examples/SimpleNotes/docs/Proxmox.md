@@ -92,6 +92,25 @@ If the router does not loop the public addresses back into the LAN, the
 container must still reach `id.example.com`: a DNS override on the router
 pointing it at the proxy's LAN address does it.
 
+**HTTP/2: on for both hosts, or for neither.** When the notes host and
+Keycloak share one certificate (a wildcard, `*.example.com`) and one
+address, an iPhone reuses the HTTP/2 connection it made to
+`id.example.com` for signing in to send its sync to `notes.example.com`
+as well, as HTTP/2 allows. A proxy with HTTP/2 on for one host and off
+for the other cannot pass that request across, and answers 421
+(Misdirected Request) with no body: the app says "Not synced: client
+error", while the Mac, whose sync makes its own connection, syncs. In
+Nginx Proxy Manager, turn on HTTP/2 Support on the SSL tab of both proxy
+hosts (the server behind needs nothing: the proxy speaks HTTP/1.1 to
+it). To check, from a computer in the LAN:
+
+```
+# asked for the notes host on a connection made for Keycloak's: 200, not 421
+curl -sk --http2 -o /dev/null -w '%{http_code}\n' \
+  --resolve id.example.com:443:<proxy's LAN address> \
+  -H 'Host: notes.example.com' https://id.example.com/odata/
+```
+
 ## 5. Checking it
 
 ```sh
@@ -185,4 +204,6 @@ new server and a new device sync an empty notebook.
 | The issuer's discovery document does not name its keys | The server could not fetch Keycloak's keys | DNS (step 3), CA certificates (0.2.0-rc4 on), or the router's loop back (step 4) |
 | A server with the specified hostname could not be found (`http://CT100:8080/…`) | `SN_SERVICE_ROOT` is not set | Set it (step 3); on the device, start from a new store, as the link it saved names the container |
 | Not synced, 401, after signing in | The token's audience is not `SN_JWT_AUDIENCE` | Add Keycloak's audience mapper, or remove `SN_JWT_AUDIENCE` |
+| Not synced: client error (on an iPhone; the Mac syncs) | The proxy answers 421: HTTP/2 is on for Keycloak's host and off for the notes host, which share a certificate | HTTP/2 on for both hosts (step 4) |
+| A TLS error, or the sign-in page times out, on an iPhone at home | iCloud Private Relay or Limit IP Address Tracking: Safari's requests go through Apple's relays, which cannot reach a LAN address | Turn both off for the home Wi-Fi |
 | Synced, and no notes | The notes are no one's, or the container's `/data` is new | Step 7, or move the old `/data` over (step 6) |

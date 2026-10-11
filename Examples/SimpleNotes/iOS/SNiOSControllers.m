@@ -3,6 +3,7 @@
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
+#import "SNMenuAction.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
 #import "SNTransferViewController.h"
@@ -62,16 +63,23 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 #pragma mark folders
 
+/* The folders open in the list, by their ids (synced, so kept across
+   launches): a folder with folders in it is closed until opened. */
+static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
+
 @implementation SNFoldersViewController {
     SNNotes *_notes;
-    NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
+    NSArray<SNFolder *> *_folders;   /* the rows: each folder, then those in it if it is open */
+    /* Each folder's depth, and those with folders in it (by object ID). */
+    NSDictionary<NSManagedObjectID *, NSNumber *> *_depths;
+    NSSet<NSManagedObjectID *> *_parents;
     NSArray<NSString *> *_tags;
     /* The counts, read once a reload (by folder ID, by tag; All Notes'
        and Recently Deleted's under NSNull and @""), not as each cell is
        drawn. */
     NSDictionary *_counts;
     /* The server being signed in to, until it is (then the notes'). */
-    SNSignIn *_signIn;
+    ODataSignIn *_signIn;
     SNPeers *_peers;
     /* Imports waiting for the one going (each with access to its file
        while it goes), and the export's zip, to save once written. */
@@ -128,11 +136,32 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (void)reload {
-    _folders = _notes.folderTree;
+    NSArray<SNFolder *> *tree = _notes.folderTree;
+    NSMutableDictionary *depths = [NSMutableDictionary dictionary];
+    NSMutableSet *parents = [NSMutableSet set];
+    for (SNFolder *f in tree) {
+        SNFolder *parent = [_notes parentOfFolder:f];
+        depths[f.objectID] = @(parent ? [depths[parent.objectID] integerValue] + 1 : 0);
+        if (parent) [parents addObject:parent.objectID];
+    }
+    _depths = depths;
+    _parents = parents;
+    /* Shown: each folder whose folders above are all open. */
+    NSSet *open = [NSSet setWithArray:[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] ?: @[]];
+    NSMutableArray *shown = [NSMutableArray array];
+    NSInteger hiddenBelow = NSIntegerMax;   /* the depth of a closed folder whose folders are being passed */
+    for (SNFolder *f in tree) {
+        NSInteger depth = [depths[f.objectID] integerValue];
+        if (depth > hiddenBelow) continue;
+        hiddenBelow = NSIntegerMax;
+        [shown addObject:f];
+        if ([parents containsObject:f.objectID] && ![open containsObject:f.id ?: @""]) hiddenBelow = depth;
+    }
+    _folders = shown;
     NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
     _tags = [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
     NSMutableDictionary *counts = [tagCounts mutableCopy];
-    for (SNFolder *f in _folders) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
+    for (SNFolder *f in tree) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
     counts[[NSNull null]] = @([_notes countOfNotesInFolder:nil]);
     counts[@""] = @(_notes.countOfDeletedNotes);
     _counts = counts;
@@ -285,15 +314,15 @@ static NSString *SNDaysLeftText(SNNote *note) {
     });
 }
 
-/* Signed in as the server asks, then synced with (SNSignIn). */
+/* Signed in as the server asks, then synced with (ODataSignIn). */
 - (void)signInToServer:(NSURL *)root {
     [_signIn cancel];
-    _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+    _signIn = SNSignInTo(root, [[SNSecretStore alloc] init]);
     _signIn.delegate = self;
     [_signIn learn];
 }
 
-- (void)useServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+- (void)useServer:(NSURL *)root signIn:(ODataSignIn *)signIn {
     if (root) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
     else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
     signIn.delegate = nil;
@@ -304,12 +333,12 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 #pragma mark signing in
 
-- (void)signInDidLearn:(SNSignIn *)signIn {
+- (void)signInDidLearn:(ODataSignIn *)signIn {
     if (signIn.signedIn) {
         [self useServer:signIn.serviceRoot signIn:signIn];
         return;
     }
-    if (signIn.kind == SNSignInPassword) {
+    if (signIn.kind == ODataSignInPassword) {
         UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In" message:signIn.serviceRoot.host
                                                             preferredStyle:UIAlertControllerStyleAlert];
         [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
@@ -331,7 +360,7 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 /* The code, and the provider's page to enter it on (opened in Safari). */
-- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
+- (void)signIn:(ODataSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
     UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In"
         message:[NSString stringWithFormat:@"Open %@ and enter the code\n\n%@", page.host ?: page.absoluteString, code]
         preferredStyle:UIAlertControllerStyleAlert];
@@ -344,13 +373,13 @@ static NSString *SNDaysLeftText(SNNote *note) {
     [self presentViewController:a animated:YES completion:nil];
 }
 
-- (void)signInDidFinish:(SNSignIn *)signIn {
+- (void)signInDidFinish:(ODataSignIn *)signIn {
     if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
     [self useServer:signIn.serviceRoot signIn:signIn];
     if (signIn.userName.length) SNTell(self, @"Signed In", [NSString stringWithFormat:@"Signed in as %@.", signIn.userName]);
 }
 
-- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
+- (void)signIn:(ODataSignIn *)signIn didFail:(NSError *)error {
     if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
     SNTell(self, @"Not Signed In", error.localizedDescription ?: @"");
 }
@@ -382,6 +411,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     UITableViewCell *cell = [t dequeueReusableCellWithIdentifier:@"folder"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"folder"];
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    cell.accessoryView = nil;
     UIListContentConfiguration *c = [UIListContentConfiguration valueCellConfiguration];
     NSUInteger count;
     NSInteger depth = 0;
@@ -399,7 +429,19 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
         c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
         count = [_counts[f ? (id)f.objectID : (id)[NSNull null]] unsignedIntegerValue];
-        depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
+        depth = f ? [_depths[f.objectID] integerValue] : 0;
+        /* Folders in it: a chevron to open or close it (the row opens its
+           notes). */
+        if (f && [_parents containsObject:f.objectID]) {
+            BOOL open = [self isOpen:f];
+            UIButton *chevron = [UIButton buttonWithType:UIButtonTypeSystem];
+            [chevron setImage:[UIImage systemImageNamed:open ? @"chevron.down" : @"chevron.right"] forState:UIControlStateNormal];
+            chevron.frame = CGRectMake(0, 0, 44, 44);
+            chevron.tag = ip.row;
+            chevron.accessibilityLabel = open ? @"Close" : @"Open";
+            [chevron addTarget:self action:@selector(toggleFolder:) forControlEvents:UIControlEventTouchUpInside];
+            cell.accessoryView = chevron;
+        }
     }
     c.secondaryText = [NSString stringWithFormat:@"%lu", (unsigned long)count];
     cell.contentConfiguration = c;
@@ -414,6 +456,25 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     else if (ip.section == SNTagsSection) next = [[SNNotesViewController alloc] initWithNotes:_notes tag:_tags[(NSUInteger)ip.row]];
     else next = [[SNNotesViewController alloc] initWithNotes:_notes folder:ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil];
     [self.navigationController pushViewController:next animated:YES];
+}
+
+- (BOOL)isOpen:(SNFolder *)folder {
+    return [[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] containsObject:folder.id ?: @""];
+}
+
+- (void)setFolder:(SNFolder *)folder open:(BOOL)open {
+    if (!folder.id.length) return;
+    NSMutableArray *ids = [[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] mutableCopy] ?: [NSMutableArray array];
+    [ids removeObject:folder.id];
+    if (open) [ids addObject:folder.id];
+    [[NSUserDefaults standardUserDefaults] setObject:ids forKey:SNOpenFoldersDefaultsKey];
+    [self reload];
+}
+
+- (IBAction)toggleFolder:(UIButton *)sender {
+    if (sender.tag < 0 || (NSUInteger)sender.tag >= _folders.count) return;
+    SNFolder *f = _folders[(NSUInteger)sender.tag];
+    [self setFolder:f open:![self isOpen:f]];
 }
 
 /* A sheet of where a folder can go: the top, or a folder not in it. */
@@ -1009,45 +1070,43 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 #pragma mark formatting
 
-/* The format bar's menus: commands sent up the responder chain, to this
-   controller (the text view is first responder). */
+/* The format bar's menus: their actions sent to this controller. */
 - (void)makeFormatMenus {
     /* A row of four, as Apple Notes' Aa has them. */
     UIMenu *traits = [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
-        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
-        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
-        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil] ]];
+        SNMenuAction(@"Bold", [UIImage systemImageNamed:@"bold"], @selector(bold:), self),
+        SNMenuAction(@"Italic", [UIImage systemImageNamed:@"italic"], @selector(italic:), self),
+        SNMenuAction(@"Underline", [UIImage systemImageNamed:@"underline"], @selector(underline:), self),
+        SNMenuAction(@"Strikethrough", [UIImage systemImageNamed:@"strikethrough"], @selector(strikethrough:), self) ]];
     if (@available(iOS 16.0, *)) traits.preferredElementSize = UIMenuElementSizeSmall;
     _styleItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
-            [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
-            [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
-            [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
-            [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]],
+            SNMenuAction(@"Title", nil, @selector(title:), self),
+            SNMenuAction(@"Heading", nil, @selector(heading:), self),
+            SNMenuAction(@"Subheading", nil, @selector(subheading:), self),
+            SNMenuAction(@"Body", nil, @selector(body:), self),
+            SNMenuAction(@"Monostyled", nil, @selector(mono:), self) ]],
         traits ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
-        [UICommand commandWithTitle:@"Attach File" image:[UIImage systemImageNamed:@"doc"] action:@selector(attachFile:) propertyList:nil],
-        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
+        SNMenuAction(@"Choose Photo", [UIImage systemImageNamed:@"photo.on.rectangle"], @selector(attachPhoto:), self),
+        SNMenuAction(@"Attach File", [UIImage systemImageNamed:@"doc"], @selector(attachFile:), self),
+        SNMenuAction(@"Add Link", [UIImage systemImageNamed:@"link"], @selector(addLink:), self) ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
-        [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],
-        [UICommand commandWithTitle:@"Numbered List" image:[UIImage systemImageNamed:@"list.number"] action:@selector(numberList:) propertyList:nil],
+        SNMenuAction(@"Bulleted List", [UIImage systemImageNamed:@"list.bullet"], @selector(bulletList:), self),
+        SNMenuAction(@"Dashed List", [UIImage systemImageNamed:@"list.dash"], @selector(dashList:), self),
+        SNMenuAction(@"Numbered List", [UIImage systemImageNamed:@"list.number"], @selector(numberList:), self),
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Move Checked to Bottom" image:[UIImage systemImageNamed:@"arrow.down.to.line"]
-                                 action:@selector(moveCheckedToBottom:) propertyList:nil],
-            [self keepCheckedCommand] ]],
+            SNMenuAction(@"Move Checked to Bottom", [UIImage systemImageNamed:@"arrow.down.to.line"], @selector(moveCheckedToBottom:), self),
+            [self keepCheckedAction] ]],
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Increase Indentation" image:[UIImage systemImageNamed:@"increase.indent"] action:@selector(indent:) propertyList:nil],
-            [UICommand commandWithTitle:@"Decrease Indentation" image:[UIImage systemImageNamed:@"decrease.indent"] action:@selector(outdent:) propertyList:nil] ]] ]];
+            SNMenuAction(@"Increase Indentation", [UIImage systemImageNamed:@"increase.indent"], @selector(indent:), self),
+            SNMenuAction(@"Decrease Indentation", [UIImage systemImageNamed:@"decrease.indent"], @selector(outdent:), self) ]] ]];
 }
 
-- (UICommand *)keepCheckedCommand {
-    UICommand *c = [UICommand commandWithTitle:@"Keep Checked at Bottom" image:nil action:@selector(toggleKeepCheckedAtBottom:) propertyList:nil];
-    c.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
-    return c;
+- (UIAction *)keepCheckedAction {
+    UIAction *a = SNMenuAction(@"Keep Checked at Bottom", nil, @selector(toggleKeepCheckedAtBottom:), self);
+    a.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return a;
 }
 
 /* After the binding changed paragraphs: the selection as it was, typing

@@ -45,7 +45,7 @@ SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS) -lz
 SimpleNotes_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
-SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib AppKit/DevicesNearby.xib AppKit/TransferPanel.xib Icons/SimpleNotes.png
+SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib AppKit/DevicesNearby.xib AppKit/TransferPanel.xib AppKit/UpdatePanel.xib Icons/SimpleNotes.png
 # SNNote+CoreDataProperties, SNFolder+CoreDataProperties: generated from
 # the model as it builds (Codegen: Category/Extension), as Xcode does.
 SimpleNotes_COREDATA_CODEGEN = yes
