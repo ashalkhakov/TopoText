@@ -115,6 +115,10 @@
 			isa = PBXBuildFile;
 			fileRef = 117AF9FFC9CA6E63B5C2C73A;
 		};
+		328026118249E60CC6AA53B4 /* SNMenuAction.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 03E8831930424FDF1C912378;
+		};
 		32994D778D47C18E6E9FFC6E /* SNTransferPanel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = A74090D524D5A82D2036F9F3;
@@ -846,6 +850,13 @@
 			sourceTree = "<group>";
 			name = SNUndoTextView.h;
 		};
+		03E8831930424FDF1C912378 /* SNMenuAction.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/SNMenuAction.m;
+			sourceTree = "<group>";
+			name = SNMenuAction.m;
+		};
 		054A76FC40094ADDD3CBC934 /* SNSmartFolderViewController.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1157,6 +1168,13 @@
 			name = TopoText.xcodeproj;
 			path = ../../TopoText.xcodeproj;
 			sourceTree = "<group>";
+		};
+		6C544B141330E02F70867301 /* SNMenuAction.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/SNMenuAction.h;
+			sourceTree = "<group>";
+			name = SNMenuAction.h;
 		};
 		6E9D5B559DEB6B7E294A4AB3 /* SNTableGrid+System.m */ = {
 			isa = PBXFileReference;
@@ -1766,6 +1784,8 @@
 				B22E24B4B4725F0EFE51DD23,
 				036F46B4B4BE3204D3B8A566,
 				E24E63BBA2A66A746F957E15,
+				6C544B141330E02F70867301,
+				03E8831930424FDF1C912378,
 				60B496EE8C7BBF49E296082F,
 				CCF418C8E3E8B505943CEE74,
 				27FDFB70C50488AC14F320AC,
@@ -2031,6 +2051,7 @@
 				F805AB3AE8BCCEE4EF1C9A0E,
 				1D3E0EBF808C8D10BBC7A9B8,
 				330A0C62A452B44EBD481FEA,
+				328026118249E60CC6AA53B4,
 				7E28E0CE996D7FC9B8BE562B,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,

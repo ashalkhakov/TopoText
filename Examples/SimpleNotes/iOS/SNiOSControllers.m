@@ -3,6 +3,7 @@
 #import "SNRichText.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
+#import "SNMenuAction.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
 #import "SNTransferViewController.h"
@@ -1069,45 +1070,43 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 #pragma mark formatting
 
-/* The format bar's menus: commands sent up the responder chain, to this
-   controller (the text view is first responder). */
+/* The format bar's menus: their actions sent to this controller. */
 - (void)makeFormatMenus {
     /* A row of four, as Apple Notes' Aa has them. */
     UIMenu *traits = [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-        [UICommand commandWithTitle:@"Bold" image:[UIImage systemImageNamed:@"bold"] action:@selector(bold:) propertyList:nil],
-        [UICommand commandWithTitle:@"Italic" image:[UIImage systemImageNamed:@"italic"] action:@selector(italic:) propertyList:nil],
-        [UICommand commandWithTitle:@"Underline" image:[UIImage systemImageNamed:@"underline"] action:@selector(underline:) propertyList:nil],
-        [UICommand commandWithTitle:@"Strikethrough" image:[UIImage systemImageNamed:@"strikethrough"] action:@selector(strikethrough:) propertyList:nil] ]];
+        SNMenuAction(@"Bold", [UIImage systemImageNamed:@"bold"], @selector(bold:), self),
+        SNMenuAction(@"Italic", [UIImage systemImageNamed:@"italic"], @selector(italic:), self),
+        SNMenuAction(@"Underline", [UIImage systemImageNamed:@"underline"], @selector(underline:), self),
+        SNMenuAction(@"Strikethrough", [UIImage systemImageNamed:@"strikethrough"], @selector(strikethrough:), self) ]];
     if (@available(iOS 16.0, *)) traits.preferredElementSize = UIMenuElementSizeSmall;
     _styleItem.menu = [UIMenu menuWithTitle:@"" children:@[
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Title" image:nil action:@selector(title:) propertyList:nil],
-            [UICommand commandWithTitle:@"Heading" image:nil action:@selector(heading:) propertyList:nil],
-            [UICommand commandWithTitle:@"Subheading" image:nil action:@selector(subheading:) propertyList:nil],
-            [UICommand commandWithTitle:@"Body" image:nil action:@selector(body:) propertyList:nil],
-            [UICommand commandWithTitle:@"Monostyled" image:nil action:@selector(mono:) propertyList:nil] ]],
+            SNMenuAction(@"Title", nil, @selector(title:), self),
+            SNMenuAction(@"Heading", nil, @selector(heading:), self),
+            SNMenuAction(@"Subheading", nil, @selector(subheading:), self),
+            SNMenuAction(@"Body", nil, @selector(body:), self),
+            SNMenuAction(@"Monostyled", nil, @selector(mono:), self) ]],
         traits ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Choose Photo" image:[UIImage systemImageNamed:@"photo.on.rectangle"] action:@selector(attachPhoto:) propertyList:nil],
-        [UICommand commandWithTitle:@"Attach File" image:[UIImage systemImageNamed:@"doc"] action:@selector(attachFile:) propertyList:nil],
-        [UICommand commandWithTitle:@"Add Link" image:[UIImage systemImageNamed:@"link"] action:@selector(addLink:) propertyList:nil] ]];
+        SNMenuAction(@"Choose Photo", [UIImage systemImageNamed:@"photo.on.rectangle"], @selector(attachPhoto:), self),
+        SNMenuAction(@"Attach File", [UIImage systemImageNamed:@"doc"], @selector(attachFile:), self),
+        SNMenuAction(@"Add Link", [UIImage systemImageNamed:@"link"], @selector(addLink:), self) ]];
     _listItem.menu = [UIMenu menuWithTitle:@"" children:@[
-        [UICommand commandWithTitle:@"Bulleted List" image:[UIImage systemImageNamed:@"list.bullet"] action:@selector(bulletList:) propertyList:nil],
-        [UICommand commandWithTitle:@"Dashed List" image:[UIImage systemImageNamed:@"list.dash"] action:@selector(dashList:) propertyList:nil],
-        [UICommand commandWithTitle:@"Numbered List" image:[UIImage systemImageNamed:@"list.number"] action:@selector(numberList:) propertyList:nil],
+        SNMenuAction(@"Bulleted List", [UIImage systemImageNamed:@"list.bullet"], @selector(bulletList:), self),
+        SNMenuAction(@"Dashed List", [UIImage systemImageNamed:@"list.dash"], @selector(dashList:), self),
+        SNMenuAction(@"Numbered List", [UIImage systemImageNamed:@"list.number"], @selector(numberList:), self),
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Move Checked to Bottom" image:[UIImage systemImageNamed:@"arrow.down.to.line"]
-                                 action:@selector(moveCheckedToBottom:) propertyList:nil],
-            [self keepCheckedCommand] ]],
+            SNMenuAction(@"Move Checked to Bottom", [UIImage systemImageNamed:@"arrow.down.to.line"], @selector(moveCheckedToBottom:), self),
+            [self keepCheckedAction] ]],
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
-            [UICommand commandWithTitle:@"Increase Indentation" image:[UIImage systemImageNamed:@"increase.indent"] action:@selector(indent:) propertyList:nil],
-            [UICommand commandWithTitle:@"Decrease Indentation" image:[UIImage systemImageNamed:@"decrease.indent"] action:@selector(outdent:) propertyList:nil] ]] ]];
+            SNMenuAction(@"Increase Indentation", [UIImage systemImageNamed:@"increase.indent"], @selector(indent:), self),
+            SNMenuAction(@"Decrease Indentation", [UIImage systemImageNamed:@"decrease.indent"], @selector(outdent:), self) ]] ]];
 }
 
-- (UICommand *)keepCheckedCommand {
-    UICommand *c = [UICommand commandWithTitle:@"Keep Checked at Bottom" image:nil action:@selector(toggleKeepCheckedAtBottom:) propertyList:nil];
-    c.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
-    return c;
+- (UIAction *)keepCheckedAction {
+    UIAction *a = SNMenuAction(@"Keep Checked at Bottom", nil, @selector(toggleKeepCheckedAtBottom:), self);
+    a.state = _notes.movesCheckedToBottom ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return a;
 }
 
 /* After the binding changed paragraphs: the selection as it was, typing
