@@ -50,6 +50,10 @@ FOUNDATION_EXPORT SNColor *SNSystemMarkerColor(void);
 FOUNDATION_EXPORT SNColor *SNSystemAccentColor(void);
 // A table's lines.
 FOUNDATION_EXPORT SNColor *SNSystemGridColor(void);
+// A colour's name (SNColorNames) as text in it, and as a highlight behind
+// text (the same colour, see-through).
+FOUNDATION_EXPORT SNColor *SNSystemNamedColor(NSString *name);
+FOUNDATION_EXPORT SNColor *SNSystemHighlightColor(NSString *name);
 // An indent's width (a list marker's column).
 FOUNDATION_EXPORT CGFloat SNSystemIndentStep(void);
 // A checkbox's width, for a font.

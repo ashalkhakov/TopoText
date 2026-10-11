@@ -56,6 +56,13 @@ FOUNDATION_EXPORT NSString * const SNListNumber;     // @"number"
 FOUNDATION_EXPORT NSString * const SNListCheck;      // @"check"
 FOUNDATION_EXPORT NSString * const SNCheckedKey;     // @"checked"
 FOUNDATION_EXPORT NSString * const SNIndentKey;      // @"indent"
+FOUNDATION_EXPORT NSString * const SNQuoteKey;       // @"quote" (a block quote)
+// A character's colour and highlight: a colour's name, one of
+// SNColorNames(), which each system shows as its own (dark mode too).
+FOUNDATION_EXPORT NSString * const SNColorKey;       // @"color"
+FOUNDATION_EXPORT NSString * const SNHighlightKey;   // @"highlight"
+// Apple Notes' five: purple, pink, orange, mint, blue.
+FOUNDATION_EXPORT NSArray<NSString *> *SNColorNames(void);
 // The paragraph's keys.
 FOUNDATION_EXPORT NSSet<NSString *> *SNParagraphKeys(void);
 // The storage's attributes that say a paragraph's (their values TopoText's).
@@ -63,6 +70,10 @@ FOUNDATION_EXPORT NSString * const SNStyleAttributeName;    // @"SNStyle"
 FOUNDATION_EXPORT NSString * const SNListAttributeName;     // @"SNList"
 FOUNDATION_EXPORT NSString * const SNCheckedAttributeName;  // @"SNChecked"
 FOUNDATION_EXPORT NSString * const SNIndentAttributeName;   // @"SNIndent"
+FOUNDATION_EXPORT NSString * const SNQuoteAttributeName;    // @"SNQuote"
+// A colour's or highlight's name, beside the system colour shown for it.
+FOUNDATION_EXPORT NSString * const SNColorAttributeName;     // @"SNColor"
+FOUNDATION_EXPORT NSString * const SNHighlightAttributeName; // @"SNHighlight"
 // A link given (SNLinkKey), beside NSLinkAttributeName: one only detected
 // (an address typed, linked as Apple Notes does) has NSLinkAttributeName
 // alone, and is the view's, not the text's.
@@ -131,6 +142,11 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // On the range's characters; with none selected, on what is typed next.
 - (BOOL)range:(NSRange)range has:(NSString *)key;
 - (void)toggle:(NSString *)key inRange:(NSRange)range;
+// A colour's name (SNColorKey, SNHighlightKey) on the range's characters,
+// or on what is typed next; nil: taken off. And the one there (the first
+// character's; with none selected, the typing's).
+- (void)setCharacterValue:(nullable NSString *)value forKey:(NSString *)key inRange:(NSRange)range;
+- (nullable NSString *)characterValueForKey:(NSString *)key inRange:(NSRange)range;
 // A link on the range's characters (nil: taken off), and the one at a place.
 - (void)setLink:(nullable NSString *)link inRange:(NSRange)range;
 - (nullable NSString *)linkAt:(NSUInteger)index;
@@ -164,6 +180,10 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 - (void)toggleList:(NSString *)list forParagraphsInRange:(NSRange)range;
 // Checklist items ticked, or unticked when the first is ticked.
 - (void)toggleCheckedForParagraphsInRange:(NSRange)range;
+// A block quote: these paragraphs quoted (as they are: a heading, a list
+// item), or not when they all are already. Return on an empty quoted line
+// ends the quote, as on an empty list item.
+- (void)toggleQuoteForParagraphsInRange:(NSRange)range;
 // The checklist a place is in (its items one after another), its ticked
 // items moved after the others, as Apple Notes' Move Checked to Bottom;
 // NO when nothing moved. Only the ticked ones out of place move, each a

@@ -49,6 +49,19 @@ SNColor *SNSystemGridColor(void) {
     return [UIColor systemGray3Color];
 }
 
+SNColor *SNSystemNamedColor(NSString *name) {
+    if ([name isEqual:@"purple"]) return [UIColor systemPurpleColor];
+    if ([name isEqual:@"pink"]) return [UIColor systemPinkColor];
+    if ([name isEqual:@"orange"]) return [UIColor systemOrangeColor];
+    if ([name isEqual:@"mint"]) return [UIColor systemMintColor];
+    if ([name isEqual:@"blue"]) return [UIColor systemBlueColor];
+    return SNSystemTextColor();
+}
+
+SNColor *SNSystemHighlightColor(NSString *name) {
+    return [SNSystemNamedColor(name) colorWithAlphaComponent:0.3];
+}
+
 CGFloat SNSystemIndentStep(void) {
     return 28;
 }

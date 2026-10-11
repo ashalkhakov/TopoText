@@ -81,7 +81,7 @@ static NSData *SNTinyPNG(void) {
 - (NSDictionary *)paragraphAttributesOf:(TopoText *)text at:(NSUInteger)index {
     NSRange p = [text.paragraphRanges[index] rangeValue];
     NSMutableDictionary *a = [[text attributesAtIndex:p.location effectiveRange:NULL] mutableCopy];
-    for (NSString *k in @[ SNBoldKey, SNItalicKey, SNStrikeKey, SNUnderlineKey, SNLinkKey, SNAttachmentKey ]) [a removeObjectForKey:k];
+    for (NSString *k in @[ SNBoldKey, SNItalicKey, SNStrikeKey, SNUnderlineKey, SNLinkKey, SNAttachmentKey, SNColorKey, SNHighlightKey ]) [a removeObjectForKey:k];
     return a;
 }
 
@@ -137,6 +137,39 @@ static NSData *SNTinyPNG(void) {
     XCTAssertNil([back attributesAtIndex:at effectiveRange:NULL][SNItalicKey]);
 }
 
+- (void)testColoursAndQuotesAreWrittenAndReadBack {
+    TopoText *text = [TopoText textWithReplica:1];
+    [self append:@"Quotes" to:text attributes:@{ SNStyleKey: SNStyleTitle }];
+    [self append:@"Said " to:text attributes:@{ SNQuoteKey: @YES }];
+    [text insertString:@"loudly" atIndex:text.length attributes:@{ SNQuoteKey: @YES, SNColorKey: @"pink" }];
+    [self append:@"Aside" to:text attributes:@{ SNQuoteKey: @YES, SNStyleKey: SNStyleHeading }];
+    [self append:@"item" to:text attributes:@{ SNQuoteKey: @YES, SNListKey: SNListDash }];
+    [self append:@"Marked " to:text attributes:nil];
+    [text insertString:@"this" atIndex:text.length attributes:@{ SNHighlightKey: @"mint", SNBoldKey: @YES }];
+    NSString *md = SNMarkdownOfText(text, nil);
+    XCTAssertEqualObjects(md, @"# Quotes\n\n"
+                               "> Said <span data-color=\"pink\">loudly</span>\n\n"
+                               "> ## Aside\n\n"
+                               "> - item\n\n"
+                               "Marked <mark data-color=\"mint\">**this**</mark>\n");
+    TopoText *back = SNTextOfMarkdown(md, @"Quotes", nil);
+    XCTAssertEqualObjects(back.string, text.string);
+    for (NSUInteger p = 0; p < text.paragraphRanges.count; p++)
+        XCTAssertEqualObjects([self paragraphAttributesOf:back at:p], [self paragraphAttributesOf:text at:p], @"paragraph %lu", (unsigned long)p);
+    NSUInteger at = [back.string rangeOfString:@"loudly"].location;
+    XCTAssertEqualObjects([back attributesAtIndex:at effectiveRange:NULL][SNColorKey], @"pink");
+    XCTAssertNil([back attributesAtIndex:at - 1 effectiveRange:NULL][SNColorKey]);
+    at = [back.string rangeOfString:@"this"].location;
+    XCTAssertEqualObjects([back attributesAtIndex:at effectiveRange:NULL][SNHighlightKey], @"mint");
+    XCTAssertEqualObjects([back attributesAtIndex:at effectiveRange:NULL][SNBoldKey], @YES);
+    /* Another app's: a <mark> of no colour of ours, a quote over two lines. */
+    TopoText *other = SNTextOfMarkdown(@"<mark>hi</mark> there\n\n> one\n> two\n", @"", nil);
+    XCTAssertEqualObjects([other attributesAtIndex:0 effectiveRange:NULL][SNHighlightKey], @"orange");
+    XCTAssertNil([other attributesAtIndex:3 effectiveRange:NULL][SNHighlightKey]);
+    XCTAssertEqualObjects(other.string, @"hi there\none two");
+    XCTAssertEqualObjects([other paragraphAttributesAtIndex:10 keys:SNParagraphKeys()], @{ SNQuoteKey: @YES });
+}
+
 - (void)testOtherAppsMarkdownIsRead {
     NSString *md = @"Intro line one\ncontinued here.\n\n"
                     "+ plus item\n  1) numbered\n\n"
@@ -150,6 +183,7 @@ static NSData *SNTinyPNG(void) {
     XCTAssertEqualObjects([self paragraphAttributesOf:text at:3][SNListKey], SNListNumber);
     XCTAssertEqualObjects([self paragraphAttributesOf:text at:3][SNIndentKey], @1);
     XCTAssertEqualObjects([self paragraphAttributesOf:text at:6][SNStyleKey], SNStyleSubheading);
+    XCTAssertEqualObjects([self paragraphAttributesOf:text at:5], @{ SNQuoteKey: @YES });
     NSUInteger at = [text.string rangeOfString:@"bold"].location;
     XCTAssertEqualObjects([text attributesAtIndex:at effectiveRange:NULL][SNBoldKey], @YES);
     at = [text.string rangeOfString:@"html"].location;

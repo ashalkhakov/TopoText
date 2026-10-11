@@ -96,6 +96,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)moveCheckedToBottom:(nullable id)sender;
 - (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
+// Format > Block Quote (Command-'): the paragraphs quoted, or not.
+- (IBAction)toggleBlockQuote:(nullable id)sender;
+// Format > Highlight and Text Color: the item's tag the colour (0 none,
+// then SNColorNames' order: purple, pink, orange, mint, blue).
+- (IBAction)applyHighlightColor:(nullable id)sender;
+- (IBAction)applyTextColor:(nullable id)sender;
 // Edit > Find > Search: the notes' search field.
 - (IBAction)findNote:(nullable id)sender;
 // Edit > Find's actions in the note (Find…, Find and Replace…, Find Next,

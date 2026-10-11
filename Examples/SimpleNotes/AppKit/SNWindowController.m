@@ -1173,6 +1173,34 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self endFormatting];
 }
 
+/* A colour's name on the selection, undoably; with none, on what is typed
+   next. A menu item's tag says which: 0 none, then SNColorNames' order. */
+- (void)setCharacterColor:(NSString *)key from:(id)sender {
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSInteger tag = [sender tag];
+    NSString *name = tag > 0 && tag <= (NSInteger)SNColorNames().count ? SNColorNames()[tag - 1] : nil;
+    NSRange range = tv.selectedRange;
+    if (!range.length) {
+        [binding setCharacterValue:name forKey:key inRange:range];
+        return;
+    }
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding setCharacterValue:name forKey:key inRange:range];
+    [tv didChangeText];
+}
+
+- (IBAction)applyHighlightColor:(id)sender { [self setCharacterColor:SNHighlightKey from:sender]; }
+- (IBAction)applyTextColor:(id)sender { [self setCharacterColor:SNColorKey from:sender]; }
+
+- (IBAction)toggleBlockQuote:(id)sender {
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding toggleQuoteForParagraphsInRange:r];
+    [self endFormatting];
+}
+
 - (IBAction)toggleBold:(id)sender { [self toggle:SNBoldKey]; }
 - (IBAction)toggleItalic:(id)sender { [self toggle:SNItalicKey]; }
 - (IBAction)toggleUnderline:(id)sender { [self toggle:SNUnderlineKey]; }
@@ -1220,7 +1248,19 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
                      NSStringFromSelector(@selector(toggleUnderline:)): SNUnderlineKey, NSStringFromSelector(@selector(toggleStrikethrough:)): SNStrikeKey };
     }
     NSString *name = NSStringFromSelector(a);
-    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:);
+    if (a == @selector(applyHighlightColor:) || a == @selector(applyTextColor:)) {
+        SNTextBinding *binding;
+        NSTextView *tv = [self formattedTextView:&binding];
+        BOOL enabled = binding != nil && tv.isEditable;
+        NSString *now = enabled ? [binding characterValueForKey:a == @selector(applyTextColor:) ? SNColorKey : SNHighlightKey inRange:tv.selectedRange] : nil;
+        NSUInteger at = now ? [SNColorNames() indexOfObject:now] : NSNotFound;
+        NSInteger tag = at == NSNotFound ? 0 : (NSInteger)at + 1;
+        item.state = enabled && item.tag == tag ? NSControlStateValueOn : NSControlStateValueOff;
+        *enabledOut = enabled;
+        return YES;
+    }
+    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:) ||
+                 a == @selector(toggleBlockQuote:);
     if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
     BOOL enabled = _binding != nil && _textView.isEditable;
     if (inline_[name]) {
@@ -1240,6 +1280,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         enabled = enabled && [p[SNListKey] isEqual:SNListCheck];
     }
     else if (a == @selector(decreaseIndentation:)) enabled = enabled && p[SNIndentKey] != nil;
+    else if (a == @selector(toggleBlockQuote:)) on = p[SNQuoteKey] != nil;
     item.state = on ? NSControlStateValueOn : NSControlStateValueOff;
     *enabledOut = enabled;
     return YES;

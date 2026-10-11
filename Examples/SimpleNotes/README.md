@@ -1,11 +1,11 @@
 # SimpleNotes
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
-with headings, lists and checklists, links, images and tables, tags,
-search, find and replace in a note, pinning, sorting and grouping by date, Recently Deleted, and moving
-notes between folders. It runs
-on macOS and on Linux (AppKit, through GNUstep), and on iPhone and iPad.
-Every note is kept on the device and works offline. Notes sync with a
+with headings, lists and checklists, block quotes, colours and highlights,
+links, images and tables, tags, search, find and replace in a note,
+pinning, sorting and grouping by date, Recently Deleted, and moving notes
+between folders. It runs on macOS and on Linux (AppKit, through GNUstep),
+and on iPhone and iPad. Every note is kept on the device and works offline. Notes sync with a
 server, `simplenotes-server`, which serves them over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
@@ -259,6 +259,8 @@ The layout:
 | Indent | four spaces per level |
 | Bold, italic, strikethrough | `**`, `*`, `~~` |
 | Underline | `<u>` |
+| Text colour, highlight | `<span data-color="pink">`, `<mark data-color="mint">` |
+| Block quote | `>` before the line (a heading's or list item's too) |
 
 Both run in the background, with a window that shows how far they've got
 ("Importing 1,240 of 25,000 notes…") and a Stop button; the notes can be
@@ -604,10 +606,15 @@ A note's text uses plain values that sync and merge the same way
 everywhere. `SNRichText` turns them into each system's fonts, indents and
 list markers, and back.
 
-- **Per character:** `bold`, `italic`, `underline`, `strike`.
+- **Per character:** `bold`, `italic`, `underline`, `strike`, and `color`
+  and `highlight`, each a colour's name: `purple`, `pink`, `orange`, `mint`
+  or `blue`, Apple Notes' five. Each system shows the name in its own
+  shade, in dark mode too. A name a device doesn't know (one added later)
+  is shown as no colour.
 - **Per paragraph:** `style` (`title`, `heading`, `subheading`, or `mono`;
   none is body), `list` (`bullet`, `dash`, `number`, or `check`), `checked`,
-  and `indent` (1 to 8).
+  `indent` (1 to 8), and `quote` (a block quote, which goes with any of
+  them).
 
 Character formatting is per character, and the last writer wins per
 attribute, as in TopoText. Bold applied to a line does not spread to text
@@ -626,7 +633,9 @@ The Format menu (AppKit) and the format bar's menus (iOS) have Apple Notes'
 paragraph styles and lists, with the same shortcuts: Title ⇧⌘T, Heading ⇧⌘H,
 Subheading ⇧⌘J, Body ⇧⌘B, Monostyled ⇧⌘M, Bulleted List ⇧⌘7, Dashed List
 ⇧⌘8, Numbered List ⇧⌘9, Checklist ⇧⌘L, Mark as Checked ⇧⌘U, and indentation
-with ⌘] and ⌘[.
+with ⌘] and ⌘[. **Block Quote** (⌘') draws a bar beside the paragraphs and
+indents them; **Highlight** and **Text Color** each offer the five colours
+and None. On iOS they are in the Aa menu.
 
 Typing works as in Apple Notes:
 
@@ -638,6 +647,8 @@ Typing works as in Apple Notes:
   the line to the one above, which keeps the upper line's formatting.
 - Tab and Shift-Tab indent and outdent an item.
 - Return after a title, heading or subheading starts a body line.
+- Return in a block quote goes on quoting. Return on an empty quoted line
+  ends the quote.
 
 Clicking (or tapping) a checkbox ticks it. Numbered items count up within
 their indent level; items indented further don't interrupt the count.

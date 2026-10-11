@@ -7,13 +7,16 @@
 //   bullet, dash, number, check  * , - , 1. , - [ ] / - [x]  (indent: 4 spaces a level)
 //   bold, italic, strike         **…**, *…*, ~~…~~
 //   underline                    <u>…</u>
+//   colour, highlight            <span data-color="pink">…</span>,
+//                                <mark data-color="mint">…</mark>
+//   block quote                  > , before the paragraph's own (> ## , > - )
 //   link                         [text](url)
 //   attachment                   what the delegate makes of it (an image's
 //                                ![](file), a file's [name](file), a table)
 //
 // Import reads more than export writes, as other apps write it: + lists,
-// __bold__ and _italic_, setext-less headings deeper than ###, block quotes,
-// <b>, <i>, <s>, <a href>, <img src>, entities.
+// __bold__ and _italic_, setext-less headings deeper than ###, <b>, <i>,
+// <s>, <a href>, <img src>, <mark> (an orange highlight), entities.
 
 #pragma once
 #import <Foundation/Foundation.h>

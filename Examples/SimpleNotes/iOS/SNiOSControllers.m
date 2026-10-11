@@ -1,6 +1,7 @@
 #import "SNiOSControllers.h"
 #import "SNPeersViewController.h"
 #import "SNRichText.h"
+#import "SNTextSystem.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
 #import "SNMenuAction.h"
@@ -1104,8 +1105,12 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
             SNMenuAction(@"Heading", nil, @selector(heading:), self),
             SNMenuAction(@"Subheading", nil, @selector(subheading:), self),
             SNMenuAction(@"Body", nil, @selector(body:), self),
-            SNMenuAction(@"Monostyled", nil, @selector(mono:), self) ]],
-        traits ]];
+            SNMenuAction(@"Monostyled", nil, @selector(mono:), self),
+            SNMenuAction(@"Block Quote", [UIImage systemImageNamed:@"text.quote"], @selector(blockQuote:), self) ]],
+        traits,
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [self colorMenu:@"Highlight" image:@"highlighter" action:@selector(applyHighlightColor:)],
+            [self colorMenu:@"Text Color" image:@"paintpalette" action:@selector(applyTextColor:)] ]] ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
         SNMenuAction(@"Choose Photo", [UIImage systemImageNamed:@"photo.on.rectangle"], @selector(attachPhoto:), self),
         SNMenuAction(@"Attach File", [UIImage systemImageNamed:@"doc"], @selector(attachFile:), self),
@@ -1120,6 +1125,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
             SNMenuAction(@"Increase Indentation", [UIImage systemImageNamed:@"increase.indent"], @selector(indent:), self),
             SNMenuAction(@"Decrease Indentation", [UIImage systemImageNamed:@"decrease.indent"], @selector(outdent:), self) ]] ]];
+}
+
+/* None, then the five colours, each a dot of itself. */
+- (UIMenu *)colorMenu:(NSString *)title image:(NSString *)image action:(SEL)action {
+    NSMutableArray *items = [NSMutableArray arrayWithObject:SNMenuAction(@"None", [UIImage systemImageNamed:@"circle.slash"], action, self)];
+    for (NSString *name in SNColorNames()) {
+        UIImage *dot = [[UIImage systemImageNamed:@"circle.fill"] imageWithTintColor:SNSystemNamedColor(name)
+                                                                        renderingMode:UIImageRenderingModeAlwaysOriginal];
+        [items addObject:SNMenuAction(name.capitalizedString, dot, action, self)];
+    }
+    return [UIMenu menuWithTitle:title image:[UIImage systemImageNamed:image] identifier:nil options:0 children:items];
 }
 
 - (UIAction *)keepCheckedAction {
@@ -1154,6 +1170,29 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     NSRange r = tv.selectedRange;
     [binding toggle:key inRange:r];
     if (r.length) tv.selectedRange = r;
+}
+
+/* A colour's name on the selection (a cell's too), or on what is typed
+   next; the action's title says which (None: taken off). */
+- (void)setCharacterColor:(NSString *)key from:(id)sender {
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSString *title = [sender respondsToSelector:@selector(title)] ? [[sender title] lowercaseString] : nil;
+    NSString *name = [SNColorNames() containsObject:title] ? title : nil;
+    NSRange r = tv.selectedRange;
+    [binding setCharacterValue:name forKey:key inRange:r];
+    if (r.length) tv.selectedRange = r;
+}
+
+- (IBAction)applyHighlightColor:(id)sender { [self setCharacterColor:SNHighlightKey from:sender]; }
+- (IBAction)applyTextColor:(id)sender { [self setCharacterColor:SNColorKey from:sender]; }
+
+- (IBAction)blockQuote:(id)sender {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding toggleQuoteForParagraphsInRange:r];
+    [self formatted:r];
 }
 
 - (void)style:(NSString *)style {

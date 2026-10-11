@@ -469,6 +469,26 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [written.lastPathComponent isEqual:@"Lease.pdf"] && [[NSData dataWithContentsOfURL:written] isEqual:pdf],
               [NSString stringWithFormat:@"shown as a card, written out to be opened (%@)", written.path]);
 
+        /* A quote, a highlight and a colour, from the Format menu. */
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertText:@"Bring a warm jacket"];
+        NSUInteger said = tv.string.length - 19;
+        SNSay([tv tryToPerform:@selector(toggleBlockQuote:) with:nil] &&
+              [[tv.textStorage attribute:SNQuoteAttributeName atIndex:said effectiveRange:NULL] boolValue], @"Block Quote from the menu");
+        NSMenuItem *mint = [[NSMenuItem alloc] initWithTitle:@"Mint" action:@selector(applyHighlightColor:) keyEquivalent:@""];
+        mint.tag = 4;
+        tv.selectedRange = NSMakeRange(said + 8, 4);
+        [tv tryToPerform:@selector(applyHighlightColor:) with:mint];
+        NSMenuItem *purple = [[NSMenuItem alloc] initWithTitle:@"Purple" action:@selector(applyTextColor:) keyEquivalent:@""];
+        purple.tag = 1;
+        tv.selectedRange = NSMakeRange(said + 13, 6);
+        [tv tryToPerform:@selector(applyTextColor:) with:purple];
+        SNSay([[tv.textStorage attribute:SNHighlightAttributeName atIndex:said + 8 effectiveRange:NULL] isEqual:@"mint"] &&
+              [[tv.textStorage attribute:SNColorAttributeName atIndex:said + 13 effectiveRange:NULL] isEqual:@"purple"] &&
+              [window validateMenuItem:purple] && purple.state == NSControlStateValueOn,
+              @"Highlight and Text Color from the menu");
+
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");

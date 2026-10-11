@@ -49,6 +49,28 @@ SNColor *SNSystemGridColor(void) {
     return [[NSColor grayColor] colorWithAlphaComponent:0.6];
 }
 
+SNColor *SNSystemNamedColor(NSString *name) {
+#ifdef GNUSTEP
+    /* Its colour lists have no system purple, pink, mint: macOS's light
+       ones. */
+    NSDictionary *rgb = @{ @"purple": @[ @0.69, @0.32, @0.87 ], @"pink": @[ @1.0, @0.18, @0.33 ], @"orange": @[ @1.0, @0.58, @0.0 ],
+                           @"mint": @[ @0.0, @0.78, @0.75 ], @"blue": @[ @0.0, @0.48, @1.0 ] };
+    NSArray *c = rgb[name];
+    return c ? [NSColor colorWithCalibratedRed:[c[0] doubleValue] green:[c[1] doubleValue] blue:[c[2] doubleValue] alpha:1] : SNSystemTextColor();
+#else
+    if ([name isEqual:@"purple"]) return [NSColor systemPurpleColor];
+    if ([name isEqual:@"pink"]) return [NSColor systemPinkColor];
+    if ([name isEqual:@"orange"]) return [NSColor systemOrangeColor];
+    if ([name isEqual:@"mint"]) return [NSColor systemMintColor];
+    if ([name isEqual:@"blue"]) return [NSColor systemBlueColor];
+    return SNSystemTextColor();
+#endif
+}
+
+SNColor *SNSystemHighlightColor(NSString *name) {
+    return [SNSystemNamedColor(name) colorWithAlphaComponent:0.3];
+}
+
 CGFloat SNSystemIndentStep(void) {
     return 24;
 }

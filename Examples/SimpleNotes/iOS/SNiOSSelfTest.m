@@ -218,6 +218,16 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSString *style = [wtv.textStorage attribute:@"SNStyle" atIndex:0 effectiveRange:NULL];
             SNSay([style isEqual:SNStyleTitle], [NSString stringWithFormat:@"Title from the bar over the keyboard (%@)", style]);
             [body performWithSender:we.styleItem target:nil];
+            /* Highlight > Mint, then None, from the same menu. */
+            UIMenu *colors = (UIMenu *)we.styleItem.menu.children[2];
+            UIMenu *highlight = (UIMenu *)colors.children.firstObject;
+            wtv.selectedRange = NSMakeRange(0, 4);
+            [(UIAction *)highlight.children[4] performWithSender:we.styleItem target:nil];
+            NSString *mint = [wtv.textStorage attribute:SNHighlightAttributeName atIndex:1 effectiveRange:NULL];
+            [(UIAction *)highlight.children.firstObject performWithSender:we.styleItem target:nil];
+            SNSay([mint isEqual:@"mint"] && ![wtv.textStorage attribute:SNHighlightAttributeName atIndex:1 effectiveRange:NULL],
+                  [NSString stringWithFormat:@"Highlight from the Aa menu, and None (%@)", mint]);
+            wtv.selectedRange = NSMakeRange(0, 0);
         }
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {

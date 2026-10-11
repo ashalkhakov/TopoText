@@ -87,6 +87,11 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)subheading:(nullable id)sender;
 - (IBAction)body:(nullable id)sender;
 - (IBAction)mono:(nullable id)sender;
+// In the Aa menu too: Block Quote, and Highlight and Text Color (the
+// sender's title the colour: None, Purple, Pink, Orange, Mint, Blue).
+- (IBAction)blockQuote:(nullable id)sender;
+- (IBAction)applyHighlightColor:(nullable id)sender;
+- (IBAction)applyTextColor:(nullable id)sender;
 - (IBAction)bulletList:(nullable id)sender;
 - (IBAction)dashList:(nullable id)sender;
 - (IBAction)numberList:(nullable id)sender;

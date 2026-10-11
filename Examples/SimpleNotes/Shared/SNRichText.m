@@ -20,6 +20,12 @@ NSString * const SNListNumber = @"number";
 NSString * const SNListCheck = @"check";
 NSString * const SNCheckedKey = @"checked";
 NSString * const SNIndentKey = @"indent";
+NSString * const SNQuoteKey = @"quote";
+NSString * const SNColorKey = @"color";
+NSString * const SNHighlightKey = @"highlight";
+NSString * const SNQuoteAttributeName = @"SNQuote";
+NSString * const SNColorAttributeName = @"SNColor";
+NSString * const SNHighlightAttributeName = @"SNHighlight";
 NSString * const SNStyleAttributeName = @"SNStyle";
 NSString * const SNListAttributeName = @"SNList";
 NSString * const SNCheckedAttributeName = @"SNChecked";
@@ -38,8 +44,18 @@ static const NSInteger SNMaxIndent = 8;
 
 NSSet<NSString *> *SNParagraphKeys(void) {
     static NSSet *keys;
-    if (!keys) keys = [NSSet setWithObjects:SNStyleKey, SNListKey, SNCheckedKey, SNIndentKey, nil];
+    if (!keys) keys = [NSSet setWithObjects:SNStyleKey, SNListKey, SNCheckedKey, SNIndentKey, SNQuoteKey, nil];
     return keys;
+}
+
+NSArray<NSString *> *SNColorNames(void) {
+    return @[ @"purple", @"pink", @"orange", @"mint", @"blue" ];
+}
+
+/* A colour's name, if it is one of ours (another device's newer one, or
+   none: nil, shown as no colour). */
+static NSString *SNColorNameOf(id value) {
+    return [value isKindOfClass:[NSString class]] && [SNColorNames() containsObject:value] ? value : nil;
 }
 
 static BOOL SNIsStyle(id style) {
@@ -74,6 +90,7 @@ static NSDictionary *SNParagraphOf(NSDictionary *attrs) {
     }
     NSInteger indent = SNIndentOf(attrs[SNIndentKey]);
     if (indent) p[SNIndentKey] = @(indent);
+    if ([attrs[SNQuoteKey] respondsToSelector:@selector(boolValue)] && [attrs[SNQuoteKey] boolValue]) p[SNQuoteKey] = @YES;
     return p;
 }
 
@@ -139,14 +156,16 @@ SNFont *SNFontFor(NSString *style, BOOL bold, BOOL italic) {
 }
 
 /* The text in from the margin: an indent's, and a list marker's column. */
-static NSParagraphStyle *SNParagraphStyle(NSInteger indent, BOOL list) {
+static NSParagraphStyle *SNParagraphStyle(NSInteger indent, BOOL list, BOOL quote) {
     static NSMutableDictionary *cache;
     if (!cache) cache = [NSMutableDictionary dictionary];
-    NSNumber *key = @(indent * 2 + (list ? 1 : 0));
+    NSNumber *key = @(indent * 4 + (quote ? 2 : 0) + (list ? 1 : 0));
     NSParagraphStyle *style = cache[key];
     if (style) return style;
     NSMutableParagraphStyle *m = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
-    CGFloat x = (indent + (list ? 1 : 0)) * SNSystemIndentStep();
+    /* A quote's bar in a column of its own, after the indent, before a
+       list's marker. */
+    CGFloat x = (indent + (quote ? 1 : 0) + (list ? 1 : 0)) * SNSystemIndentStep();
     m.firstLineHeadIndent = x;
     m.headIndent = x;
     cache[key] = style = [m copy];
@@ -163,7 +182,13 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     v[NSFontAttributeName] = SNFontFor(style, bold, italic);
     if (bold) v[SNBoldAttributeName] = @YES;
     if (italic) v[SNItalicAttributeName] = @YES;
-    v[NSForegroundColorAttributeName] = SNSystemTextColor();
+    NSString *color = SNColorNameOf(attrs[SNColorKey]), *highlight = SNColorNameOf(attrs[SNHighlightKey]);
+    v[NSForegroundColorAttributeName] = color ? SNSystemNamedColor(color) : SNSystemTextColor();
+    if (color) v[SNColorAttributeName] = color;
+    if (highlight) {
+        v[NSBackgroundColorAttributeName] = SNSystemHighlightColor(highlight);
+        v[SNHighlightAttributeName] = highlight;
+    }
     if ([attrs[SNUnderlineKey] boolValue]) v[NSUnderlineStyleAttributeName] = @(NSUnderlineStyleSingle);
     if ([attrs[SNStrikeKey] boolValue]) v[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
     NSString *link = [attrs[SNLinkKey] isKindOfClass:[NSString class]] ? attrs[SNLinkKey] : nil;
@@ -177,7 +202,8 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     if (list) v[SNListAttributeName] = list;
     if (p[SNCheckedKey]) v[SNCheckedAttributeName] = @YES;
     if (p[SNIndentKey]) v[SNIndentAttributeName] = p[SNIndentKey];
-    v[NSParagraphStyleAttributeName] = SNParagraphStyle(SNIndentOf(p[SNIndentKey]), list != nil);
+    if (p[SNQuoteKey]) v[SNQuoteAttributeName] = @YES;
+    v[NSParagraphStyleAttributeName] = SNParagraphStyle(SNIndentOf(p[SNIndentKey]), list != nil, p[SNQuoteKey] != nil);
     return v;
 }
 
@@ -187,6 +213,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     t[SNListKey] = view[SNListAttributeName];
     t[SNCheckedKey] = view[SNCheckedAttributeName];
     t[SNIndentKey] = view[SNIndentAttributeName];
+    t[SNQuoteKey] = view[SNQuoteAttributeName];
     t = [SNParagraphOf(t) mutableCopy];
     NSString *style = t[SNStyleKey];
     SNFont *font = view[NSFontAttributeName];
@@ -200,6 +227,8 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if ([view[SNItalicAttributeName] boolValue]) t[SNItalicKey] = @YES;
     if ([view[NSUnderlineStyleAttributeName] integerValue]) t[SNUnderlineKey] = @YES;
     if ([view[NSStrikethroughStyleAttributeName] integerValue]) t[SNStrikeKey] = @YES;
+    if (SNColorNameOf(view[SNColorAttributeName])) t[SNColorKey] = view[SNColorAttributeName];
+    if (SNColorNameOf(view[SNHighlightAttributeName])) t[SNHighlightKey] = view[SNHighlightAttributeName];
     if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
     if ([view[SNAttachmentAttributeName] isKindOfClass:[NSString class]]) t[SNAttachmentKey] = view[SNAttachmentAttributeName];
     return t;
@@ -211,6 +240,7 @@ static NSArray *SNOwnViewKeys(void) {
     static NSArray *keys;
     if (!keys)
         keys = @[ NSFontAttributeName, NSForegroundColorAttributeName, NSUnderlineStyleAttributeName, NSStrikethroughStyleAttributeName,
+                  NSBackgroundColorAttributeName, SNColorAttributeName, SNHighlightAttributeName, SNQuoteAttributeName,
                   NSParagraphStyleAttributeName, SNStyleAttributeName, SNListAttributeName, SNCheckedAttributeName,
                   SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName,
                   SNAttachmentAttributeName ];
@@ -630,7 +660,12 @@ static __weak TTUndoStep *SNLastUndoStep;
     BOOL was = _applying;
     _applying = YES;
     [_storage beginEditing];
-    [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemTextColor() range:para];
+    /* Each run its own colour again (a tag's taken off), then the tags'. */
+    for (NSValue *v in SNAttributeRuns(_storage, para)) {
+        NSRange run = v.rangeValue;
+        NSString *color = SNColorNameOf([_storage attribute:SNColorAttributeName atIndex:run.location effectiveRange:NULL]);
+        [_storage addAttribute:NSForegroundColorAttributeName value:color ? SNSystemNamedColor(color) : SNSystemTextColor() range:run];
+    }
     for (NSValue *v in SNTagRangesInText(text)) {
         NSRange tag = v.rangeValue;
         tag.location += para.location;
@@ -898,6 +933,22 @@ static __weak TTUndoStep *SNLastUndoStep;
     [self setTextAttributes:@{ key: on ? @YES : [NSNull null] } inRange:range];
 }
 
+- (void)setCharacterValue:(NSString *)value forKey:(NSString *)key inRange:(NSRange)range {
+    if (!range.length) {
+        NSMutableDictionary *t = [[self typing] mutableCopy];
+        if (value) t[key] = value; else [t removeObjectForKey:key];
+        [self setTyping:SNViewAttributes(t)];
+        return;
+    }
+    [self setTextAttributes:@{ key: value ?: [NSNull null] } inRange:range];
+}
+
+- (NSString *)characterValueForKey:(NSString *)key inRange:(NSRange)range {
+    if (!range.length && _view) return [self typing][key];
+    NSUInteger i = range.length ? range.location : (range.location ? range.location - 1 : 0);
+    return [self textAttributesAt:i][key];
+}
+
 - (void)setLink:(NSString *)link inRange:(NSRange)range {
     if (!range.length) return;
     NSString *trimmed = [link stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -1047,6 +1098,19 @@ static __weak TTUndoStep *SNLastUndoStep;
     [self paragraphsChanged];
 }
 
+- (void)toggleQuoteForParagraphsInRange:(NSRange)range {
+    NSArray<NSValue *> *paragraphs = [self paragraphRangesIn:range];
+    BOOL all = paragraphs.count > 0;
+    for (NSValue *v in paragraphs)
+        if (![self paragraphAttributesAt:v.rangeValue.location][SNQuoteKey]) all = NO;
+    for (NSValue *v in paragraphs) {
+        NSMutableDictionary *p = [[self paragraphAttributesAt:v.rangeValue.location] mutableCopy];
+        if (all) [p removeObjectForKey:SNQuoteKey]; else p[SNQuoteKey] = @YES;
+        [self setParagraph:p inRange:v.rangeValue];
+    }
+    [self paragraphsChanged];
+}
+
 - (void)indentParagraphsInRange:(NSRange)range by:(NSInteger)by {
     for (NSValue *v in [self paragraphRangesIn:range]) {
         NSMutableDictionary *p = [[self paragraphAttributesAt:v.rangeValue.location] mutableCopy];
@@ -1104,6 +1168,13 @@ static __weak TTUndoStep *SNLastUndoStep;
         NSRange para = SNParagraphsRange(s, NSMakeRange(range.location, 0));
         BOOL empty = !para.length || (para.length == 1 && [s characterAtIndex:para.location] == '\n');
         NSDictionary *p = [self paragraphAttributesAt:range.location];
+        if (empty && !p[SNListKey] && p[SNQuoteKey]) {
+            NSMutableDictionary *q = [p mutableCopy];
+            [q removeObjectForKey:SNQuoteKey];
+            [self setParagraph:q inRange:para];
+            [self paragraphsChanged];
+            return NO;
+        }
         if (empty && p[SNListKey]) {
             NSMutableDictionary *q = [p mutableCopy];
             NSInteger indent = SNIndentOf(q[SNIndentKey]);
@@ -1218,6 +1289,11 @@ static NSUInteger SNGlyphAt(NSLayoutManager *lm, NSUInteger i) {
 /* The marker's column of a paragraph whose first line is line, from the
    text container's left edge at left (a line fragment begins at the
    indent on GNUstep, at the edge on Apple's). */
+/* A quoted paragraph's columns before its marker: the quote's bar's. */
+static NSInteger SNQuoteColumns(NSDictionary *a) {
+    return [a[SNQuoteAttributeName] boolValue] ? 1 : 0;
+}
+
 static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     SNRect r = line;
     r.origin.x = left + indent * SNSystemIndentStep();
@@ -1228,7 +1304,7 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
 - (void)drawMarker:(NSDictionary *)a start:(NSUInteger)start line:(SNRect)line left:(CGFloat)left baseline:(CGFloat)baseline {
     NSString *list = a[SNListAttributeName];
     NSInteger indent = SNIndentOf(a[SNIndentAttributeName]);
-    SNRect col = SNMarkerColumn(line, indent, left);
+    SNRect col = SNMarkerColumn(line, indent + SNQuoteColumns(a), left);
     SNFont *font = SNFontFor(nil, NO, NO);
     if ([list isEqual:SNListCheck]) {
         CGFloat d = SNSystemCheckboxSize(font);
@@ -1269,6 +1345,22 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     [marker drawAtPoint:at withAttributes:attrs];
 }
 
+/* A quoted paragraph's bar, down all its lines, in its own column. */
+- (void)drawQuoteBar:(NSDictionary *)a start:(NSUInteger)start line:(SNRect)first left:(CGFloat)left {
+    NSString *s = self.textStorage.string;
+    NSUInteger end = SNParagraphEnd(s, start);
+    SNRect last = [self lineFragmentRectForGlyphAtIndex:SNGlyphAt(self, end > start ? end - 1 : start) effectiveRange:NULL];
+    CGFloat bottom = last.origin.y + last.size.height + (first.origin.y - [self lineFragmentRectForGlyphAtIndex:SNGlyphAt(self, start)
+                                                                                                    effectiveRange:NULL].origin.y);
+    SNRect col = SNMarkerColumn(first, SNIndentOf(a[SNIndentAttributeName]), left);
+    SNRect bar = first;
+    bar.origin.x = col.origin.x + 2;
+    bar.size.width = 3;
+    bar.size.height = bottom - first.origin.y;
+    [SNSystemMarkerColor() setFill];
+    [[SNPath bezierPathWithRect:bar] fill];
+}
+
 - (void)drawGlyphsForGlyphRange:(NSRange)glyphs atPoint:(SNPoint)origin {
     [super drawGlyphsForGlyphRange:glyphs atPoint:origin];
     NSTextStorage *ts = self.textStorage;
@@ -1279,12 +1371,14 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     if (i < chars.location) i = SNParagraphEnd(s, i);
     for (; i < NSMaxRange(chars) && i < len; i = SNParagraphEnd(s, i)) {
         NSDictionary *a = [ts attributesAtIndex:i effectiveRange:NULL];
-        if (!a[SNListAttributeName]) continue;
+        if (!a[SNListAttributeName] && !a[SNQuoteAttributeName]) continue;
         NSUInteger g = SNGlyphAt(self, i);
         SNRect line = [self lineFragmentRectForGlyphAtIndex:g effectiveRange:NULL];
         line.origin.x += origin.x;
         line.origin.y += origin.y;
-        [self drawMarker:a start:i line:line left:origin.x baseline:line.origin.y + [self locationForGlyphAtIndex:g].y];
+        if (a[SNQuoteAttributeName]) [self drawQuoteBar:a start:i line:line left:origin.x];
+        if (a[SNListAttributeName])
+            [self drawMarker:a start:i line:line left:origin.x baseline:line.origin.y + [self locationForGlyphAtIndex:g].y];
     }
     /* The empty last line, an item begun there. */
     if (SNEndsEmpty(s) && _extraLineAttributes[SNListAttributeName] && NSMaxRange(glyphs) >= self.numberOfGlyphs) {
@@ -1308,7 +1402,7 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     NSDictionary *a = [ts attributesAtIndex:start effectiveRange:NULL];
     if (![a[SNListAttributeName] isEqual:SNListCheck]) return NSNotFound;
     SNRect line = [self lineFragmentRectForGlyphAtIndex:SNGlyphAt(self, start) effectiveRange:NULL];
-    SNRect col = SNMarkerColumn(line, SNIndentOf(a[SNIndentAttributeName]), 0);
+    SNRect col = SNMarkerColumn(line, SNIndentOf(a[SNIndentAttributeName]) + SNQuoteColumns(a), 0);
     BOOL inside = point.x >= col.origin.x - 4 && point.x < col.origin.x + col.size.width &&
                   point.y >= col.origin.y && point.y < col.origin.y + col.size.height;
     return inside ? start : NSNotFound;

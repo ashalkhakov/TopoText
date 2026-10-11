@@ -299,6 +299,71 @@
     XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:5 effectiveRange:NULL], plain);
 }
 
+#pragma mark colours and quotes
+
+- (void)testAColourAndAHighlightGoIntoTheText {
+    [self start:@"Hello world"];
+    id plain = [_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL];
+    [_binding setCharacterValue:@"pink" forKey:SNColorKey inRange:NSMakeRange(0, 5)];
+    [_binding setCharacterValue:@"mint" forKey:SNHighlightKey inRange:NSMakeRange(6, 5)];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL], @{ SNColorKey: @"pink" });
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:6 effectiveRange:NULL], @{ SNHighlightKey: @"mint" });
+    XCTAssertEqualObjects([_binding characterValueForKey:SNColorKey inRange:NSMakeRange(0, 5)], @"pink");
+    XCTAssertNotEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain, @"shown in its colour");
+    XCTAssertNotNil([_storage attribute:NSBackgroundColorAttributeName atIndex:6 effectiveRange:NULL], @"highlighted");
+    XCTAssertNil([_storage attribute:NSBackgroundColorAttributeName atIndex:0 effectiveRange:NULL]);
+    /* Typing on in coloured text is coloured; the paragraph's tags shown
+       again keep it so. */
+    _selection = NSMakeRange(5, 0);
+    [_binding selectionDidChange];
+    [self key:@"!"];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:5 effectiveRange:NULL][SNColorKey], @"pink");
+    XCTAssertNotEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain);
+    /* Taken off. */
+    [_binding setCharacterValue:nil forKey:SNColorKey inRange:NSMakeRange(0, 6)];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL], @{});
+    XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain);
+}
+
+- (void)testAColourNotKnownHereIsShownAsNone {
+    NSDictionary *t = SNTextAttributes(SNViewAttributes(@{ SNColorKey: @"teal" }));
+    XCTAssertEqualObjects(t, @{}, @"a newer device's colour, none here");
+}
+
+- (void)testABlockQuoteIsOnWholeParagraphs {
+    [self start:@"One\nTwo"];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(1, 0)];
+    XCTAssertEqualObjects([self paragraphAt:0], @{ SNQuoteKey: @YES });
+    XCTAssertEqualObjects([self paragraphAt:4], @{});
+    XCTAssertGreaterThan([[_storage attribute:NSParagraphStyleAttributeName atIndex:0 effectiveRange:NULL] headIndent], 0);
+    /* Both: quoted; both quoted already: neither. */
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 7)];
+    XCTAssertEqualObjects([self paragraphAt:4], @{ SNQuoteKey: @YES });
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 7)];
+    XCTAssertEqualObjects([self paragraphAt:0], @{});
+    XCTAssertEqualObjects([self paragraphAt:4], @{});
+    /* With a list, a style: kept. */
+    [_binding toggleList:SNListBullet forParagraphsInRange:NSMakeRange(0, 0)];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 0)];
+    XCTAssertEqualObjects([self paragraphAt:0], (@{ SNListKey: SNListBullet, SNQuoteKey: @YES }));
+}
+
+- (void)testReturnOnAnEmptyQuotedLineEndsTheQuote {
+    [self start:@"Said"];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 0)];
+    _selection = NSMakeRange(4, 0);
+    [_binding selectionDidChange];
+    [self key:@"\n"];
+    [self key:@"x"];
+    XCTAssertEqualObjects([self paragraphAt:5], @{ SNQuoteKey: @YES }, @"the quote goes on");
+    [self key:@""];
+    [self key:@"\n"]; /* on the empty quoted line */
+    XCTAssertEqualObjects(_editor.text.string, @"Said\n", @"no new line, the quote ended");
+    [self key:@"y"];
+    XCTAssertEqualObjects([self paragraphAt:5], @{});
+    XCTAssertEqualObjects([self paragraphAt:0], @{ SNQuoteKey: @YES });
+}
+
 #pragma mark links
 
 - (void)testALinkGivenIsTheTextsAndOneTypedIsTheViews {

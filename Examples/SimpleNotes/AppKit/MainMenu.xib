@@ -338,6 +338,11 @@ CA
                                     <action selector="decreaseIndentation:" target="-1" id="SNm-ac-415"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Block Quote" keyEquivalent="'" id="SNm-mi-421">
+                                <connections>
+                                    <action selector="toggleBlockQuote:" target="-1" id="SNm-ac-421"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-416"/>
                             <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-417">
                                 <connections>
@@ -359,6 +364,80 @@ CA
                                 <connections>
                                     <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-420"/>
                                 </connections>
+                            </menuItem>
+                            <menuItem title="Highlight" id="SNm-mi-430">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Highlight" id="SNm-mn-430">
+                                    <items>
+                                        <menuItem title="None" tag="0" id="SNm-mi-431">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-431"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Purple" tag="1" id="SNm-mi-432">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-432"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Pink" tag="2" id="SNm-mi-433">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-433"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Orange" tag="3" id="SNm-mi-434">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-434"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Mint" tag="4" id="SNm-mi-435">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-435"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Blue" tag="5" id="SNm-mi-436">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-436"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Text Color" id="SNm-mi-440">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Text Color" id="SNm-mn-440">
+                                    <items>
+                                        <menuItem title="None" tag="0" id="SNm-mi-441">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-441"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Purple" tag="1" id="SNm-mi-442">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-442"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Pink" tag="2" id="SNm-mi-443">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-443"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Orange" tag="3" id="SNm-mi-444">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-444"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Mint" tag="4" id="SNm-mi-445">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-445"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Blue" tag="5" id="SNm-mi-446">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-446"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-902"/>
                             <menuItem title="Add Link…" keyEquivalent="k" id="SNm-mi-903">

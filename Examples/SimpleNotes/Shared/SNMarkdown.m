@@ -37,14 +37,20 @@ static BOOL SNYes(id value) {
     return [value respondsToSelector:@selector(boolValue)] && [value boolValue];
 }
 
-/* A run's inline markers, outermost first: link, then bold, italic, strike,
-   underline; and what each opens and closes with. */
+/* A run's inline markers, outermost first: link, then colour, highlight,
+   bold, italic, strike, underline; and what each opens and closes with. */
 static NSArray<NSArray<NSString *> *> *SNMarkersOf(NSDictionary *attributes) {
     NSMutableArray *markers = [NSMutableArray array];
     if (SNYes(attributes[SNBoldKey])) [markers addObject:@[ @"**", @"**" ]];
     if (SNYes(attributes[SNItalicKey])) [markers addObject:@[ @"*", @"*" ]];
     if (SNYes(attributes[SNStrikeKey])) [markers addObject:@[ @"~~", @"~~" ]];
     if (SNYes(attributes[SNUnderlineKey])) [markers addObject:@[ @"<u>", @"</u>" ]];
+    /* Colours, by their names: read back as they were. */
+    id color = attributes[SNColorKey], highlight = attributes[SNHighlightKey];
+    if ([SNColorNames() containsObject:highlight])
+        [markers insertObject:@[ [NSString stringWithFormat:@"<mark data-color=\"%@\">", highlight], @"</mark>" ] atIndex:0];
+    if ([SNColorNames() containsObject:color])
+        [markers insertObject:@[ [NSString stringWithFormat:@"<span data-color=\"%@\">", color], @"</span>" ] atIndex:0];
     return markers;
 }
 
@@ -135,6 +141,8 @@ NSString *SNMarkdownOfText(TopoText *text, id<SNMarkdownExporting> exporter) {
         NSDictionary *attributes = at < string.length ? [text attributesAtIndex:at effectiveRange:NULL] : @{};
         NSString *style = attributes[SNStyleKey], *kind = attributes[SNListKey];
         NSInteger indent = [attributes[SNIndentKey] respondsToSelector:@selector(integerValue)] ? MAX(0, [attributes[SNIndentKey] integerValue]) : 0;
+        /* A block quote: its lines after "> " (a heading's, a list item's too). */
+        NSString *quoted = SNYes(attributes[SNQuoteKey]) ? @"> " : @"";
         if ([style isEqual:SNStyleMono]) {
             if (list) { flush(); list = nil; }
             if (!code) code = [NSMutableArray array];
@@ -162,14 +170,15 @@ NSString *SNMarkdownOfText(TopoText *text, id<SNMarkdownExporting> exporter) {
             } else if ([kind isEqual:SNListBullet]) marker = @"*";
             else marker = @"-";
             if (![kind isEqual:SNListNumber]) [numbers removeObjectForKey:@(indent)];
-            [list addObject:[NSString stringWithFormat:@"%@%@ %@", pad, marker, inline_]];
+            [list addObject:[NSString stringWithFormat:@"%@%@%@ %@", quoted, pad, marker, inline_]];
             for (NSString *block in blocks) [list addObject:block];
             continue;
         }
         if (list) { flush(); list = nil; }
         if (!inline_.length && !blocks.count) continue;  /* an empty line of the note */
         NSString *prefix = [style isEqual:SNStyleTitle] ? @"# " : [style isEqual:SNStyleHeading] ? @"## " : [style isEqual:SNStyleSubheading] ? @"### " : @"";
-        if (inline_.length) [out addObject:prefix.length ? [prefix stringByAppendingString:inline_] : SNEscapeLineStart(inline_)];
+        if (inline_.length)
+            [out addObject:[quoted stringByAppendingString:prefix.length ? [prefix stringByAppendingString:inline_] : SNEscapeLineStart(inline_)]];
         [out addObjectsFromArray:blocks];
     }
     flush();
@@ -198,6 +207,9 @@ static NSString *SNDecodeEntities(NSString *s) {
 static void SNParseInline(NSString *line, NSDictionary *base, id<SNMarkdownImporting> importer, NSMutableArray<SNRun *> *runs) {
     NSMutableDictionary *now = [base mutableCopy];
     NSMutableString *pending = [NSMutableString string];
+    /* The spans and marks open: each one's key and what it had before
+       (NSNull: one that changed nothing). */
+    NSMutableArray *colors = [NSMutableArray array];
     void (^emit)(void) = ^{
         if (!pending.length) return;
         SNRun *r = [SNRun new];
@@ -328,6 +340,34 @@ static void SNParseInline(NSString *line, NSDictionary *base, id<SNMarkdownImpor
                     i = NSMaxRange(close);
                     continue;
                 }
+                /* A colour and a highlight, by name (as export writes them);
+                   a <mark> of another app's, the orange one. Any other
+                   span closes as it opened, changing nothing. */
+                if ([name isEqual:@"span"] || [name isEqual:@"mark"]) {
+                    emit();
+                    NSString *key = [name isEqual:@"mark"] ? SNHighlightKey : SNColorKey;
+                    if ([lower hasPrefix:@"/"]) {
+                        id was = colors.lastObject;
+                        if (was) [colors removeLastObject];
+                        if ([was isKindOfClass:[NSArray class]]) {
+                            if ([was[1] isKindOfClass:[NSNull class]]) [now removeObjectForKey:was[0]];
+                            else now[was[0]] = was[1];
+                        }
+                    } else {
+                        NSRegularExpression *dc = [NSRegularExpression regularExpressionWithPattern:@"data-color=\"([a-z]*)\"" options:0 error:NULL];
+                        NSTextCheckingResult *m = [dc firstMatchInString:tag options:0 range:NSMakeRange(0, tag.length)];
+                        NSString *named = m ? [tag substringWithRange:[m rangeAtIndex:1]] : nil;
+                        if (![SNColorNames() containsObject:named]) named = [name isEqual:@"mark"] ? @"orange" : nil;
+                        if (named) {
+                            [colors addObject:@[ key, now[key] ?: [NSNull null] ]];
+                            now[key] = named;
+                        } else {
+                            [colors addObject:[NSNull null]];
+                        }
+                    }
+                    i = NSMaxRange(close);
+                    continue;
+                }
                 if ([name isEqual:@"br"]) {
                     [pending appendString:@" "];
                     i = NSMaxRange(close);
@@ -416,9 +456,15 @@ TopoText *SNTextOfMarkdown(NSString *markdown, NSString *title, id<SNMarkdownImp
     NSArray<NSString *> *lines = [[markdown stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"] componentsSeparatedByString:@"\n"];
     NSMutableArray<SNParagraph *> *paragraphs = [NSMutableArray array];
     __block SNParagraph *open = nil;   /* a paragraph lines are still joined to */
+    __block BOOL inQuote = NO;         /* the line read is a block quote's ("> ") */
     SNParagraph * (^add)(NSString *, NSDictionary *) = ^SNParagraph *(NSString *text, NSDictionary *attributes) {
         SNParagraph *p = [SNParagraph new];
         p.runs = [NSMutableArray array];
+        if (inQuote) {
+            NSMutableDictionary *quoted = [attributes mutableCopy];
+            quoted[SNQuoteKey] = @YES;
+            attributes = quoted;
+        }
         p.attributes = attributes;
         SNParseInline(text, @{}, importer, p.runs);
         [paragraphs addObject:p];
@@ -431,6 +477,12 @@ TopoText *SNTextOfMarkdown(NSString *markdown, NSString *title, id<SNMarkdownImp
     for (NSUInteger l = 0; l < lines.count; l++) {
         NSString *line = [lines[l] stringByReplacingOccurrencesOfString:@"\t" withString:@"    "];
         NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        /* A block quote's line: read as the line after "> " is, quoted. */
+        inQuote = [trimmed hasPrefix:@">"];
+        if (inQuote) {
+            line = [trimmed substringFromIndex:[trimmed hasPrefix:@"> "] ? 2 : 1];
+            trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        }
         if (!trimmed.length) {
             open = nil;
             continue;
@@ -502,15 +554,15 @@ TopoText *SNTextOfMarkdown(NSString *markdown, NSString *title, id<SNMarkdownImp
             open = add([line substringWithRange:[m rangeAtIndex:5]], attributes);
             continue;
         }
-        BOOL quote = [trimmed hasPrefix:@">"];
-        NSString *body = quote ? [[trimmed substringFromIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] : trimmed;
+        NSString *body = trimmed;
         BOOL hardBreak = [line hasSuffix:@"  "] || [line hasSuffix:@"\\"];
         if ([body hasSuffix:@"\\"]) body = [body substringToIndex:body.length - 1];
-        if (open && !quote) {
-            /* A line of the paragraph (or list item) before: joined to it. */
+        if (open && SNYes(open.attributes[SNQuoteKey]) == inQuote) {
+            /* A line of the paragraph (or list item) before, in a quote as
+               it is or out of one as it is: joined to it. */
             SNParseInline([@" " stringByAppendingString:body], @{}, importer, open.runs);
         } else {
-            if (!(open && quote)) [columns removeAllObjects];
+            [columns removeAllObjects];
             open = add(body, @{});
         }
         if (hardBreak) open = nil;
