@@ -288,14 +288,28 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         UITableViewController *root = (UITableViewController *)navigation.viewControllers.firstObject;
         [root viewWillAppear:NO];
         UITableView *ft = root.tableView;
-        NSMutableArray *folders = [NSMutableArray array];
+        NSMutableArray *(^folderRows)(void) = ^NSMutableArray *{
+            NSMutableArray *rows = [NSMutableArray array];
+            for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
+                UITableViewCell *c = [root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]];
+                [rows addObject:[NSString stringWithFormat:@"%ld %@", (long)c.indentationLevel,
+                                                           ((UIListContentConfiguration *)c.contentConfiguration).text]];
+            }
+            return rows;
+        };
+        /* Work starts closed; its chevron opens it, Projects under it. */
+        NSMutableArray *closed = folderRows();
+        UIButton *chevron = nil;
         for (NSInteger i = 0; i < [ft numberOfRowsInSection:1]; i++) {
             UITableViewCell *c = [root tableView:ft cellForRowAtIndexPath:[NSIndexPath indexPathForRow:i inSection:1]];
-            [folders addObject:[NSString stringWithFormat:@"%ld %@", (long)c.indentationLevel,
-                                                          ((UIListContentConfiguration *)c.contentConfiguration).text]];
+            if ([((UIListContentConfiguration *)c.contentConfiguration).text isEqual:@"Work"]) chevron = (UIButton *)c.accessoryView;
         }
-        SNSay([folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
-              [NSString stringWithFormat:@"Projects under Work (%@)", [folders componentsJoinedByString:@", "]]);
+        [chevron sendActionsForControlEvents:UIControlEventTouchUpInside];
+        NSMutableArray *folders = folderRows();
+        SNSay([closed containsObject:@"0 Work"] && ![closed containsObject:@"1 Projects"] && [chevron isKindOfClass:[UIButton class]] &&
+                  [folders containsObject:@"0 Work"] && [folders containsObject:@"1 Projects"],
+              [NSString stringWithFormat:@"Projects under Work, shown once Work is opened (%@; then %@)",
+                                         [closed componentsJoinedByString:@", "], [folders componentsJoinedByString:@", "]]);
         SNSay([ft numberOfRowsInSection:3] == 3, @"the tags listed");
         /* The server's sheet: a server that asks for no sign-in, learnt from
            its $metadata, synced with as it is. */

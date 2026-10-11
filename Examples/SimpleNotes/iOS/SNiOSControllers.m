@@ -62,9 +62,16 @@ static NSString *SNDaysLeftText(SNNote *note) {
 
 #pragma mark folders
 
+/* The folders open in the list, by their ids (synced, so kept across
+   launches): a folder with folders in it is closed until opened. */
+static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
+
 @implementation SNFoldersViewController {
     SNNotes *_notes;
-    NSArray<SNFolder *> *_folders;   /* the tree: each folder, then those in it */
+    NSArray<SNFolder *> *_folders;   /* the rows: each folder, then those in it if it is open */
+    /* Each folder's depth, and those with folders in it (by object ID). */
+    NSDictionary<NSManagedObjectID *, NSNumber *> *_depths;
+    NSSet<NSManagedObjectID *> *_parents;
     NSArray<NSString *> *_tags;
     /* The counts, read once a reload (by folder ID, by tag; All Notes'
        and Recently Deleted's under NSNull and @""), not as each cell is
@@ -128,11 +135,32 @@ static NSString *SNDaysLeftText(SNNote *note) {
 }
 
 - (void)reload {
-    _folders = _notes.folderTree;
+    NSArray<SNFolder *> *tree = _notes.folderTree;
+    NSMutableDictionary *depths = [NSMutableDictionary dictionary];
+    NSMutableSet *parents = [NSMutableSet set];
+    for (SNFolder *f in tree) {
+        SNFolder *parent = [_notes parentOfFolder:f];
+        depths[f.objectID] = @(parent ? [depths[parent.objectID] integerValue] + 1 : 0);
+        if (parent) [parents addObject:parent.objectID];
+    }
+    _depths = depths;
+    _parents = parents;
+    /* Shown: each folder whose folders above are all open. */
+    NSSet *open = [NSSet setWithArray:[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] ?: @[]];
+    NSMutableArray *shown = [NSMutableArray array];
+    NSInteger hiddenBelow = NSIntegerMax;   /* the depth of a closed folder whose folders are being passed */
+    for (SNFolder *f in tree) {
+        NSInteger depth = [depths[f.objectID] integerValue];
+        if (depth > hiddenBelow) continue;
+        hiddenBelow = NSIntegerMax;
+        [shown addObject:f];
+        if ([parents containsObject:f.objectID] && ![open containsObject:f.id ?: @""]) hiddenBelow = depth;
+    }
+    _folders = shown;
     NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
     _tags = [tagCounts.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
     NSMutableDictionary *counts = [tagCounts mutableCopy];
-    for (SNFolder *f in _folders) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
+    for (SNFolder *f in tree) counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
     counts[[NSNull null]] = @([_notes countOfNotesInFolder:nil]);
     counts[@""] = @(_notes.countOfDeletedNotes);
     _counts = counts;
@@ -382,6 +410,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     UITableViewCell *cell = [t dequeueReusableCellWithIdentifier:@"folder"]
         ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"folder"];
     cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    cell.accessoryView = nil;
     UIListContentConfiguration *c = [UIListContentConfiguration valueCellConfiguration];
     NSUInteger count;
     NSInteger depth = 0;
@@ -399,7 +428,19 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         c.text = f ? (f.name.length ? f.name : @"Untitled") : @"All Notes";
         c.image = [UIImage systemImageNamed:!f ? @"tray.full" : [_notes isSmartFolder:f] ? @"gearshape" : @"folder"];
         count = [_counts[f ? (id)f.objectID : (id)[NSNull null]] unsignedIntegerValue];
-        depth = f ? (NSInteger)[_notes depthOfFolder:f] : 0;
+        depth = f ? [_depths[f.objectID] integerValue] : 0;
+        /* Folders in it: a chevron to open or close it (the row opens its
+           notes). */
+        if (f && [_parents containsObject:f.objectID]) {
+            BOOL open = [self isOpen:f];
+            UIButton *chevron = [UIButton buttonWithType:UIButtonTypeSystem];
+            [chevron setImage:[UIImage systemImageNamed:open ? @"chevron.down" : @"chevron.right"] forState:UIControlStateNormal];
+            chevron.frame = CGRectMake(0, 0, 44, 44);
+            chevron.tag = ip.row;
+            chevron.accessibilityLabel = open ? @"Close" : @"Open";
+            [chevron addTarget:self action:@selector(toggleFolder:) forControlEvents:UIControlEventTouchUpInside];
+            cell.accessoryView = chevron;
+        }
     }
     c.secondaryText = [NSString stringWithFormat:@"%lu", (unsigned long)count];
     cell.contentConfiguration = c;
@@ -414,6 +455,25 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     else if (ip.section == SNTagsSection) next = [[SNNotesViewController alloc] initWithNotes:_notes tag:_tags[(NSUInteger)ip.row]];
     else next = [[SNNotesViewController alloc] initWithNotes:_notes folder:ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil];
     [self.navigationController pushViewController:next animated:YES];
+}
+
+- (BOOL)isOpen:(SNFolder *)folder {
+    return [[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] containsObject:folder.id ?: @""];
+}
+
+- (void)setFolder:(SNFolder *)folder open:(BOOL)open {
+    if (!folder.id.length) return;
+    NSMutableArray *ids = [[[NSUserDefaults standardUserDefaults] arrayForKey:SNOpenFoldersDefaultsKey] mutableCopy] ?: [NSMutableArray array];
+    [ids removeObject:folder.id];
+    if (open) [ids addObject:folder.id];
+    [[NSUserDefaults standardUserDefaults] setObject:ids forKey:SNOpenFoldersDefaultsKey];
+    [self reload];
+}
+
+- (IBAction)toggleFolder:(UIButton *)sender {
+    if (sender.tag < 0 || (NSUInteger)sender.tag >= _folders.count) return;
+    SNFolder *f = _folders[(NSUInteger)sender.tag];
+    [self setFolder:f open:![self isOpen:f]];
 }
 
 /* A sheet of where a folder can go: the top, or a folder not in it. */
