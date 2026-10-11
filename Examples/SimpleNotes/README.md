@@ -2,11 +2,12 @@
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
 with headings, lists and checklists, block quotes, colours and highlights,
-links, images and tables, tags, search, find and replace in a note,
-pinning, sorting and grouping by date, Recently Deleted, and moving notes
-between folders. It runs on macOS and on Linux (AppKit, through GNUstep),
-and on iPhone and iPad. Every note is kept on the device and works offline. Notes sync with a
-server, `simplenotes-server`, which serves them over OData.
+links, images and tables, tags, search, find and replace in a note, printing
+and PDF export, pinning, sorting and grouping by date, Recently Deleted, and
+moving notes between folders. It runs on macOS and on Linux (AppKit, through
+GNUstep), and on iPhone and iPad. Every note is kept on the device and works
+offline. Notes sync with a server, `simplenotes-server`, which serves them
+over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
@@ -113,6 +114,20 @@ offered there when the note can be edited, so not in Recently Deleted.
 
 A replacement is an ordinary edit of the note's text: it syncs and merges
 like typing.
+
+## Print and Export as PDF
+
+**File > Print…** (⌘P) and **File > Export as PDF…** put the open note on
+paper as it is now, including typing not yet saved: lists and checkboxes,
+quotes, colours and highlights, images, files' cards, and tables with their
+cells. Pages break between lines. Colours are the light ones, whatever the
+window is showing. On macOS and GNUstep this is AppKit's print operation,
+on a text view of the page's width laid out for the purpose; GNUstep writes
+the PDF through cairo.
+
+On iOS, the note's ••• menu has **Print**, which opens the system's print
+sheet, and **Export as PDF**, which offers the file to Save to Files,
+AirDrop, Mail and so on. Pages are A4, or Letter where inches are used.
 
 ## Links
 

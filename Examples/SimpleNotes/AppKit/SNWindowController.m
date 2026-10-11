@@ -47,6 +47,9 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     SNTextBinding *_binding;
     /* The open note's tables, each over its place in the text. */
     SNTableGrids *_grids;
+    /* A note on paper while it prints: its binding and tables' grids. */
+    SNTextBinding *_paperBinding;
+    SNTableGrids *_paperGrids;
     BOOL _reloading;
     /* What the window shows: All Notes, a folder, or Recently Deleted. The
        folder table's selection follows it, not the other way round: rows
@@ -847,6 +850,94 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:panel.URL]];
 }
 
+#pragma mark printing
+
+/* The open note on paper: a text view of the page's width, out of sight,
+   the note's editor's text shown in it by a binding of its own (read only:
+   nothing is written back), its tables in grids of their own over it (a
+   view's subviews print with it); let go of once printed. */
+- (SNTextView *)paperViewFor:(NSPrintInfo *)info {
+    CGFloat width = info.paperSize.width - info.leftMargin - info.rightMargin;
+    SNTextView *paper = [[SNTextView alloc] initWithFrame:NSMakeRect(0, 0, width, 100)];
+    [paper useListLayoutManager];
+    paper.editable = NO;
+    paper.selectable = NO;
+    paper.drawsBackground = NO;
+    paper.printTitle = [self selectedNote].title.length ? [self selectedNote].title : @"Note";
+    paper.verticallyResizable = YES;
+    paper.textContainer.widthTracksTextView = YES;
+#ifndef GNUSTEP
+    /* Dark text on white paper, whatever the window is in: the view's
+       colours, and the pictures made for it (a file's card) as well. */
+    paper.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+    [paper.appearance performAsCurrentDrawingAppearance:^{
+        [self showNoteOnPaper:paper];
+    }];
+#else
+    [self showNoteOnPaper:paper];
+#endif
+    [paper.layoutManager ensureLayoutForTextContainer:paper.textContainer];
+    NSRect used = [paper.layoutManager usedRectForTextContainer:paper.textContainer];
+    [paper setFrameSize:NSMakeSize(width, NSMaxY(used) + paper.textContainerInset.height * 2)];
+    return paper;
+}
+
+- (void)showNoteOnPaper:(SNTextView *)paper {
+    _paperBinding = [[SNTextBinding alloc] initWithTextView:(id<SNTextViewing>)paper editor:_editor];
+    [paper setFrameSize:NSMakeSize(paper.frame.size.width, 100000)];
+    _paperGrids = [[SNTableGrids alloc] initWithBinding:_paperBinding notes:_notes];
+    [_paperGrids update];
+}
+
+- (void)letGoOfPaper {
+    [_paperGrids removeAll];
+    _paperGrids = nil;
+    [_paperBinding unbind];
+    _paperBinding = nil;
+}
+
+- (NSPrintOperation *)printOperationTo:(NSString *)path {
+    NSPrintInfo *info = [[NSPrintInfo sharedPrintInfo] copy];
+    /* From the top of the page, as a document is. */
+    info.verticallyCentered = NO;
+    info.horizontallyCentered = NO;
+    if (path) {
+        info.jobDisposition = NSPrintSaveJob;
+#ifdef GNUSTEP
+        info.dictionary[NSPrintSavePath] = path;
+#else
+        info.dictionary[NSPrintJobSavingURL] = [NSURL fileURLWithPath:path];
+#endif
+    }
+    NSPrintOperation *op = [NSPrintOperation printOperationWithView:[self paperViewFor:info] printInfo:info];
+    return op;
+}
+
+- (IBAction)printNote:(id)sender {
+    if (!_editor) return;
+    [[self printOperationTo:nil] runOperation];
+    [self letGoOfPaper];
+}
+
+- (IBAction)exportNoteAsPDF:(id)sender {
+    if (!_editor) return;
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    NSString *title = [[self selectedNote].title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    panel.nameFieldStringValue = [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+    panel.prompt = @"Export";
+    if ([panel runModal] != NSModalResponseOK || !panel.URL) return;
+    [self exportNoteAsPDFTo:panel.URL.path];
+}
+
+- (BOOL)exportNoteAsPDFTo:(NSString *)path {
+    NSPrintOperation *op = [self printOperationTo:path];
+    op.showsPrintPanel = NO;
+    op.showsProgressPanel = NO;
+    BOOL done = [op runOperation];
+    [self letGoOfPaper];
+    return done;
+}
+
 - (IBAction)renameFolder:(id)sender {
     SNFolder *f = [self selectedFolder];
     if (!f) return;
@@ -1086,6 +1177,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(printNote:) || a == @selector(exportNoteAsPDF:)) return _editor != nil;
     if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
     if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;

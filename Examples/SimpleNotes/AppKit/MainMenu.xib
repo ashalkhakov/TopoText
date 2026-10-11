@@ -136,6 +136,18 @@ CA
                                     <action selector="exportAllNotes:" target="-1" id="SNm-ac-932"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Export as PDF…" id="SNm-mi-934">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="exportNoteAsPDF:" target="-1" id="SNm-ac-934"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-935"/>
+                            <menuItem title="Print…" keyEquivalent="p" id="SNm-mi-936">
+                                <connections>
+                                    <action selector="printNote:" target="-1" id="SNm-ac-936"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-210"/>
                             <menuItem title="Move To" tag="7001" id="SNm-mi-211">
                                 <modifierMask key="keyEquivalentModifierMask"/>

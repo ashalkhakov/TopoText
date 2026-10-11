@@ -63,6 +63,10 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
     [self.textContainer replaceLayoutManager:[[SNListLayoutManager alloc] init]];
 }
 
+- (NSString *)printJobTitle {
+    return _printTitle ?: [super printJobTitle];
+}
+
 - (void)useFindInterface {
 #ifdef GNUSTEP
     self.usesFindPanel = YES;

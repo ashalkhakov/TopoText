@@ -127,6 +127,12 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 // Find in Note (the ... menu): the system's find navigator, Replace in it
 // too (iOS 16 and later).
 - (IBAction)findInNote:(nullable id)sender;
+// Print and Export as PDF (the ... menu): the note on paper (A4, or Letter
+// where inches are used), to the print sheet, or a file to share.
+- (IBAction)printNote:(nullable id)sender;
+- (IBAction)exportNoteAsPDF:(nullable id)sender;
+// The note on paper, as a PDF's data.
+- (NSData *)pdfOfNote;
 // A note in Recently Deleted, recovered (the button over it).
 - (IBAction)recover:(nullable id)sender;
 @end

@@ -214,6 +214,13 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             UIMenu *styles = (UIMenu *)we.styleItem.menu.children.firstObject;
             UIAction *title = (UIAction *)styles.children.firstObject, *body = (UIAction *)styles.children[3];
             wtv.selectedRange = NSMakeRange(0, 0);
+            /* Export as PDF: the note on paper. SN_SELF_TEST_PDF: written
+               there too, to be looked at. */
+            NSData *pdf = [we pdfOfNote];
+            const char *pdfPath = getenv("SN_SELF_TEST_PDF");
+            if (pdfPath) [pdf writeToFile:@(pdfPath) atomically:YES];
+            SNSay(pdf.length > 1000 && [[[NSString alloc] initWithData:[pdf subdataWithRange:NSMakeRange(0, 5)] encoding:NSASCIIStringEncoding] isEqual:@"%PDF-"],
+                  [NSString stringWithFormat:@"Export as PDF (%lu bytes)", (unsigned long)pdf.length]);
             [title performWithSender:we.styleItem target:nil];
             NSString *style = [wtv.textStorage attribute:@"SNStyle" atIndex:0 effectiveRange:NULL];
             SNSay([style isEqual:SNStyleTitle], [NSString stringWithFormat:@"Title from the bar over the keyboard (%@)", style]);

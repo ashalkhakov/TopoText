@@ -489,9 +489,21 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [window validateMenuItem:purple] && purple.state == NSControlStateValueOn,
               @"Highlight and Text Color from the menu");
 
+        /* Export as PDF: the note on paper, pages of it. Beside the snapshot
+           when one is asked for, else a file of its own, gone after. */
+        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
+        NSString *pdfPath = snapshot ? [@(snapshot).stringByDeletingPathExtension stringByAppendingPathExtension:@"pdf"]
+                                     : [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                           [NSString stringWithFormat:@"sn-selftest-%@.pdf", [NSProcessInfo processInfo].globallyUniqueString]];
+        BOOL printed = [window exportNoteAsPDFTo:pdfPath];
+        NSData *pdfData = [NSData dataWithContentsOfFile:pdfPath];
+        SNSay(printed && pdfData.length > 1000 && [[[NSString alloc] initWithData:[pdfData subdataWithRange:NSMakeRange(0, 5)]
+                                                                           encoding:NSASCIIStringEncoding] isEqual:@"%PDF-"],
+              [NSString stringWithFormat:@"Export as PDF (%lu bytes)", (unsigned long)pdfData.length]);
+        if (!snapshot) [[NSFileManager defaultManager] removeItemAtPath:pdfPath error:NULL];
+
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */
-        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             tv.selectedRange = NSMakeRange(tv.string.length, 0);
             NSView *v = window.window.contentView;

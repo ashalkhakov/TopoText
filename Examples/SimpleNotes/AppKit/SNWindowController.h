@@ -103,6 +103,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)applyHighlightColor:(nullable id)sender;
 - (IBAction)applyTextColor:(nullable id)sender;
 // Edit > Find > Search: the notes' search field.
+// File > Print… (Command-P) and Export as PDF…: the open note laid out on
+// paper, as it is now (what was typed and not yet saved too): its lists,
+// colours, images, files' cards, tables (drawn as they look), in the
+// paper's light colours.
+- (IBAction)printNote:(nullable id)sender;
+- (IBAction)exportNoteAsPDF:(nullable id)sender;
+// The open note as a PDF at path, with no panel (Export as PDF's, once a
+// file is chosen); NO: none written.
+- (BOOL)exportNoteAsPDFTo:(NSString *)path;
 - (IBAction)findNote:(nullable id)sender;
 // Edit > Find's actions in the note (Find…, Find and Replace…, Find Next,
 // ...), from wherever the window's focus is (the notes' list): the note's

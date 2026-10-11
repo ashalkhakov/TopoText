@@ -906,14 +906,107 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     self.navigationItem.rightBarButtonItems = items;
 }
 
-/* The note's ... menu (Apple Notes' too): Find in Note. */
+/* The note's ... menu (Apple Notes' too): Find in Note, Print, Export as
+   PDF. */
 - (UIBarButtonItem *)noteMenuItem {
     NSMutableArray *actions = [NSMutableArray array];
     if (@available(iOS 16.0, *)) [actions addObject:SNMenuAction(@"Find in Note", [UIImage systemImageNamed:@"magnifyingglass"], @selector(findInNote:), self)];
+    [actions addObject:SNMenuAction(@"Print", [UIImage systemImageNamed:@"printer"], @selector(printNote:), self)];
+    [actions addObject:SNMenuAction(@"Export as PDF", [UIImage systemImageNamed:@"doc.richtext"], @selector(exportNoteAsPDF:), self)];
     UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
                                                               menu:[UIMenu menuWithTitle:@"" children:actions]];
     item.accessibilityLabel = @"More";
     return item;
+}
+
+#pragma mark printing
+
+/* The note on paper, as a PDF: a text view of the page's width, out of
+   sight, the open note's text in it by a binding of its own (read only),
+   its tables in grids of their own, in light colours; drawn a page at a
+   time, each page ending after the last line that fits on it. A4, or
+   Letter where inches are used. */
+- (NSData *)pdfOfNote {
+    BOOL metric = [[[NSLocale currentLocale] objectForKey:NSLocaleUsesMetricSystem] boolValue];
+    CGRect page = metric ? CGRectMake(0, 0, 595, 842) : CGRectMake(0, 0, 612, 792);
+    CGFloat margin = 54;
+    CGRect content = CGRectInset(page, margin, margin);
+    NSTextStorage *storage = [[NSTextStorage alloc] init];
+    SNListLayoutManager *lm = [[SNListLayoutManager alloc] init];
+    [storage addLayoutManager:lm];
+    NSTextContainer *container = [[NSTextContainer alloc] initWithSize:CGSizeMake(content.size.width, CGFLOAT_MAX)];
+    [lm addTextContainer:container];
+    UITextView *paper = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, content.size.width, 100000) textContainer:container];
+    paper.editable = NO;
+    paper.scrollEnabled = NO;
+    paper.backgroundColor = [UIColor whiteColor];
+    paper.textContainerInset = UIEdgeInsetsZero;
+    paper.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
+    __block SNTextBinding *binding = nil;
+    __block SNTableGrids *grids = nil;
+    [[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight] performAsCurrentTraitCollection:^{
+        binding = [[SNTextBinding alloc] initWithTextView:paper editor:self->_editor];
+        [binding textWidthMayHaveChanged];
+        grids = [[SNTableGrids alloc] initWithBinding:binding notes:self->_notes];
+        [grids update];
+    }];
+    [lm ensureLayoutForTextContainer:container];
+    CGFloat height = CGRectGetMaxY([lm usedRectForTextContainer:container]);
+    paper.frame = CGRectMake(0, 0, content.size.width, MAX(height, 1));
+    [paper layoutIfNeeded];
+    /* Where each page begins: at the top of the first line that would not
+       fit on the one before. */
+    NSMutableArray<NSNumber *> *tops = [NSMutableArray arrayWithObject:@0];
+    NSRange glyphs = [lm glyphRangeForTextContainer:container];
+    for (NSUInteger g = glyphs.location; g < NSMaxRange(glyphs); ) {
+        NSRange line;
+        CGRect r = [lm lineFragmentRectForGlyphAtIndex:g effectiveRange:&line];
+        if (CGRectGetMaxY(r) - tops.lastObject.doubleValue > content.size.height && r.origin.y > tops.lastObject.doubleValue)
+            [tops addObject:@(r.origin.y)];
+        g = NSMaxRange(line);
+    }
+    UIGraphicsPDFRenderer *renderer = [[UIGraphicsPDFRenderer alloc] initWithBounds:page format:[UIGraphicsPDFRendererFormat defaultFormat]];
+    NSData *pdf = [renderer PDFDataWithActions:^(UIGraphicsPDFRendererContext *context) {
+        for (NSUInteger i = 0; i < tops.count; i++) {
+            CGFloat top = tops[i].doubleValue, bottom = i + 1 < tops.count ? tops[i + 1].doubleValue : height;
+            [context beginPage];
+            CGContextRef c = context.CGContext;
+            CGContextSaveGState(c);
+            CGContextClipToRect(c, CGRectMake(content.origin.x, content.origin.y, content.size.width, bottom - top));
+            CGContextTranslateCTM(c, content.origin.x, content.origin.y - top);
+            [paper.layer renderInContext:c];
+            CGContextRestoreGState(c);
+        }
+    }];
+    [grids removeAll];
+    [binding unbind];
+    return pdf;
+}
+
+- (NSString *)pdfName {
+    NSString *title = [_note.title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    return [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+}
+
+/* The system's print sheet, the note on paper given to it. */
+- (IBAction)printNote:(id)sender {
+    UIPrintInteractionController *print = [UIPrintInteractionController sharedPrintController];
+    UIPrintInfo *info = [UIPrintInfo printInfo];
+    info.jobName = _note.title.length ? _note.title : @"Note";
+    info.outputType = UIPrintInfoOutputGeneral;
+    print.printInfo = info;
+    print.printingItem = [self pdfOfNote];
+    [print presentAnimated:YES completionHandler:nil];
+}
+
+/* The note on paper as a file, offered as any file is (Save to Files,
+   AirDrop, Mail...). */
+- (IBAction)exportNoteAsPDF:(id)sender {
+    NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[self pdfName]]];
+    if (![[self pdfOfNote] writeToURL:file atomically:YES]) return;
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[ file ] applicationActivities:nil];
+    share.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItems.firstObject;
+    [self presentViewController:share animated:YES completion:nil];
 }
 
 /* The system's find navigator, over the keyboard: Replace too, in a note

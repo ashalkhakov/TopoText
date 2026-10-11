@@ -25,6 +25,8 @@ NS_ASSUME_NONNULL_BEGIN
 // Edit > Find > Find and Replace…: the find bar with its Replace row (the
 // Find panel on GNUstep).
 - (IBAction)findAndReplace:(nullable id)sender;
+// The print job's name (a note printed: its title).
+@property (nonatomic, copy, nullable) NSString *printTitle;
 @end
 
 NS_ASSUME_NONNULL_END
