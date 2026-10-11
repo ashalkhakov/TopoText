@@ -177,7 +177,7 @@ jobs:
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
       GNUSTEP_PATCHES_REF: 43dcb1fa0d6d468029d66dfeb250ae42bc1d8b10
-      FREECOREDATA_REF: a07b87ff0cba571bbc282f99d73f37619a9f65b3
+      FREECOREDATA_REF: 5bfd5a87179cff43e0a8a55622fc00f01951c88a
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
