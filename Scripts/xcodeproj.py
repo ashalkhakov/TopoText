@@ -281,7 +281,7 @@ def simplenotes(topotext_ids):
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
                                            'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNTransferPanel.h', 'SNTransferPanel.m', 'SNMemory.h', 'SNMemory.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
-                                           'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'Info.plist',
+                                           'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNTransferViewController.h', 'SNTransferViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNSecretStore.m',
                                      'SNEditorViewController.xib', 'Assets.xcassets', 'Info.plist',
@@ -318,7 +318,7 @@ def simplenotes(topotext_ids):
     targets = []
     mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
-                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
+                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
                      appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],

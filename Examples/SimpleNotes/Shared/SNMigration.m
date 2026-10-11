@@ -50,6 +50,16 @@ static NSManagedObjectModel *SNWithoutExternalStorage(NSManagedObjectModel *mode
     return before;
 }
 
+BOOL SNStoreNeedsMigration(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper) {
+    if (![[NSFileManager defaultManager] fileExistsAtPath:storeURL.path]) return NO;
+    NSDictionary *metadata = [NSPersistentStoreCoordinator metadataForPersistentStoreOfType:NSSQLiteStoreType URL:storeURL
+                                                                                    options:@{ NSPersistentHistoryTrackingKey: @YES } error:NULL];
+    NSManagedObjectModel *current = metadata ? SNModelAt(momdURL) : nil;
+    if (!current) return NO;
+    [bookkeeper addBookkeepingToModel:current configuration:nil];
+    return ![current isConfiguration:nil compatibleWithStoreMetadata:metadata];
+}
+
 BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error) {
     if (![[NSFileManager defaultManager] fileExistsAtPath:storeURL.path]) return YES;
     NSDictionary *options = @{ NSPersistentHistoryTrackingKey: @YES };

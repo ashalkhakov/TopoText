@@ -495,6 +495,10 @@
 			isa = PBXBuildFile;
 			fileRef = D66318865ACBC88ED27304E8;
 		};
+		E1C9E59B512340C214F1B7DB /* UpdatePanel.xib in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 33EFE5B507339051F022F7B7;
+		};
 		E28023D9DDBD289626CB9170 /* SNPeersWindow.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = CDAACC1B7695C7D881D1F53C;
@@ -995,6 +999,13 @@
 			path = ../../Xcode/Configs/Common.xcconfig;
 			sourceTree = "<group>";
 			name = Common.xcconfig;
+		};
+		33EFE5B507339051F022F7B7 /* UpdatePanel.xib */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = file.xib;
+			path = AppKit/UpdatePanel.xib;
+			sourceTree = "<group>";
+			name = UpdatePanel.xib;
 		};
 		3A2C9D1C292C6680E66D6F77 /* main.m */ = {
 			isa = PBXFileReference;
@@ -1641,6 +1652,7 @@
 				7B171DA9ABD39A0E778CE234,
 				F311510A21AD054DB71F2A08,
 				0028F98C5C8655B937FD37DB,
+				33EFE5B507339051F022F7B7,
 				575D635025FF7766A4A183D2,
 				A453D29A1E57E3F3B4AD13AD,
 			);
@@ -1989,6 +2001,7 @@
 				0FCC9C9E0E329BC98E59E527,
 				C93C1B38E5CC45EE1BFB472B,
 				D8CD33C84CC9AEFF9DB416B0,
+				E1C9E59B512340C214F1B7DB,
 				5E4D80EF65B4B9359460DD8B,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -10,10 +10,37 @@
 @property (nonatomic, strong) ODataSignIn *signIn;
 @end
 
-@implementation SNiOSAppDelegate
+/* Shown while a store of an older version is brought up to this one. */
+@interface SNUpdatingViewController : UIViewController
+@end
+
+@implementation SNUpdatingViewController
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor systemBackgroundColor];
+    UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+    [spinner startAnimating];
+    UILabel *label = [[UILabel alloc] init];
+    label.text = @"Updating your notes for this version of SimpleNotes…\nThis is done once, and can take a minute.";
+    label.numberOfLines = 0;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.textColor = [UIColor secondaryLabelColor];
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[ spinner, label ]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 16;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[ [stack.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+                                               [stack.leadingAnchor constraintEqualToAnchor:self.view.layoutMarginsGuide.leadingAnchor],
+                                               [stack.trailingAnchor constraintEqualToAnchor:self.view.layoutMarginsGuide.trailingAnchor] ]];
+}
+@end
+
+@implementation SNiOSAppDelegate {
+    NSURL *_store;
+}
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
-    NSError *error = nil;
     NSArray *args = [NSProcessInfo processInfo].arguments;
     NSUInteger i = [args indexOfObject:@"--self-test"];
     if (i != NSNotFound && i + 1 < args.count) SNSelfTestRoot = [NSURL URLWithString:args[i + 1]];
@@ -21,6 +48,34 @@
     NSURL *store = SNSelfTestRoot ? [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
                                                                 [NSString stringWithFormat:@"sn-selftest-app-%@.sqlite", [NSProcessInfo processInfo].globallyUniqueString]]]
                                   : [SNNotes defaultStoreURLNamed:@"SimpleNotes"];
+    _store = store;
+    _window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    /* Made by an older version: brought up to this one off the main thread
+       (a minute, with many files), the user told meanwhile; then opened. */
+    if ([SNNotes storeNeedsUpdateAt:store]) {
+        _window.rootViewController = [[SNUpdatingViewController alloc] init];
+        [_window makeKeyAndVisible];
+        [self performSelectorInBackground:@selector(updateStore:) withObject:store];
+        return YES;
+    }
+    [self openNotes:nil];
+    return YES;
+}
+
+/* On a thread of its own. */
+- (void)updateStore:(NSURL *)store {
+    @autoreleasepool {
+        NSError *error = nil;
+        BOOL updated = [SNNotes updateStoreAt:store error:&error];
+        if (!updated) NSLog(@"SimpleNotes: the notes were not updated: %@", error);
+        [self performSelectorOnMainThread:@selector(openNotes:) withObject:nil waitUntilDone:NO];
+    }
+}
+
+/* The store opened, and the folders shown. */
+- (void)openNotes:(id)sender {
+    NSError *error = nil;
+    NSURL *store = _store;
     _notes = [[SNNotes alloc] initWithStoreURL:store error:&error];
     if (!_notes) NSLog(@"SimpleNotes: the notes do not open: %@", error);
     NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
@@ -43,14 +98,12 @@
     }
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:folders];
     nav.navigationBar.prefersLargeTitles = YES;
-    _window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     _window.rootViewController = nav;
     [_window makeKeyAndVisible];
     if (SNSelfTestRoot) {
         [_notes sync];
         SNStartSelfTest(_notes, nav);
     }
-    return YES;
 }
 
 /* Opened, or back: the server's changes met, what waits sent. */

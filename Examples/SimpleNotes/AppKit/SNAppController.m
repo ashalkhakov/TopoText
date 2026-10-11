@@ -26,14 +26,45 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
-    NSError *error = nil;
     /* -SNStore path: another device on this machine, for trying sync out. */
     NSString *path = [[NSUserDefaults standardUserDefaults] stringForKey:@"SNStore"];
     if (SNSelfTestRoot && !path.length)
         path = [NSTemporaryDirectory() stringByAppendingPathComponent:
                    [NSString stringWithFormat:@"sn-selftest-app-%@.sqlite", [NSProcessInfo processInfo].globallyUniqueString]];
     NSURL *store = path.length ? [NSURL fileURLWithPath:path] : [SNNotes defaultStoreURLNamed:@"SimpleNotes"];
-    _notes = [[SNNotes alloc] initWithStoreURL:store error:&error];
+    _store = store;
+    /* Made by an older version: brought up to this one off the main thread
+       (a minute, with many files), the user told meanwhile; then opened. */
+    if ([SNNotes storeNeedsUpdateAt:store]) {
+        [[NSBundle mainBundle] loadNibNamed:@"UpdatePanel" owner:self topLevelObjects:NULL];
+        [_updatePanel center];
+        [_updateBar startAnimation:nil];
+        [_updatePanel makeKeyAndOrderFront:nil];
+        [self performSelectorInBackground:@selector(updateStore:) withObject:store];
+        return;
+    }
+    [self openNotes:nil];
+}
+
+/* On a thread of its own. */
+- (void)updateStore:(NSURL *)store {
+    @autoreleasepool {
+        NSError *error = nil;
+        BOOL updated = [SNNotes updateStoreAt:store error:&error];
+        [self performSelectorOnMainThread:@selector(openNotes:)
+                               withObject:updated ? nil : error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreOpenError userInfo:nil]
+                            waitUntilDone:NO];
+    }
+}
+
+/* The store opened (failed: why its update failed), and the window. */
+- (void)openNotes:(NSError *)failed {
+    [_updateBar stopAnimation:nil];
+    [_updatePanel orderOut:nil];
+    _updatePanel = nil;
+    NSURL *store = _store;
+    NSError *error = failed;
+    _notes = failed ? nil : [[SNNotes alloc] initWithStoreURL:store error:&error];
     if (!_notes) {
         NSAlert *alert = [[NSAlert alloc] init];
         alert.messageText = @"The notes cannot be opened.";
@@ -63,7 +94,6 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
         return;
     }
     [_notes sync];
-    _store = store;
     /* Synced with devices nearby again if it was (served, and syncing by
        itself); else made when Devices Nearby opens (its identity is a key
        in the keychain: none made for nothing). */

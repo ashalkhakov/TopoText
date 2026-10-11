@@ -26,6 +26,11 @@ NS_ASSUME_NONNULL_BEGIN
 // Each version of the compiled model at momdURL, oldest first by name.
 FOUNDATION_EXPORT NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdURL);
 
+// Whether the store at storeURL (SQLite) is of an older version than the
+// current one, as SNMigrateStore finds it (from its metadata alone, at
+// once): an app tells the user before the migration, which can take a while.
+FOUNDATION_EXPORT BOOL SNStoreNeedsMigration(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper);
+
 // The store at storeURL (SQLite) brought to the current version, with
 // the bookkeeper's bookkeeping added to each version. Nothing to do (no
 // store yet, or one of the current version): YES. A store of no version the

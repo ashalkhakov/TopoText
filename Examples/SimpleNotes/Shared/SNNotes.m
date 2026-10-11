@@ -180,6 +180,16 @@ NSString *SNDateText(NSDate *date) {
     return [dir URLByAppendingPathComponent:@"Notes.sqlite"];
 }
 
++ (BOOL)storeNeedsUpdateAt:(NSURL *)storeURL {
+    NSURL *momd = SNModelURLInBundle([NSBundle mainBundle]);
+    return [momd.pathExtension isEqual:@"momd"] && SNStoreNeedsMigration(storeURL, momd, [ODataSyncEngine class]);
+}
+
++ (BOOL)updateStoreAt:(NSURL *)storeURL error:(NSError **)error {
+    NSURL *momd = SNModelURLInBundle([NSBundle mainBundle]);
+    return ![momd.pathExtension isEqual:@"momd"] || SNMigrateStore(storeURL, momd, [ODataSyncEngine class], error);
+}
+
 - (instancetype)initWithStoreURL:(NSURL *)storeURL error:(NSError **)error {
     return [self initWithStoreURL:storeURL modelURL:nil error:error];
 }

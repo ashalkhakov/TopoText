@@ -48,6 +48,13 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (nullable instancetype)initWithStoreURL:(NSURL *)storeURL error:(NSError **)error;
 // In the user's Application Support, under name.
 + (NSURL *)defaultStoreURLNamed:(NSString *)name;
+// A store made by an older version of the app (the model in the app's
+// bundle), brought up to this one: whether it needs to be (at once, from
+// its metadata), and doing it (which can take a minute: off the main
+// thread, the user told meanwhile). -initWithStoreURL: does it too,
+// waited for, when it has not been done.
++ (BOOL)storeNeedsUpdateAt:(NSURL *)storeURL;
++ (BOOL)updateStoreAt:(NSURL *)storeURL error:(NSError **)error;
 
 // The main queue's: what the views show and change.
 @property (nonatomic, readonly) NSManagedObjectContext *context;
