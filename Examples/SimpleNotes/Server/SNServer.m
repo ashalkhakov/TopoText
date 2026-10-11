@@ -33,6 +33,10 @@
 //   Port, Localhost, AccessLog, and every other HTTPServerKit setting
 //                (HSApplication.h); sign-in too: TrustedUserHeader for a
 //                proxy that signs users in, or JWTIssuer and JWTAudience
+//   MaxPageSize  at most this many rows a response, the rest a next link
+//                away (default 25): a new device's first sync reads every
+//                note and file; all in one response, the user's took the
+//                server over a gigabyte, 200 rows of files 486 MB, 25 273 MB
 //   AllowAnonymous  NO: a request that names no one is refused, once a
 //                sign-in is set (default YES, for trying it out)
 //   AllowAnonymousMetadata  NO: $metadata too is refused to one not
@@ -64,7 +68,7 @@
 @implementation SNServerConfiguration
 + (NSString *)environmentPrefix { return @"SN_"; }
 + (NSArray<NSString *> *)knownSettings {
-    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"MoveFrom", @"MoveFromType", @"ServiceRoot", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
+    return [[super knownSettings] arrayByAddingObjectsFromArray:@[ @"Model", @"StoreType", @"StoreURL", @"MoveFrom", @"MoveFromType", @"ServiceRoot", @"MaxPageSize", @"AllowAnonymous", @"AllowAnonymousMetadata", @"Notebooks", @"GiveUnownedTo", @"PeerKey" ]];
 }
 @end
 
@@ -207,6 +211,9 @@ static NSURL *SNURL(id value) {
                                                             (unsigned long)c.port]];
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:coordinator serviceRoot:root];
     _service.allowsAnonymousRequests = [c flag:@"AllowAnonymous" otherwise:YES];
+    /* Pages, whatever a client asks for: what one response holds is built
+       whole in memory. */
+    _service.maxPageSize = (NSUInteger)MAX(0.0, [c number:@"MaxPageSize" otherwise:25]);
     /* Moved: the history began again with the copy, so every delta link
        given before answers 410, and each device reads its notes again. */
     if (moved && ![_service pruneHistoryBeforeDate:[NSDate date] error:&failure]) {
