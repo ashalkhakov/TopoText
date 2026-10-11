@@ -32,6 +32,8 @@
 @property (nonatomic, strong) ODataService *service;
 @property (nonatomic, copy) NSDictionary *key;
 @property (nonatomic) NSInteger polls, refreshes;
+/* Token polls lost on the way (no answer: the connection lost), first. */
+@property (nonatomic) NSInteger lost;
 @property (nonatomic, copy) NSString *challenge;
 @end
 
@@ -73,6 +75,14 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
                                                           @"verification_uri": @"https://id.test/activate",
                                                           @"verification_uri_complete": @"https://id.test/activate?user_code=WDJB-MJHT",
                                                           @"interval": @0.05, @"expires_in": @60 } options:0 error:NULL];
+    } else if ([url hasSuffix:@"/token"] && [form containsString:@"device_code"] && _lost > 0) {
+        _lost--;
+        NSError *cut = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNetworkConnectionLost
+                                       userInfo:@{ NSLocalizedDescriptionKey: @"The network connection was lost." }];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            done(nil, nil, cut);
+        });
+        return;
     } else if ([url hasSuffix:@"/token"] && [form containsString:@"device_code"]) {
         /* Pending once (the user still signing in), then the tokens; for
            the verifier of the challenge only. */
@@ -200,6 +210,18 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     XCTAssertEqual(s.kind, SNSignInOpenID);
     XCTAssertEqualObjects(s.issuer.absoluteString, @"https://id.test");
     XCTAssertFalse(s.signedIn);
+}
+
+/* Polls lost on the way (iOS cut them while the app waited behind the
+   sign-in page): asked again, and signed in all the same. */
+- (void)testAPollLostOnTheWayIsAskedAgain {
+    SNFakeSignIn *s = [self signInWith:[[SNMemorySecrets alloc] init]];
+    s.lost = 2;
+    [s begin];
+    [self waitFor:&_finished];
+    XCTAssertNil(_failed, @"%@", _failed);
+    XCTAssertTrue(s.signedIn);
+    XCTAssertEqual(s.lost, 0);
 }
 
 /* The device flow: a code shown, signed in elsewhere, tokens kept; a sync
