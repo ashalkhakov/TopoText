@@ -508,6 +508,23 @@ CA
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="View" id="SNm-mn-800">
                         <items>
+                            <menuItem title="as List" keyEquivalent="1" id="SNm-mi-810">
+                                <connections>
+                                    <action selector="showAsList:" target="-1" id="SNm-ac-810"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="as Gallery" keyEquivalent="2" id="SNm-mi-811">
+                                <connections>
+                                    <action selector="showAsGallery:" target="-1" id="SNm-ac-811"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-812"/>
+                            <menuItem title="Show Attachments" keyEquivalent="3" id="SNm-mi-813">
+                                <connections>
+                                    <action selector="showAttachments:" target="-1" id="SNm-ac-813"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-814"/>
                             <menuItem title="Sort By" id="SNm-mi-801">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="Sort By" id="SNm-mn-801">
@@ -613,7 +630,7 @@ CA
                                     <action selector="performMiniaturize:" target="-1" id="SNm-ac-601"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Notes" keyEquivalent="1" id="SNm-mi-602">
+                            <menuItem title="Notes" keyEquivalent="0" id="SNm-mi-602">
                                 <connections>
                                     <action selector="showNotes:" target="SNa-pp-del" id="SNm-ac-602"/>
                                 </connections>

@@ -47,6 +47,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)sortByDateCreated:(nullable id)sender;
 - (IBAction)sortByTitle:(nullable id)sender;
 - (IBAction)toggleGroupByDate:(nullable id)sender;
+// View as Gallery (its ... menu): the cards in its place
+// (SNGalleryViewController), and from now on.
+- (IBAction)viewAsGallery:(nullable id)sender;
 // Sort Folder By: the folder shown, its own order (Default: the device's).
 - (IBAction)sortFolderByDefault:(nullable id)sender;
 - (IBAction)sortFolderByDateEdited:(nullable id)sender;
@@ -65,6 +68,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
                                                        PHPickerViewControllerDelegate, UIDocumentPickerDelegate,
                                                        QLPreviewControllerDataSource>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
+// An attachment of the note scrolled to once it shows (the attachments
+// browser's).
+@property (nonatomic, copy, nullable) NSString *attachmentToShow;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory, as Apple Notes'
 // (an iPhone's width): a table, Aa (styles, and bold, italic, underline,

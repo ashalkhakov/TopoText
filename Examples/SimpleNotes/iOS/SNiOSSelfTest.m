@@ -1,5 +1,6 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
+#import "SNGalleryViewController.h"
 #import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
@@ -322,6 +323,47 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         [stv resignFirstResponder];
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
+
+        /* The gallery: the notes as cards, Weekend's with its photo. */
+        SNGalleryViewController *gallery = [[SNGalleryViewController alloc] initWithNotes:notes folder:nil];
+        [navigation pushViewController:gallery animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        NSUInteger weekendCard = [[gallery shownRows] indexOfObject:@"Weekend"];
+        SNSay(weekendCard != NSNotFound && [[gallery shownRows] containsObject:@"Groceries"],
+              [NSString stringWithFormat:@"the gallery has the notes (%@)", [[gallery shownRows] componentsJoinedByString:@", "]]);
+        UIImage * (^weekendPicture)(void) = ^UIImage *{
+            for (UICollectionViewCell *cell in gallery.collectionView.visibleCells) {
+                UIImageView *picture = [cell valueForKey:@"picture"];
+                if ([[[cell valueForKey:@"titleLabel"] text] isEqual:@"Weekend"] && picture.image) return picture.image;
+            }
+            return nil;
+        };
+        SNWait(5, ^BOOL { return weekendPicture() != nil; });
+        SNSay(weekendPicture() != nil, @"and Weekend's card its photo");
+        /* SN_SELF_TEST_HOLD: held up a while, for the simulator's own
+           screenshot (xcrun simctl io screenshot). */
+        if (getenv("SN_SELF_TEST_HOLD")) {
+            fprintf(stderr, "self-test: the gallery is up\n");
+            SNWait(4, ^BOOL { return NO; });
+        }
+        [navigation popViewControllerAnimated:NO];
+        /* View Attachments: the photo, and the file, each its note's. */
+        SNAttachmentsViewController *browser = [[SNAttachmentsViewController alloc] initWithNotes:notes];
+        [navigation pushViewController:browser animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNNote *weekendNote = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
+        NSArray *photos = browser.shownItems;
+        SNSay(photos.count == 1 && [[photos.firstObject noteID] isEqual:weekendNote.objectID],
+              [NSString stringWithFormat:@"View Attachments has the photo (%lu)", (unsigned long)photos.count]);
+        if (getenv("SN_SELF_TEST_HOLD")) {
+            fprintf(stderr, "self-test: the attachments are up\n");
+            SNWait(4, ^BOOL { return NO; });
+        }
+        browser.showsFiles = YES;
+        SNSay(browser.shownItems.count == 1 && [[browser.shownItems.firstObject name] isEqual:@"Lease.pdf"],
+              [NSString stringWithFormat:@"and, under Files, the file (%lu)", (unsigned long)browser.shownItems.count]);
+        [navigation popViewControllerAnimated:NO];
+        SNWait(0.3, ^BOOL { return NO; });
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];

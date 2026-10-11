@@ -851,6 +851,51 @@
     XCTAssertNil([a attachmentWithID:attachmentID], @"and everywhere");
 }
 
+- (void)testTheAttachmentsBrowserListsWhatTheNotesShow {
+    SNNotes *a = [self device];
+    NSData *png = [NSData dataWithBytes:"\x89PNG not really" length:16];
+    NSData *pdf = [@"%PDF-1.4 a little document" dataUsingEncoding:NSUTF8StringEncoding];
+    SNNote *trip = [a addNoteInFolder:nil];
+    SNAttachment *beach = [a addImageToNote:trip data:png type:@"image/png" width:4 height:3];
+    SNAttachment *hills = [a addImageToNote:trip data:png type:@"image/png" width:4 height:3];
+    SNAttachment *tickets = [a addFileToNote:trip data:pdf name:@"Tickets.pdf" type:@"application/pdf"];
+    beach.created = [NSDate dateWithTimeIntervalSinceNow:-300];
+    hills.created = [NSDate dateWithTimeIntervalSinceNow:-200];
+    [self edit:trip on:a with:^(TopoText *t) {
+        [t insertString:@"Trip \uFFFC \uFFFC \uFFFC" atIndex:0 attributes:nil];
+        [t addAttributes:@{ @"attachment": hills.id } range:NSMakeRange(5, 1)];
+        [t addAttributes:@{ @"attachment": beach.id } range:NSMakeRange(7, 1)];
+        [t addAttributes:@{ @"attachment": tickets.id } range:NSMakeRange(9, 1)];
+    }];
+    XCTAssertEqualObjects([a firstImageIDOfNote:trip], hills.id, @"the first in the text");
+    /* Taken out of the text: kept (an undo), not listed. */
+    [self edit:trip on:a with:^(TopoText *t) { [t deleteCharactersInRange:NSMakeRange(5, 2)]; }];
+    XCTAssertNotNil([a attachmentWithID:hills.id]);
+    XCTAssertEqualObjects([a firstImageIDOfNote:trip], beach.id);
+    /* A deleted note's: not listed. */
+    SNNote *gone = [a addNoteInFolder:nil];
+    SNAttachment *old = [a addImageToNote:gone data:png type:@"image/png" width:4 height:3];
+    [self edit:gone on:a with:^(TopoText *t) {
+        [t insertString:@"Old \uFFFC" atIndex:0 attributes:nil];
+        [t addAttributes:@{ @"attachment": old.id } range:NSMakeRange(4, 1)];
+    }];
+    [a deleteNote:gone];
+    /* The newest first. */
+    SNNote *garden = [a addNoteInFolder:nil];
+    SNAttachment *roses = [a addImageToNote:garden data:png type:@"image/png" width:4 height:3];
+    [self edit:garden on:a with:^(TopoText *t) {
+        [t insertString:@"Roses \uFFFC" atIndex:0 attributes:nil];
+        [t addAttributes:@{ @"attachment": roses.id } range:NSMakeRange(6, 1)];
+    }];
+    NSArray<SNAttachmentItem *> *images = [a attachmentsOfKind:SNAttachmentKindImage];
+    XCTAssertEqualObjects([images valueForKey:@"attachmentID"], (@[ roses.id, beach.id ]));
+    XCTAssertEqualObjects(images.lastObject.noteID, trip.objectID);
+    NSArray<SNAttachmentItem *> *files = [a attachmentsOfKind:SNAttachmentKindFile];
+    XCTAssertEqualObjects([files valueForKey:@"attachmentID"], @[ tickets.id ]);
+    XCTAssertEqualObjects(files.firstObject.name, @"Tickets.pdf");
+    XCTAssertNil([a firstImageIDOfNote:[a addNoteInFolder:nil]], @"none in an empty note");
+}
+
 - (void)testAFileGoesToTheOtherDevice {
     SNNotes *a = [self device], *b = [self device];
     SNNote *note = [a addNoteInFolder:nil];

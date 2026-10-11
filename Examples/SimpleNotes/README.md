@@ -3,11 +3,11 @@
 A small Apple Notes: folders (and folders in folders), notes in rich text
 with headings, lists and checklists, block quotes, colours and highlights,
 links, images and tables, tags, search, find and replace in a note, printing
-and PDF export, pinning, sorting and grouping by date, Recently Deleted, and
-moving notes between folders. It runs on macOS and on Linux (AppKit, through
-GNUstep), and on iPhone and iPad. Every note is kept on the device and works
-offline. Notes sync with a server, `simplenotes-server`, which serves them
-over OData.
+and PDF export, a gallery view, an attachments browser, pinning, sorting and
+grouping by date, Recently Deleted, and moving notes between folders. It
+runs on macOS and on Linux (AppKit, through GNUstep), and on iPhone and
+iPad. Every note is kept on the device and works offline. Notes sync with a
+server, `simplenotes-server`, which serves them over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
@@ -128,6 +128,27 @@ the PDF through cairo.
 On iOS, the note's ••• menu has **Print**, which opens the system's print
 sheet, and **Export as PDF**, which offers the file to Save to Files,
 AirDrop, Mail and so on. Pages are A4, or Letter where inches are used.
+
+## Gallery and attachments
+
+**View > as Gallery** (⌘2) shows the notes as cards: each note's first
+image, or the start of its text, with its title and date under it. The
+cards take the list's place, and its pane widens for them. Choosing a card
+opens its note, as choosing a row does. **View > as List** (⌘1) brings the
+list back. The choice is remembered. Window > Notes is ⌘0, as in Apple Notes.
+
+**View > Show Attachments** (⌘3) opens a window with every image in the
+notes (**Photos**) and every file (**Files**), the newest first. Choosing
+one shows its note in All Notes, scrolled to where it is. An attachment
+taken out of its note's text is kept (Undo, or another device, can bring
+it back) but isn't listed.
+
+On iOS, a list's ••• menu has **View as Gallery** (and the gallery's has
+**View as List**), and the folders' menu has **View Attachments**.
+
+Pictures are made small, when their cards come into view, one at a time,
+and kept for a while; an image's data isn't held in memory once its
+picture is made.
 
 ## Links
 

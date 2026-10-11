@@ -176,7 +176,7 @@ jobs:
       # (#72): a context that related objects is let go of; 5247095 (#73):
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
-      GNUSTEP_PATCHES_REF: 43dcb1fa0d6d468029d66dfeb250ae42bc1d8b10
+      GNUSTEP_PATCHES_REF: d39a393fbcfc8082f23444fbd1d6f236d42f62b4
       FREECOREDATA_REF: 5bfd5a87179cff43e0a8a55622fc00f01951c88a
     defaults:
       run:

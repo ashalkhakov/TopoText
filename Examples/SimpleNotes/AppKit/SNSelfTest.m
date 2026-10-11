@@ -52,6 +52,22 @@ NSURL *SNSelfTestRoot;
 
 static int SNFailed;
 
+/* A window as it is now, drawn into a picture (the README's screenshots). */
+static BOOL SNSnapshotWindow(NSWindow *w, NSString *path) {
+    NSView *v = w.contentView;
+    /* Drawn whole first: gnustep-gui's cacheDisplayInRect: copies what the
+       window last displayed. */
+    [w display];
+    NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
+    [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
+#ifdef GNUSTEP
+    NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+    NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+    return [png writeToFile:path atomically:YES];
+}
+
 static void SNSay(BOOL ok, NSString *what) {
     fprintf(stderr, "%s %s\n", ok ? "PASS" : "FAIL", what.UTF8String);
     if (!ok) SNFailed++;
@@ -506,19 +522,38 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
            into a picture (the README's screenshots). */
         if (snapshot) {
             tv.selectedRange = NSMakeRange(tv.string.length, 0);
-            NSView *v = window.window.contentView;
-            /* Drawn whole first: gnustep-gui's cacheDisplayInRect: copies
-               what the window last displayed. */
-            [window.window display];
-            NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
-            [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
-#ifdef GNUSTEP
-            NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
-#else
-            NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
-#endif
-            SNSay([png writeToFile:@(snapshot) atomically:YES], [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
+            SNSay(SNSnapshotWindow(window.window, @(snapshot)), [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
         }
+
+        /* View > as Gallery: the notes as cards, Weekend's with its photo;
+           a card chosen opens its note. */
+        SNNote *weekendNote = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
+        SNNote *groceriesNote = [notes notesInFolder:nil matching:@"Groceries"].firstObject;
+        SNSay([tv tryToPerform:@selector(showAsGallery:) with:nil] && !window.gallery.view.isHidden && window.noteTable.enclosingScrollView.isHidden &&
+              [window.gallery.shownNotes containsObject:weekendNote] && [window.gallery.shownNotes containsObject:groceriesNote],
+              [NSString stringWithFormat:@"View as Gallery: the notes as cards (%lu)", (unsigned long)window.gallery.shownNotes.count]);
+        SNWait(5, ^BOOL { return [window.gallery pictureOfNote:weekendNote] != nil; });
+        SNSay([window.gallery pictureOfNote:weekendNote] != nil, @"and Weekend's card its photo");
+        if (snapshot) SNSnapshotWindow(window.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-gallery.png"]);
+        [window gallery:window.gallery didChooseNote:groceriesNote];
+        SNSay([tv.string hasPrefix:@"Groceries"], @"a card chosen opens its note");
+        SNSay([tv tryToPerform:@selector(showAsList:) with:nil] && window.gallery.view.isHidden && !window.noteTable.enclosingScrollView.isHidden,
+              @"View as List: the list again");
+        /* View > Show Attachments: the photo, the file; one chosen shows its
+           note, where it is. */
+        SNSay([tv tryToPerform:@selector(showAttachments:) with:nil] && window.attachmentsWindow.window.isVisible &&
+              window.attachmentsWindow.shownItems.count == 1 && [window.attachmentsWindow.shownItems.firstObject.noteID isEqual:weekendNote.objectID],
+              [NSString stringWithFormat:@"Show Attachments: the photo (%lu)", (unsigned long)window.attachmentsWindow.shownItems.count]);
+        if (snapshot) SNWait(1, ^BOOL { return NO; });
+        if (snapshot) SNSnapshotWindow(window.attachmentsWindow.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-attachments.png"]);
+        window.attachmentsWindow.showsFiles = YES;
+        SNAttachmentItem *leaseItem = window.attachmentsWindow.shownItems.firstObject;
+        SNSay(window.attachmentsWindow.shownItems.count == 1 && [leaseItem.name isEqual:@"Lease.pdf"], @"and, under Files, the file");
+        [window attachmentsWindow:window.attachmentsWindow didChooseAttachment:leaseItem];
+        SNSay([tv.string hasPrefix:@"Weekend"] && tv.selectedRange.location < tv.string.length &&
+              [[tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.selectedRange.location effectiveRange:NULL] isEqual:leaseItem.attachmentID],
+              @"one chosen shows its note, where it is");
+        [window.attachmentsWindow close];
 
         /* Deleted from the window, into Recently Deleted on the other device;
            recovered from Recently Deleted, back there too. */

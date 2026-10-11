@@ -8,6 +8,7 @@
 #import "SNNotes.h"
 #import "SNTextView.h"
 #import "SNTransferPanel.h"
+#import "SNGallery.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -15,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
                                                     NSTableViewDelegate, SNTextViewDelegate, SNNoteEditorDelegate,
-                                                    SNTransferPanelDelegate>
+                                                    SNTransferPanelDelegate, SNGalleryDelegate, SNAttachmentsWindowDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The sidebar: All Notes, the folders (folders in folders under them),
 // Recently Deleted, and the tags.
@@ -102,6 +103,16 @@ NS_ASSUME_NONNULL_BEGIN
 // then SNColorNames' order: purple, pink, orange, mint, blue).
 - (IBAction)applyHighlightColor:(nullable id)sender;
 - (IBAction)applyTextColor:(nullable id)sender;
+// View > as List (Command-1) and as Gallery (Command-2): the notes as rows
+// or as cards, in the list's place (the pane wider for cards), from now
+// on; a card chosen opens its note as a row does.
+- (IBAction)showAsList:(nullable id)sender;
+- (IBAction)showAsGallery:(nullable id)sender;
+@property (nonatomic, readonly) SNGallery *gallery;
+// View > Show Attachments (Command-3): every image and file in the notes,
+// in a window of its own; one chosen shows its note, where it is.
+- (IBAction)showAttachments:(nullable id)sender;
+@property (nonatomic, readonly, nullable) SNAttachmentsWindow *attachmentsWindow;
 // Edit > Find > Search: the notes' search field.
 // File > Print… (Command-P) and Export as PDF…: the open note laid out on
 // paper, as it is now (what was typed and not yet saved too): its lists,

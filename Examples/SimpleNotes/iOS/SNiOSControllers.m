@@ -5,6 +5,7 @@
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
 #import "SNMenuAction.h"
+#import "SNGalleryViewController.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
 #import "SNTransferViewController.h"
@@ -119,7 +120,9 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
             }],
             [UIAction actionWithTitle:@"Export All Notes" image:[UIImage systemImageNamed:@"square.and.arrow.up"] identifier:nil handler:^(UIAction *a) {
                 [self exportAllNotes:nil];
-            }] ]] ]];
+            }] ]],
+        /* Every image and file in the notes (Apple Notes' View Attachments). */
+        SNMenuAction(@"View Attachments", [UIImage systemImageNamed:@"paperclip"], @selector(viewAttachments:), self) ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItems = @[
         [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
@@ -454,9 +457,13 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (void)tableView:(UITableView *)t didSelectRowAtIndexPath:(NSIndexPath *)ip {
     UIViewController *next;
     if (ip.section == SNDeletedSection) next = [[SNNotesViewController alloc] initRecentlyDeletedWithNotes:_notes];
-    else if (ip.section == SNTagsSection) next = [[SNNotesViewController alloc] initWithNotes:_notes tag:_tags[(NSUInteger)ip.row]];
-    else next = [[SNNotesViewController alloc] initWithNotes:_notes folder:ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil];
+    else if (ip.section == SNTagsSection) next = SNNotesControllerFor(_notes, nil, _tags[(NSUInteger)ip.row]);
+    else next = SNNotesControllerFor(_notes, ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil, nil);
     [self.navigationController pushViewController:next animated:YES];
+}
+
+- (IBAction)viewAttachments:(id)sender {
+    [self.navigationController pushViewController:[[SNAttachmentsViewController alloc] initWithNotes:_notes] animated:YES];
 }
 
 - (BOOL)isOpen:(SNFolder *)folder {
@@ -626,7 +633,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortByDateEdited:) on:order == SNSortByDateEdited],
         [self sortCommand:@"Date Created" action:@selector(sortByDateCreated:) on:order == SNSortByDateCreated],
         [self sortCommand:@"Title" action:@selector(sortByTitle:) on:order == SNSortByTitle] ]];
-    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    UIAction *gallery = SNMenuAction(@"View as Gallery", [UIImage systemImageNamed:@"square.grid.2x2"], @selector(viewAsGallery:), self);
+    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ gallery, sortBy, group ]];
     /* The folder's own order, synced with it (Default: the device's). */
     NSNumber *own = [_notes sortOrderOfFolder:_folder];
     UIMenu *folderBy = [UIMenu menuWithTitle:@"Sort Folder By" image:[UIImage systemImageNamed:@"folder"] identifier:nil options:0 children:@[
@@ -634,7 +642,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortFolderByDateEdited:) on:[own isEqual:@(SNSortByDateEdited)]],
         [self sortCommand:@"Date Created" action:@selector(sortFolderByDateCreated:) on:[own isEqual:@(SNSortByDateCreated)]],
         [self sortCommand:@"Title" action:@selector(sortFolderByTitle:) on:[own isEqual:@(SNSortByTitle)]] ]];
-    return [UIMenu menuWithTitle:@"" children:@[ folderBy, sortBy, group ]];
+    return [UIMenu menuWithTitle:@"" children:@[ gallery, folderBy, sortBy, group ]];
+}
+
+- (IBAction)viewAsGallery:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:SNGalleryDefaultsKey];
+    UINavigationController *nav = self.navigationController;
+    NSMutableArray *stack = [nav.viewControllers mutableCopy];
+    NSUInteger i = [stack indexOfObject:self];
+    if (i == NSNotFound) return;
+    stack[i] = SNNotesControllerFor(_notes, _tag ? nil : _folder, _tag);
+    [nav setViewControllers:stack animated:NO];
 }
 
 - (UICommand *)sortCommand:(NSString *)title action:(SEL)action on:(BOOL)on {
@@ -1026,6 +1044,19 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [super viewWillAppear:animated];
     self.navigationController.toolbarHidden = YES;
     if (!_textView.text.length && !_note.deletedAt) [_textView becomeFirstResponder];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (!_attachmentToShow) return;
+    NSTextStorage *storage = _textView.textStorage;
+    for (NSUInteger i = 0; i < storage.length; i++) {
+        if ([[storage attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL] isEqual:_attachmentToShow]) {
+            [_textView scrollRangeToVisible:NSMakeRange(i, 1)];
+            break;
+        }
+    }
+    _attachmentToShow = nil;
 }
 
 /* Wider or narrower (turned, a split view, first laid out): images sized

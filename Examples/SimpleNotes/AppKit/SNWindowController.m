@@ -47,6 +47,10 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     SNTextBinding *_binding;
     /* The open note's tables, each over its place in the text. */
     SNTableGrids *_grids;
+    /* The notes as cards, in the list's place when chosen; the list's
+       pane's width before it widened for them. */
+    SNGallery *_gallery;
+    CGFloat _listWidth;
     /* A note on paper while it prints: its binding and tables' grids. */
     SNTextBinding *_paperBinding;
     SNTableGrids *_paperGrids;
@@ -116,9 +120,82 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [_folderTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
     _collapsed = [NSMutableSet set];
     [_noteTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
+    /* The cards, where the list is, shown instead of it when chosen. */
+    NSScrollView *list = _noteTable.enclosingScrollView;
+    _gallery = [[SNGallery alloc] initWithNotes:_notes];
+    _gallery.delegate = self;
+    _gallery.view.frame = list.frame;
+    _gallery.view.autoresizingMask = list.autoresizingMask;
+    _gallery.view.hidden = YES;
+    [list.superview addSubview:_gallery.view];
     [self reloadFolders];
+    [self showGallery:[[NSUserDefaults standardUserDefaults] boolForKey:SNGalleryDefaultsKey]];
     [self reloadNotes];
     [self showStatus:_notes.status];
+}
+
+#pragma mark the gallery and the attachments
+
+- (IBAction)showAsList:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:SNGalleryDefaultsKey];
+    [self showGallery:NO];
+}
+
+- (IBAction)showAsGallery:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:SNGalleryDefaultsKey];
+    [self showGallery:YES];
+}
+
+/* The cards in the list's place, its pane widened for them (half of what
+   the note had); or the list again, its width as it was. */
+- (void)showGallery:(BOOL)cards {
+    NSScrollView *list = _noteTable.enclosingScrollView;
+    NSView *pane = list.superview;
+    NSSplitView *split = [pane.superview isKindOfClass:[NSSplitView class]] ? (NSSplitView *)pane.superview : nil;
+    if (cards == !_gallery.view.isHidden) return;
+    if (cards) {
+        _listWidth = pane.frame.size.width;
+        CGFloat from = NSMinX(pane.frame), room = NSWidth(split.bounds) - from;
+        [split setPosition:from + MAX(_listWidth, room / 2) ofDividerAtIndex:1];
+        _gallery.view.frame = list.frame;
+    } else if (_listWidth > 0) {
+        [split setPosition:NSMinX(pane.frame) + _listWidth ofDividerAtIndex:1];
+    }
+    list.hidden = cards;
+    _gallery.view.hidden = !cards;
+    [self reloadNotes];
+}
+
+- (void)gallery:(SNGallery *)gallery didChooseNote:(SNNote *)note {
+    NSUInteger row = [_rows indexOfObject:note];
+    if (row != NSNotFound) [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+}
+
+- (IBAction)showAttachments:(id)sender {
+    if (!_attachmentsWindow) {
+        _attachmentsWindow = [[SNAttachmentsWindow alloc] initWithNotes:_notes];
+        _attachmentsWindow.delegate = self;
+    } else {
+        [_attachmentsWindow reload];
+    }
+    [_attachmentsWindow showWindow:nil];
+}
+
+/* Its note, in All Notes, scrolled to where it is. */
+- (void)attachmentsWindow:(SNAttachmentsWindow *)window didChooseAttachment:(SNAttachmentItem *)item {
+    SNNote *note = [_notes noteForObjectID:item.noteID];
+    if (!note) return;
+    [self showAllNotes];
+    [self gallery:_gallery didChooseNote:note];
+    if (![_editor.noteID isEqual:note.objectID]) [self openNote:note];
+    NSTextStorage *storage = _textView.textStorage;
+    for (NSUInteger i = 0; i < storage.length; i++) {
+        if (![[storage attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL] isEqual:item.attachmentID]) continue;
+        _textView.selectedRange = NSMakeRange(i, 1);
+        [_textView scrollRangeToVisible:NSMakeRange(i, 1)];
+        break;
+    }
+    [self.window makeKeyAndOrderFront:nil];
 }
 
 - (void)showStatus:(NSString *)status {
@@ -263,6 +340,13 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         if ([_rows[i] isKindOfClass:[SNNote class]] && [[_rows[i] objectID] isEqual:selected]) row = i;
     if (row != NSNotFound) [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
     else [_noteTable deselectAll:nil];
+    if (!_gallery.view.isHidden) {
+        NSMutableArray *cards = [NSMutableArray array];
+        for (id r in _rows)
+            if ([r isKindOfClass:[SNNote class]]) [cards addObject:r];
+        _gallery.shownNotes = cards;
+        [_gallery chooseNote:row != NSNotFound ? _rows[row] : nil];
+    }
     _reloading = NO;
     /* The open note left this list (deleted, recovered, moved, here or
        elsewhere): closed. One still here follows whether it is deleted. */
@@ -1177,6 +1261,10 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(showAsList:) || a == @selector(showAsGallery:)) {
+        item.state = (a == @selector(showAsGallery:)) == !_gallery.view.isHidden ? NSControlStateValueOn : NSControlStateValueOff;
+        return YES;
+    }
     if (a == @selector(printNote:) || a == @selector(exportNoteAsPDF:)) return _editor != nil;
     if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
     if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
