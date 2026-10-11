@@ -101,6 +101,10 @@ FOUNDATION_EXPORT void SNSystemTextChanged(id<SNTextViewing> view);
 // A text view's drawing done again (the list markers: a range of its
 // characters, or all).
 FOUNDATION_EXPORT void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range);
+// The headings' chevrons shown beside a note's text (not on paper, nor in
+// a table's cell): drawn with the glyphs where the margin can be drawn in
+// so, else by a view over the text view's.
+FOUNDATION_EXPORT void SNSystemShowChevrons(id<SNTextViewing> view);
 // observer sent selector (an NSNotification) when the view's width may
 // have changed; nothing where its controller says so instead (UIKit's
 // -viewDidLayoutSubviews).

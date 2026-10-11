@@ -99,6 +99,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)decreaseIndentation:(nullable id)sender;
 // Format > Block Quote (Command-'): the paragraphs quoted, or not.
 - (IBAction)toggleBlockQuote:(nullable id)sender;
+// Format > Collapse All Sections and Expand All Sections: every heading's
+// (a chevron beside each collapses or expands one, as Apple Notes').
+- (IBAction)collapseAllSections:(nullable id)sender;
+- (IBAction)expandAllSections:(nullable id)sender;
 // Format > Highlight and Text Color: the item's tag the colour (0 none,
 // then SNColorNames' order: purple, pink, orange, mint, blue).
 - (IBAction)applyHighlightColor:(nullable id)sender;

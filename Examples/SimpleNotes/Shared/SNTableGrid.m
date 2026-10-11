@@ -489,7 +489,11 @@ static SNRect SNGridRect(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
     }
     for (NSUInteger k = 0; k < ids.count; k++) {
         SNTableGrid *grid = _byID[ids[k]];
-        if (grid) [self place:grid at:places[k].unsignedIntegerValue];
+        if (!grid) continue;
+        /* In a collapsed section: hidden with it. */
+        BOOL hidden = [_binding isHiddenAt:places[k].unsignedIntegerValue];
+        if ([grid isHidden] != hidden) [grid setHidden:hidden];   /* gnustep-gui: methods, no property */
+        if (!hidden) [self place:grid at:places[k].unsignedIntegerValue];
     }
     _updating = NO;
 }

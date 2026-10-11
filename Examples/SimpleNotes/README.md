@@ -1,13 +1,14 @@
 # SimpleNotes
 
 A small Apple Notes: folders (and folders in folders), notes in rich text
-with headings, lists and checklists, block quotes, colours and highlights,
-links, images and tables, tags, search, find and replace in a note, printing
-and PDF export, a gallery view, an attachments browser, pinning, sorting and
-grouping by date, Recently Deleted, and moving notes between folders. It
-runs on macOS and on Linux (AppKit, through GNUstep), and on iPhone and
-iPad. Every note is kept on the device and works offline. Notes sync with a
-server, `simplenotes-server`, which serves them over OData.
+with headings, lists and checklists, block quotes, collapsible sections,
+colours and highlights, links, images and tables, tags, search, find and
+replace in a note, printing and PDF export, a gallery view, an attachments
+browser, pinning, sorting and grouping by date, Recently Deleted, and moving
+notes between folders. It runs on macOS and on Linux (AppKit, through
+GNUstep), and on iPhone and iPad. Every note is kept on the device and works
+offline. Notes sync with a server, `simplenotes-server`, which serves them
+over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
@@ -128,6 +129,20 @@ the PDF through cairo.
 On iOS, the note's ••• menu has **Print**, which opens the system's print
 sheet, and **Export as PDF**, which offers the file to Save to Files,
 AirDrop, Mail and so on. Pages are A4, or Letter where inches are used.
+
+## Collapsed sections
+
+A title, heading or subheading with something under it has a chevron in the
+margin to its left. Clicking (or tapping) it collapses the section: what
+follows the heading, down to the next heading at the same level or higher,
+is hidden. **Format > Collapse All Sections** and **Expand All Sections**
+(on iOS, in the note's ••• menu) do all of them at once.
+
+Collapsing is a paragraph attribute of the heading, `collapsed`, so it syncs
+and merges like other formatting. Hiding is the view's alone: the text is
+unchanged, and export and search see all of it. The insertion point moves
+past a hidden section rather than into it, and Return at the end of a
+collapsed heading expands it first, so what you type next is visible.
 
 ## Gallery and attachments
 

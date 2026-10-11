@@ -355,6 +355,18 @@ CA
                                     <action selector="toggleBlockQuote:" target="-1" id="SNm-ac-421"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Collapse All Sections" id="SNm-mi-422">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="collapseAllSections:" target="-1" id="SNm-ac-422"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Expand All Sections" id="SNm-mi-423">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="expandAllSections:" target="-1" id="SNm-ac-423"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-416"/>
                             <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-417">
                                 <connections>

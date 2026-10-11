@@ -57,6 +57,9 @@ FOUNDATION_EXPORT NSString * const SNListCheck;      // @"check"
 FOUNDATION_EXPORT NSString * const SNCheckedKey;     // @"checked"
 FOUNDATION_EXPORT NSString * const SNIndentKey;      // @"indent"
 FOUNDATION_EXPORT NSString * const SNQuoteKey;       // @"quote" (a block quote)
+// A heading's section collapsed (a title's, a heading's, a subheading's):
+// what follows it hidden, to the next heading as high or higher.
+FOUNDATION_EXPORT NSString * const SNCollapsedKey;   // @"collapsed"
 // A character's colour and highlight: a colour's name, one of
 // SNColorNames(), which each system shows as its own (dark mode too).
 FOUNDATION_EXPORT NSString * const SNColorKey;       // @"color"
@@ -71,6 +74,10 @@ FOUNDATION_EXPORT NSString * const SNListAttributeName;     // @"SNList"
 FOUNDATION_EXPORT NSString * const SNCheckedAttributeName;  // @"SNChecked"
 FOUNDATION_EXPORT NSString * const SNIndentAttributeName;   // @"SNIndent"
 FOUNDATION_EXPORT NSString * const SNQuoteAttributeName;    // @"SNQuote"
+FOUNDATION_EXPORT NSString * const SNCollapsedAttributeName;  // @"SNCollapsed"
+// The view's only: what a collapsed section hides (drawn as nothing, no
+// taller than nothing).
+FOUNDATION_EXPORT NSString * const SNHiddenAttributeName;     // @"SNHidden"
 // A colour's or highlight's name, beside the system colour shown for it.
 FOUNDATION_EXPORT NSString * const SNColorAttributeName;     // @"SNColor"
 FOUNDATION_EXPORT NSString * const SNHighlightAttributeName; // @"SNHighlight"
@@ -184,6 +191,15 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // item), or not when they all are already. Return on an empty quoted line
 // ends the quote, as on an empty list item.
 - (void)toggleQuoteForParagraphsInRange:(NSRange)range;
+// Collapsed sections, as Apple Notes has them: a heading's (a title's, a
+// heading's, a subheading's) collapsed or expanded; all of them. The
+// insertion point does not stop in what is hidden, and Return at the end
+// of a collapsed heading expands it.
+- (void)toggleCollapsedAt:(NSUInteger)index;
+- (void)setAllSectionsCollapsed:(BOOL)collapsed;
+// A heading with something under it, which it can hide.
+- (BOOL)hasSectionAt:(NSUInteger)index;
+- (BOOL)isHiddenAt:(NSUInteger)index;
 // The checklist a place is in (its items one after another), its ticked
 // items moved after the others, as Apple Notes' Move Checked to Bottom;
 // NO when nothing moved. Only the ticked ones out of place move, each a
@@ -229,6 +245,15 @@ FOUNDATION_EXPORT NSAttributedString *SNViewString(TopoText *text);
 // The paragraph whose checkbox is at point (in the text container's
 // coordinates), its first character's index; NSNotFound for none.
 - (NSUInteger)checkboxAtPoint:(SNPoint)point;
+// The heading whose chevron (left of it) is at a point: its first
+// character's index; NSNotFound: none.
+- (NSUInteger)sectionToggleAtPoint:(SNPoint)point;
+// The headings' chevrons, in the margin left of the text, the container's
+// origin at origin: drawn with the glyphs (drawsChevrons), or by a view
+// over the text where the system's text view covers its margin
+// (SNSystemShowChevrons says which).
+- (void)drawChevronsAtPoint:(SNPoint)origin;
+@property (nonatomic) BOOL drawsChevrons;
 @end
 
 NS_ASSUME_NONNULL_END

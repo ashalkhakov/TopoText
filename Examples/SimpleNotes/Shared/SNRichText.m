@@ -21,6 +21,9 @@ NSString * const SNListCheck = @"check";
 NSString * const SNCheckedKey = @"checked";
 NSString * const SNIndentKey = @"indent";
 NSString * const SNQuoteKey = @"quote";
+NSString * const SNCollapsedKey = @"collapsed";
+NSString * const SNCollapsedAttributeName = @"SNCollapsed";
+NSString * const SNHiddenAttributeName = @"SNHidden";
 NSString * const SNColorKey = @"color";
 NSString * const SNHighlightKey = @"highlight";
 NSString * const SNQuoteAttributeName = @"SNQuote";
@@ -44,7 +47,7 @@ static const NSInteger SNMaxIndent = 8;
 
 NSSet<NSString *> *SNParagraphKeys(void) {
     static NSSet *keys;
-    if (!keys) keys = [NSSet setWithObjects:SNStyleKey, SNListKey, SNCheckedKey, SNIndentKey, SNQuoteKey, nil];
+    if (!keys) keys = [NSSet setWithObjects:SNStyleKey, SNListKey, SNCheckedKey, SNIndentKey, SNQuoteKey, SNCollapsedKey, nil];
     return keys;
 }
 
@@ -66,6 +69,11 @@ static BOOL SNIsStyle(id style) {
 /* A title, a heading or a subheading: bold by its style. */
 static BOOL SNIsBoldStyle(id style) {
     return SNIsStyle(style) && ![style isEqual:SNStyleMono];
+}
+
+/* How high a heading is: a title 1, a heading 2, a subheading 3; else 0. */
+static NSInteger SNHeadingLevel(id style) {
+    return [style isEqual:SNStyleTitle] ? 1 : [style isEqual:SNStyleHeading] ? 2 : [style isEqual:SNStyleSubheading] ? 3 : 0;
 }
 
 static BOOL SNIsList(id list) {
@@ -91,6 +99,9 @@ static NSDictionary *SNParagraphOf(NSDictionary *attrs) {
     NSInteger indent = SNIndentOf(attrs[SNIndentKey]);
     if (indent) p[SNIndentKey] = @(indent);
     if ([attrs[SNQuoteKey] respondsToSelector:@selector(boolValue)] && [attrs[SNQuoteKey] boolValue]) p[SNQuoteKey] = @YES;
+    /* Only a heading collapses. */
+    if (SNHeadingLevel(p[SNStyleKey]) && [attrs[SNCollapsedKey] respondsToSelector:@selector(boolValue)] && [attrs[SNCollapsedKey] boolValue])
+        p[SNCollapsedKey] = @YES;
     return p;
 }
 
@@ -105,7 +116,7 @@ static NSMutableDictionary *SNInlineOf(NSDictionary *attrs) {
    not ticked, body after a title, as Apple Notes has it. */
 static NSDictionary *SNNextParagraph(NSDictionary *p) {
     NSMutableDictionary *n = [SNParagraphOf(p) mutableCopy];
-    [n removeObjectForKey:SNCheckedKey];
+    [n removeObjectsForKeys:@[ SNCheckedKey, SNCollapsedKey ]];
     if (SNIsBoldStyle(n[SNStyleKey])) [n removeObjectForKey:SNStyleKey];
     return n;
 }
@@ -203,6 +214,7 @@ NSDictionary *SNViewAttributes(NSDictionary *attrs) {
     if (p[SNCheckedKey]) v[SNCheckedAttributeName] = @YES;
     if (p[SNIndentKey]) v[SNIndentAttributeName] = p[SNIndentKey];
     if (p[SNQuoteKey]) v[SNQuoteAttributeName] = @YES;
+    if (p[SNCollapsedKey]) v[SNCollapsedAttributeName] = @YES;
     v[NSParagraphStyleAttributeName] = SNParagraphStyle(SNIndentOf(p[SNIndentKey]), list != nil, p[SNQuoteKey] != nil);
     return v;
 }
@@ -214,6 +226,7 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     t[SNCheckedKey] = view[SNCheckedAttributeName];
     t[SNIndentKey] = view[SNIndentAttributeName];
     t[SNQuoteKey] = view[SNQuoteAttributeName];
+    t[SNCollapsedKey] = view[SNCollapsedAttributeName];
     t = [SNParagraphOf(t) mutableCopy];
     NSString *style = t[SNStyleKey];
     SNFont *font = view[NSFontAttributeName];
@@ -241,6 +254,7 @@ static NSArray *SNOwnViewKeys(void) {
     if (!keys)
         keys = @[ NSFontAttributeName, NSForegroundColorAttributeName, NSUnderlineStyleAttributeName, NSStrikethroughStyleAttributeName,
                   NSBackgroundColorAttributeName, SNColorAttributeName, SNHighlightAttributeName, SNQuoteAttributeName,
+                  SNCollapsedAttributeName, SNHiddenAttributeName,
                   NSParagraphStyleAttributeName, SNStyleAttributeName, SNListAttributeName, SNCheckedAttributeName,
                   SNIndentAttributeName, SNBoldAttributeName, SNItalicAttributeName, SNLinkAttributeName, NSLinkAttributeName,
                   SNAttachmentAttributeName ];
@@ -366,6 +380,10 @@ static __weak TTUndoStep *SNLastUndoStep;
 
 @implementation SNTextBinding {
     BOOL _applying;
+    /* Collapsed sections being hidden or shown; and where the insertion
+       point was, to go on past a hidden one the way it went. */
+    BOOL _sectioning;
+    NSUInteger _lastCaret;
     /* What was typed since the paragraphs were last made one formatting
        (textDidChange), and where a line began after a newline typed. */
     NSRange _dirty;
@@ -663,12 +681,14 @@ static __weak TTUndoStep *SNLastUndoStep;
     /* Each run its own colour again (a tag's taken off), then the tags'. */
     for (NSValue *v in SNAttributeRuns(_storage, para)) {
         NSRange run = v.rangeValue;
+        if ([_storage attribute:SNHiddenAttributeName atIndex:run.location effectiveRange:NULL]) continue;
         NSString *color = SNColorNameOf([_storage attribute:SNColorAttributeName atIndex:run.location effectiveRange:NULL]);
         [_storage addAttribute:NSForegroundColorAttributeName value:color ? SNSystemNamedColor(color) : SNSystemTextColor() range:run];
     }
     for (NSValue *v in SNTagRangesInText(text)) {
         NSRange tag = v.rangeValue;
         tag.location += para.location;
+        if ([_storage attribute:SNHiddenAttributeName atIndex:tag.location effectiveRange:NULL]) continue;
         [_storage addAttribute:NSForegroundColorAttributeName value:SNSystemAccentColor() range:tag];
     }
     /* Detected links: off where none is now, on where one is. */
@@ -690,6 +710,143 @@ static __weak TTUndoStep *SNLastUndoStep;
     }
     [_storage endEditing];
     _applying = was;
+    [self refreshSections];
+}
+
+#pragma mark collapsed sections
+
+/* A line of hidden text: as tall as nothing. */
+static NSParagraphStyle *SNHiddenParagraphStyle(void) {
+    static NSParagraphStyle *style;
+    if (!style) {
+        NSMutableParagraphStyle *m = [[NSMutableParagraphStyle alloc] init];
+        m.minimumLineHeight = 0;
+        m.maximumLineHeight = 0.01;
+        m.lineSpacing = 0;
+        m.paragraphSpacing = 0;
+        m.paragraphSpacingBefore = 0;
+        style = [m copy];
+    }
+    return style;
+}
+
+/* An index set's ranges, in order. */
+static NSArray<NSValue *> *SNRangesIn(NSIndexSet *set) {
+    NSMutableArray *ranges = [NSMutableArray array];
+    for (NSUInteger i = set.firstIndex; i != NSNotFound; ) {
+        NSUInteger end = i;
+        while ([set containsIndex:end + 1]) end++;
+        [ranges addObject:[NSValue valueWithRange:NSMakeRange(i, end - i + 1)]];
+        i = [set indexGreaterThanIndex:end];
+    }
+    return ranges;
+}
+
+/* What the collapsed headings hide: the paragraphs after each, to the next
+   heading as high or higher (one inside, collapsed or not, goes with it). */
+- (NSIndexSet *)hiddenIndexes {
+    NSMutableIndexSet *hidden = [NSMutableIndexSet indexSet];
+    NSString *s = _storage.string;
+    NSInteger hiding = 0;
+    for (NSUInteger i = 0; i < s.length; ) {
+        NSUInteger end = SNParagraphEnd(s, i);
+        NSDictionary *a = [_storage attributesAtIndex:i effectiveRange:NULL];
+        NSInteger level = SNHeadingLevel(a[SNStyleAttributeName]);
+        if (hiding && (!level || level > hiding)) {
+            [hidden addIndexesInRange:NSMakeRange(i, end - i)];
+        } else {
+            hiding = level && [a[SNCollapsedAttributeName] boolValue] ? level : 0;
+        }
+        i = end;
+    }
+    return hidden;
+}
+
+/* The storage as the collapsed headings have it now: what they hide drawn
+   as nothing (no taller than nothing, its attachments too); what they no
+   longer hide shown again as the text has it. */
+- (void)refreshSections {
+    if (_sectioning) return;
+    _sectioning = YES;
+    NSIndexSet *want = [self hiddenIndexes];
+    NSMutableIndexSet *have = [NSMutableIndexSet indexSet];
+    for (NSUInteger i = 0; i < _storage.length; ) {
+        NSRange r;
+        if ([_storage attribute:SNHiddenAttributeName atIndex:i effectiveRange:&r]) [have addIndexesInRange:r];
+        i = NSMaxRange(r) > i ? NSMaxRange(r) : i + 1;
+    }
+    NSMutableIndexSet *show = [have mutableCopy], *hide = [want mutableCopy];
+    [show removeIndexes:want];
+    [hide removeIndexes:have];
+    if (show.count || hide.count) {
+        BOOL was = _applying;
+        _applying = YES;
+        [_storage beginEditing];
+        for (NSValue *v in SNRangesIn(show)) {
+            for (NSValue *run in SNAttributeRuns(_storage, v.rangeValue)) {
+                NSDictionary *view = [_storage attributesAtIndex:run.rangeValue.location effectiveRange:NULL];
+                NSMutableDictionary *now = [view mutableCopy];
+                [now removeObjectsForKeys:SNOwnViewKeys()];
+                [now removeObjectForKey:NSAttachmentAttributeName];
+                [now addEntriesFromDictionary:SNViewAttributes(SNTextAttributes(view))];
+                [_storage setAttributes:now range:run.rangeValue];
+            }
+            [self showAttachmentsIn:_storage range:v.rangeValue];
+        }
+        NSString *str = _storage.string;
+        for (NSValue *v in SNRangesIn(hide)) {
+            NSRange r = v.rangeValue;
+            [_storage addAttributes:@{ SNHiddenAttributeName: @YES, NSFontAttributeName: SNSystemFont(1, NO),
+                                       NSForegroundColorAttributeName: [SNColor clearColor], NSParagraphStyleAttributeName: SNHiddenParagraphStyle() }
+                              range:r];
+            [_storage removeAttribute:NSBackgroundColorAttributeName range:r];
+            for (NSUInteger i = r.location; i < NSMaxRange(r); i++)
+                if ([str characterAtIndex:i] == SNAttachmentCharacter)
+                    [_storage addAttribute:NSAttachmentAttributeName value:SNSystemRoomAttachment((SNSize){ 0, 0 }) range:NSMakeRange(i, 1)];
+        }
+        [_storage endEditing];
+        _applying = was;
+        for (NSValue *v in SNRangesIn(show)) [self showTagsInRange:v.rangeValue];
+    }
+    _sectioning = NO;
+}
+
+- (BOOL)isHiddenAt:(NSUInteger)index {
+    return index < _storage.length && [_storage attribute:SNHiddenAttributeName atIndex:index effectiveRange:NULL] != nil;
+}
+
+- (BOOL)hasSectionAt:(NSUInteger)index {
+    NSString *s = _storage.string;
+    if (index >= s.length) return NO;
+    NSUInteger start = SNParagraphStart(s, index), next = SNParagraphEnd(s, start);
+    NSInteger level = SNHeadingLevel([_storage attribute:SNStyleAttributeName atIndex:start effectiveRange:NULL]);
+    if (!level || next >= s.length) return NO;
+    NSInteger under = SNHeadingLevel([_storage attribute:SNStyleAttributeName atIndex:next effectiveRange:NULL]);
+    return !under || under > level;
+}
+
+- (void)toggleCollapsedAt:(NSUInteger)index {
+    NSString *s = _storage.string;
+    if (index >= s.length) return;
+    NSMutableDictionary *p = [[self paragraphAttributesAt:index] mutableCopy];
+    if (!SNHeadingLevel(p[SNStyleKey])) return;
+    if (p[SNCollapsedKey]) [p removeObjectForKey:SNCollapsedKey]; else p[SNCollapsedKey] = @YES;
+    [self setParagraph:p inRange:SNParagraphsRange(s, NSMakeRange(index, 0))];
+    [self paragraphsChanged];
+}
+
+- (void)setAllSectionsCollapsed:(BOOL)collapsed {
+    NSString *s = _storage.string;
+    for (NSUInteger i = 0; i < s.length; ) {
+        NSUInteger end = SNParagraphEnd(s, i);
+        NSMutableDictionary *p = [[self paragraphAttributesAt:i] mutableCopy];
+        if (SNHeadingLevel(p[SNStyleKey]) && (collapsed ? [self hasSectionAt:i] && !p[SNCollapsedKey] : p[SNCollapsedKey] != nil)) {
+            if (collapsed) p[SNCollapsedKey] = @YES; else [p removeObjectForKey:SNCollapsedKey];
+            [self setParagraph:p inRange:NSMakeRange(i, end - i)];
+        }
+        i = end;
+    }
+    [self paragraphsChanged];
 }
 
 #pragma mark attachments
@@ -734,7 +891,7 @@ static __weak TTUndoStep *SNLastUndoStep;
     for (NSUInteger i = range.location; i < NSMaxRange(range); i++) {
         if ([s characterAtIndex:i] != SNAttachmentCharacter) continue;
         NSString *attachmentID = [target attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL];
-        if (!attachmentID) continue;
+        if (!attachmentID || [target attribute:SNHiddenAttributeName atIndex:i effectiveRange:NULL]) continue;
         SNTextAttachment *shown = [target attribute:NSAttachmentAttributeName atIndex:i effectiveRange:NULL];
         SNAttachment *attachment = [self attachmentWithID:attachmentID];
         NSValue *room = [attachment.kind isEqual:SNAttachmentKindTable] ? _rooms[attachmentID] : nil;
@@ -1151,8 +1308,20 @@ static __weak TTUndoStep *SNLastUndoStep;
 }
 
 - (void)selectionDidChange {
-    /* The insertion point moved away: typing there is another step. */
+    /* The insertion point does not stop in a collapsed section: past it
+       the way it went, or back to the end of its heading. */
     NSRange sel = [self selection];
+    if (!sel.length && [self isHiddenAt:sel.location]) {
+        NSRange hidden;
+        [_storage attribute:SNHiddenAttributeName atIndex:sel.location longestEffectiveRange:&hidden inRange:NSMakeRange(0, _storage.length)];
+        BOOL onward = sel.location >= _lastCaret && NSMaxRange(hidden) < _storage.length;
+        NSUInteger to = onward ? NSMaxRange(hidden) : (hidden.location ? hidden.location - 1 : 0);
+        _lastCaret = to;
+        _view.selectedRange = NSMakeRange(to, 0);
+        return;
+    }
+    _lastCaret = sel.location;
+    /* The insertion point moved away: typing there is another step. */
     if (_typingStep && (sel.length || sel.location != _typingEnd)) _typingStep = nil;
     [self refreshTypingKeepingInline:NO];
 }
@@ -1163,6 +1332,13 @@ static __weak TTUndoStep *SNLastUndoStep;
     if (_applying || !string) return YES;
     NSString *s = _storage.string;
     NSRange sel = [self selection];
+    if (!range.length && [string isEqualToString:@"\n"] && [self paragraphAttributesAt:range.location][SNCollapsedKey]) {
+        /* Return after a collapsed heading: its section shown, for what is
+           typed after it. */
+        NSMutableDictionary *p = [[self paragraphAttributesAt:range.location] mutableCopy];
+        [p removeObjectForKey:SNCollapsedKey];
+        [self setParagraph:p inRange:SNParagraphsRange(s, NSMakeRange(range.location, 0))];
+    }
     if (!range.length && [string isEqualToString:@"\n"]) {
         /* Return on an empty item: the list ends there (outdented first). */
         NSRange para = SNParagraphsRange(s, NSMakeRange(range.location, 0));
@@ -1345,6 +1521,74 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     [marker drawAtPoint:at withAttributes:attrs];
 }
 
+/* A heading with something under it (as the binding's -hasSectionAt:). */
+- (BOOL)headingHasSectionAt:(NSUInteger)start {
+    NSTextStorage *ts = self.textStorage;
+    NSString *s = ts.string;
+    NSUInteger next = SNParagraphEnd(s, start);
+    NSInteger level = SNHeadingLevel([ts attribute:SNStyleAttributeName atIndex:start effectiveRange:NULL]);
+    if (!level || next >= s.length) return NO;
+    NSInteger under = SNHeadingLevel([ts attribute:SNStyleAttributeName atIndex:next effectiveRange:NULL]);
+    return !under || under > level;
+}
+
+/* Where a heading's chevron is: left of the text, on its first line. */
+static SNRect SNChevronBox(SNRect line, CGFloat left) {
+    SNRect r = line;
+    r.origin.x = left - 14;
+    r.size.width = 12;
+    return r;
+}
+
+/* A heading's chevron: pointing right when its section is collapsed, down
+   (fainter) when it is not, as Apple Notes'. */
+- (void)drawChevron:(BOOL)collapsed line:(SNRect)line left:(CGFloat)left {
+    SNRect box = SNChevronBox(line, left);
+    CGFloat cx = box.origin.x + box.size.width / 2, cy = line.origin.y + line.size.height / 2;
+    SNPath *path = [SNPath bezierPath];
+    if (collapsed) {
+        SNPoint a = { cx - 2, cy - 4 }, b = { cx + 2, cy }, c = { cx - 2, cy + 4 };
+        SNSystemAddLine(path, a, b);
+        SNSystemAddLine(path, b, c);
+    } else {
+        SNPoint a = { cx - 4, cy - 2 }, b = { cx, cy + 2 }, c = { cx + 4, cy - 2 };
+        SNSystemAddLine(path, a, b);
+        SNSystemAddLine(path, b, c);
+    }
+    path.lineWidth = 1.6;
+    [(collapsed ? SNSystemMarkerColor() : [SNSystemMarkerColor() colorWithAlphaComponent:0.4]) setStroke];
+    [path stroke];
+}
+
+- (void)drawChevronsAtPoint:(SNPoint)origin {
+    NSTextStorage *ts = self.textStorage;
+    NSString *s = ts.string;
+    for (NSUInteger i = 0; i < s.length; i = SNParagraphEnd(s, i)) {
+        NSDictionary *a = [ts attributesAtIndex:i effectiveRange:NULL];
+        if (a[SNHiddenAttributeName] || !SNHeadingLevel(a[SNStyleAttributeName]) || ![self headingHasSectionAt:i]) continue;
+        SNRect line = [self lineFragmentRectForGlyphAtIndex:SNGlyphAt(self, i) effectiveRange:NULL];
+        line.origin.x += origin.x;
+        line.origin.y += origin.y;
+        [self drawChevron:[a[SNCollapsedAttributeName] boolValue] line:line left:origin.x];
+    }
+}
+
+- (NSUInteger)sectionToggleAtPoint:(SNPoint)point {
+    NSTextStorage *ts = self.textStorage;
+    NSString *s = ts.string;
+    NSTextContainer *tc = self.textContainers.firstObject;
+    if (!s.length || !tc || point.x >= 0) return NSNotFound;
+    SNPoint inside = { 0, point.y };
+    NSUInteger g = [self glyphIndexForPoint:inside inTextContainer:tc];
+    NSUInteger c = MIN([self characterIndexForGlyphAtIndex:g], s.length - 1);
+    NSUInteger start = SNParagraphStart(s, c);
+    if (![self headingHasSectionAt:start]) return NSNotFound;
+    SNRect line = [self lineFragmentRectForGlyphAtIndex:SNGlyphAt(self, start) effectiveRange:NULL];
+    SNRect box = SNChevronBox(line, 0);
+    BOOL hit = point.x >= box.origin.x - 4 && point.y >= line.origin.y && point.y < line.origin.y + line.size.height;
+    return hit ? start : NSNotFound;
+}
+
 /* A quoted paragraph's bar, down all its lines, in its own column. */
 - (void)drawQuoteBar:(NSDictionary *)a start:(NSUInteger)start line:(SNRect)first left:(CGFloat)left {
     NSString *s = self.textStorage.string;
@@ -1369,8 +1613,10 @@ static SNRect SNMarkerColumn(SNRect line, NSInteger indent, CGFloat left) {
     NSRange chars = [self characterRangeForGlyphRange:glyphs actualGlyphRange:NULL];
     NSUInteger i = SNParagraphStart(s, MIN(chars.location, len));
     if (i < chars.location) i = SNParagraphEnd(s, i);
+    if (_drawsChevrons) [self drawChevronsAtPoint:origin];
     for (; i < NSMaxRange(chars) && i < len; i = SNParagraphEnd(s, i)) {
         NSDictionary *a = [ts attributesAtIndex:i effectiveRange:NULL];
+        if (a[SNHiddenAttributeName]) continue;
         if (!a[SNListAttributeName] && !a[SNQuoteAttributeName]) continue;
         NSUInteger g = SNGlyphAt(self, i);
         SNRect line = [self lineFragmentRectForGlyphAtIndex:g effectiveRange:NULL];

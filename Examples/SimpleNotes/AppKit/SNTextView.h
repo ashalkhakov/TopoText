@@ -13,6 +13,8 @@ NS_ASSUME_NONNULL_BEGIN
 // A checkbox clicked: its paragraph's first character's index (as
 // -textView:clickedOnLink:atIndex: says a link's).
 - (void)textView:(SNTextView *)textView clickedCheckboxAtIndex:(NSUInteger)index;
+// A heading's chevron clicked: its first character's index.
+- (void)textView:(SNTextView *)textView clickedSectionToggleAtIndex:(NSUInteger)index;
 @end
 
 @interface SNTextView : NSTextView

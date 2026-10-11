@@ -133,6 +133,10 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 // Find in Note (the ... menu): the system's find navigator, Replace in it
 // too (iOS 16 and later).
 - (IBAction)findInNote:(nullable id)sender;
+// Collapse All Sections and Expand All Sections (the ... menu); a heading's
+// chevron, tapped, collapses or expands its own.
+- (IBAction)collapseAllSections:(nullable id)sender;
+- (IBAction)expandAllSections:(nullable id)sender;
 // Print and Export as PDF (the ... menu): the note on paper (A4, or Letter
 // where inches are used), to the print sheet, or a file to share.
 - (IBAction)printNote:(nullable id)sender;

@@ -104,6 +104,11 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
             [delegate textView:self clickedCheckboxAtIndex:at];
             return;
         }
+        at = [lm sectionToggleAtPoint:NSMakePoint(p.x - origin.x, p.y - origin.y)];
+        if (at != NSNotFound && [delegate respondsToSelector:@selector(textView:clickedSectionToggleAtIndex:)]) {
+            [delegate textView:self clickedSectionToggleAtIndex:at];
+            return;
+        }
     }
     [super mouseDown:event];
 }

@@ -194,6 +194,12 @@ void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
     if (range.length) [layoutManager invalidateDisplayForCharacterRange:range];
 }
 
+void SNSystemShowChevrons(id<SNTextViewing> view) {
+    if (![(id)view isKindOfClass:[UITextView class]]) return;
+    NSLayoutManager *lm = ((UITextView *)view).layoutManager;
+    if ([lm isKindOfClass:[SNListLayoutManager class]]) ((SNListLayoutManager *)lm).drawsChevrons = YES;
+}
+
 void SNSystemObserveResizing(id view, id observer, SEL selector) {
 }
 

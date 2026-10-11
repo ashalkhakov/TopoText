@@ -555,6 +555,32 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               @"one chosen shows its note, where it is");
         [window.attachmentsWindow close];
 
+        /* Collapsed sections: a heading's chevron clicked hides what is
+           under it, the text as it was; Expand All Sections shows it. */
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertText:@"Packing"];
+        NSUInteger packing = tv.string.length - 7;
+        [tv tryToPerform:@selector(styleHeading:) with:nil];
+        [tv insertNewline:nil];
+        [tv insertText:@"socks"];
+        [tv insertNewline:nil];
+        [tv insertText:@"boots"];
+        NSUInteger socks = packing + 8;
+        NSString *before = tv.string;
+        SNListLayoutManager *slm = (SNListLayoutManager *)tv.layoutManager;
+        NSRect headingLine = [slm lineFragmentRectForGlyphAtIndex:[slm glyphRangeForCharacterRange:NSMakeRange(packing, 1) actualCharacterRange:NULL].location
+                                                   effectiveRange:NULL];
+        NSUInteger chevron = [slm sectionToggleAtPoint:NSMakePoint(-7, NSMidY(headingLine))];
+        SNSay(chevron == packing, [NSString stringWithFormat:@"a chevron beside the heading (%lu)", (unsigned long)chevron]);
+        [window textView:(SNTextView *)tv clickedSectionToggleAtIndex:packing];
+        SNSay([tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil &&
+              [tv.textStorage attribute:SNHiddenAttributeName atIndex:packing effectiveRange:NULL] == nil && [tv.string isEqual:before],
+              @"clicked, what is under it is hidden, the text as it was");
+        if (snapshot) SNSnapshotWindow(window.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-collapsed.png"]);
+        SNSay([tv tryToPerform:@selector(expandAllSections:) with:nil] &&
+              [tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] == nil, @"Expand All Sections shows it again");
+
         /* Deleted from the window, into Recently Deleted on the other device;
            recovered from Recently Deleted, back there too. */
         [window showAllNotes];

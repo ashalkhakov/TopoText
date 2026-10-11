@@ -887,6 +887,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [super viewDidLoad];
     _editor = [_notes editorForNote:_note];
     [self useListLayoutManager];
+    SNSystemShowChevrons(_textView);
     _editor.delegate = self;
     _binding = [[SNTextBinding alloc] initWithTextView:_textView editor:_editor];
     _textView.delegate = self;
@@ -929,6 +930,9 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (UIBarButtonItem *)noteMenuItem {
     NSMutableArray *actions = [NSMutableArray array];
     if (@available(iOS 16.0, *)) [actions addObject:SNMenuAction(@"Find in Note", [UIImage systemImageNamed:@"magnifyingglass"], @selector(findInNote:), self)];
+    [actions addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+        SNMenuAction(@"Collapse All Sections", [UIImage systemImageNamed:@"chevron.right"], @selector(collapseAllSections:), self),
+        SNMenuAction(@"Expand All Sections", [UIImage systemImageNamed:@"chevron.down"], @selector(expandAllSections:), self) ]]];
     [actions addObject:SNMenuAction(@"Print", [UIImage systemImageNamed:@"printer"], @selector(printNote:), self)];
     [actions addObject:SNMenuAction(@"Export as PDF", [UIImage systemImageNamed:@"doc.richtext"], @selector(exportNoteAsPDF:), self)];
     UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
@@ -1004,6 +1008,20 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (NSString *)pdfName {
     NSString *title = [_note.title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
     return [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+}
+
+- (IBAction)collapseAllSections:(id)sender {
+    if (!_textView.editable) return;
+    NSRange sel = _textView.selectedRange;
+    [_binding setAllSectionsCollapsed:YES];
+    [self formatted:sel];
+}
+
+- (IBAction)expandAllSections:(id)sender {
+    if (!_textView.editable) return;
+    NSRange sel = _textView.selectedRange;
+    [_binding setAllSectionsCollapsed:NO];
+    [self formatted:sel];
 }
 
 /* The system's print sheet, the note on paper given to it. */
@@ -1141,6 +1159,16 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [lm checkboxAtPoint:CGPointMake(p.x - inset.left, p.y - inset.top)];
 }
 
+/* A heading's chevron under a tap: its index; NSNotFound: none. */
+- (NSUInteger)sectionToggleAt:(UIGestureRecognizer *)g {
+    if (!_textView.editable) return NSNotFound;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    SNListLayoutManager *lm = (SNListLayoutManager *)_textView.layoutManager;
+    if (![lm isKindOfClass:[SNListLayoutManager class]]) return NSNotFound;
+    return [lm sectionToggleAtPoint:CGPointMake(p.x - inset.left, p.y - inset.top)];
+}
+
 /* Only a tap on a checkbox: the text view has the others. */
 /* The link under a tap: a given one or one detected; nil for none. */
 - (NSURL *)linkAt:(UIGestureRecognizer *)g {
@@ -1175,7 +1203,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 /* Only a tap on a checkbox, a link or a file: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
+    return [self checkboxAt:g] != NSNotFound || [self sectionToggleAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
 }
 
 /* A link to a note opens its editor; any other, in its own application. */
@@ -1194,6 +1222,13 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSUInteger heading = [self sectionToggleAt:g];
+    if (heading != NSNotFound) {
+        NSRange sel = _textView.selectedRange;
+        [_binding toggleCollapsedAt:heading];
+        [self formatted:sel];
+        return;
+    }
     NSString *file = [self checkboxAt:g] == NSNotFound ? [self fileAt:g] : nil;
     if (file) {
         [self previewFileOfAttachment:file];

@@ -236,6 +236,39 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             SNSay([mint isEqual:@"mint"] && ![wtv.textStorage attribute:SNHighlightAttributeName atIndex:1 effectiveRange:NULL],
                   [NSString stringWithFormat:@"Highlight from the Aa menu, and None (%@)", mint]);
             wtv.selectedRange = NSMakeRange(0, 0);
+            /* Collapsed sections: a heading's chevron in the margin; Collapse
+               All Sections hides what is under it, the text as it was. */
+            /* Typed as the keyboard types: Return asked of the delegate. */
+            void (^type)(NSString *) = ^(NSString *text) {
+                wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
+                if ([text isEqual:@"\n"] && ![we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:text]) return;
+                [wtv insertText:text];
+            };
+            type(@"\n");
+            type(@"Packing");
+            NSUInteger packing = wtv.text.length - 7;
+            [we heading:nil];
+            type(@"\n");
+            type(@"socks");
+            type(@"\n");
+            type(@"boots");
+            NSUInteger socks = packing + 8;
+            NSString *before = wtv.text;
+            SNListLayoutManager *slm = (SNListLayoutManager *)wtv.layoutManager;
+            CGRect headingLine = [slm lineFragmentRectForGlyphAtIndex:[slm glyphRangeForCharacterRange:NSMakeRange(packing, 1) actualCharacterRange:NULL].location
+                                                         effectiveRange:NULL];
+            NSUInteger chevron = [slm sectionToggleAtPoint:CGPointMake(-7, CGRectGetMidY(headingLine))];
+            SNSay(chevron == packing, [NSString stringWithFormat:@"a chevron beside the heading (%lu)", (unsigned long)chevron]);
+            [we collapseAllSections:nil];
+            SNSay([wtv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil && [wtv.text isEqual:before],
+                  @"Collapse All Sections hides what is under it, the text as it was");
+            if (getenv("SN_SELF_TEST_HOLD")) {
+                [wtv scrollRangeToVisible:NSMakeRange(packing, 1)];
+                fprintf(stderr, "self-test: the section is collapsed\n");
+                SNWait(4, ^BOOL { return NO; });
+            }
+            [we expandAllSections:nil];
+            SNSay([wtv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] == nil, @"Expand All Sections shows it again");
         }
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
@@ -259,7 +292,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
             [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
         }
-        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-" ]],
+        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-", @"-", @"-", @"-" ]],
               [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
         NSString *photoID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
         SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);

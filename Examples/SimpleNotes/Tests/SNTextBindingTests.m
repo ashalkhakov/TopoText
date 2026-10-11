@@ -364,6 +364,74 @@
     XCTAssertEqualObjects([self paragraphAt:0], @{ SNQuoteKey: @YES });
 }
 
+#pragma mark collapsed sections
+
+/* "Trip" a title; "Day one" and "Day two" headings, each a line under it. */
+- (void)startTrip {
+    [self start:@"Trip\nDay one\nswim\nDay two\nhike"];
+    [_binding setStyle:SNStyleTitle forParagraphsInRange:NSMakeRange(0, 0)];
+    [_binding setStyle:SNStyleHeading forParagraphsInRange:NSMakeRange(5, 0)];
+    [_binding setStyle:SNStyleHeading forParagraphsInRange:NSMakeRange(18, 0)];
+}
+
+- (void)testACollapsedHeadingHidesItsSection {
+    [self startTrip];
+    XCTAssertTrue([_binding hasSectionAt:5]);
+    XCTAssertFalse([_binding hasSectionAt:13], @"body has none");
+    [_binding toggleCollapsedAt:5];
+    XCTAssertEqualObjects([self paragraphAt:5], (@{ SNStyleKey: SNStyleHeading, SNCollapsedKey: @YES }), @"the text's, synced");
+    XCTAssertTrue([_binding isHiddenAt:13], @"its line hidden");
+    XCTAssertFalse([_binding isHiddenAt:5], @"not the heading");
+    XCTAssertFalse([_binding isHiddenAt:18], @"nor the next heading");
+    XCTAssertFalse([_binding isHiddenAt:26], @"nor what is under it");
+    XCTAssertLessThan([[_storage attribute:NSParagraphStyleAttributeName atIndex:13 effectiveRange:NULL] maximumLineHeight], 1);
+    XCTAssertEqualObjects(_editor.text.string, @"Trip\nDay one\nswim\nDay two\nhike", @"the text as it was");
+    /* Expanded: shown as the text has it. */
+    [_binding toggleCollapsedAt:5];
+    XCTAssertFalse([_binding isHiddenAt:13]);
+    XCTAssertGreaterThan([(SNFont *)[_storage attribute:NSFontAttributeName atIndex:13 effectiveRange:NULL] pointSize], 5);
+    XCTAssertEqualObjects([self paragraphAt:5], @{ SNStyleKey: SNStyleHeading });
+}
+
+- (void)testATitleHidesTheHeadingsUnderIt {
+    [self startTrip];
+    [_binding toggleCollapsedAt:0];
+    for (NSUInteger i = 5; i < _storage.length; i++) XCTAssertTrue([_binding isHiddenAt:i], @"%lu hidden", (unsigned long)i);
+    /* All: each heading with a section; none, expanded. */
+    [_binding toggleCollapsedAt:0];
+    [_binding setAllSectionsCollapsed:YES];
+    XCTAssertTrue([[self paragraphAt:0][SNCollapsedKey] boolValue] && [[self paragraphAt:5][SNCollapsedKey] boolValue] &&
+                  [[self paragraphAt:18][SNCollapsedKey] boolValue]);
+    [_binding setAllSectionsCollapsed:NO];
+    XCTAssertFalse([_binding isHiddenAt:13] || [_binding isHiddenAt:26]);
+}
+
+- (void)testTheInsertionPointGoesPastAHiddenSection {
+    [self startTrip];
+    [_binding toggleCollapsedAt:5];
+    _selection = NSMakeRange(10, 0);   /* in "Day one" */
+    [_binding selectionDidChange];
+    _selection = NSMakeRange(14, 0);   /* into "swim", going on */
+    [_binding selectionDidChange];
+    XCTAssertEqual(_selection.location, 18u, @"past it, at the next heading");
+    _selection = NSMakeRange(15, 0);   /* into it, coming back */
+    [_binding selectionDidChange];
+    XCTAssertEqual(_selection.location, 12u, @"back to the end of its heading");
+}
+
+- (void)testReturnAfterACollapsedHeadingExpandsIt {
+    [self startTrip];
+    [_binding toggleCollapsedAt:5];
+    _selection = NSMakeRange(12, 0);
+    [_binding selectionDidChange];
+    [self key:@"\n"];
+    [self key:@"x"];
+    XCTAssertFalse([_binding isHiddenAt:13], @"what is typed shows");
+    XCTAssertFalse([_binding isHiddenAt:15]);
+    XCTAssertNil([self paragraphAt:5][SNCollapsedKey]);
+    XCTAssertEqualObjects(_editor.text.string, @"Trip\nDay one\nx\nswim\nDay two\nhike");
+}
+
 #pragma mark links
 
 - (void)testALinkGivenIsTheTextsAndOneTypedIsTheViews {

@@ -1,5 +1,6 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
+#import "SNTextSystem.h"
 #import "SNModel.h"
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
@@ -100,6 +101,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 - (void)windowDidLoad {
     [super windowDidLoad];
     [_textView useListLayoutManager];
+    SNSystemShowChevrons(_textView);
     /* Undo is the binding's: by the characters' ids, so it survives a
        sync's edits; the text view's own (by positions) would not. */
     _textView.allowsUndo = NO;
@@ -805,6 +807,25 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:index];
 }
 
+/* A heading's section collapsed or expanded, undoably. */
+- (void)textView:(SNTextView *)tv clickedSectionToggleAtIndex:(NSUInteger)index {
+    if (![self beginFormattingAt:NSMakeRange(index, 0)]) return;
+    [_binding toggleCollapsedAt:index];
+    [self endFormatting];
+    [_grids update];
+}
+
+- (void)setAllSectionsCollapsed:(BOOL)collapsed {
+    NSRange all = NSMakeRange(0, _textView.string.length);
+    if (![self beginFormattingAt:all]) return;
+    [_binding setAllSectionsCollapsed:collapsed];
+    [self endFormatting];
+    [_grids update];
+}
+
+- (IBAction)collapseAllSections:(id)sender { [self setAllSectionsCollapsed:YES]; }
+- (IBAction)expandAllSections:(id)sender { [self setAllSectionsCollapsed:NO]; }
+
 /* Undoably: a move keeps the list's length, so the text view's undo of
    "this range, replaced" puts the old order back. */
 - (void)moveCheckedToBottomAt:(NSUInteger)index {
@@ -1261,6 +1282,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(collapseAllSections:) || a == @selector(expandAllSections:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
     if (a == @selector(showAsList:) || a == @selector(showAsGallery:)) {
         item.state = (a == @selector(showAsGallery:)) == !_gallery.view.isHidden ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;

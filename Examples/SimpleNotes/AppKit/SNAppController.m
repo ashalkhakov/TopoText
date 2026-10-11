@@ -73,7 +73,10 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
         [NSApp terminate:nil];
         return;
     }
-    NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
+    /* A self-test has a store and a server of its own: not the user's, nor
+       the user's tokens in the keychain (a build to test has a signature
+       the keychain asks about, and waits for). */
+    NSString *server = SNSelfTestRoot ? nil : [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
     NSURL *root = server.length ? [NSURL URLWithString:server] : nil;
     if (root) {
         /* Signed in as it was last time: the tokens kept for it. */
