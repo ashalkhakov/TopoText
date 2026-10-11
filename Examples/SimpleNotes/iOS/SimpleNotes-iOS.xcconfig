@@ -11,6 +11,9 @@ TARGETED_DEVICE_FAMILY = 1,2
 PRODUCT_NAME = SimpleNotes
 PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.SimpleNotes
 INFOPLIST_FILE = iOS/Info.plist
+// Its icon (Assets.xcassets): the Mac's, full-bleed and opaque, iOS rounding
+// its corners itself.
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
 INFOPLIST_KEY_CFBundleDisplayName = SimpleNotes
 INFOPLIST_KEY_UILaunchScreen_Generation = YES
 INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES

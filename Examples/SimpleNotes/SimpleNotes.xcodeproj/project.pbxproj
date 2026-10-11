@@ -97,6 +97,10 @@
 			isa = PBXBuildFile;
 			fileRef = CA7528909F30CDA2E84D7397;
 		};
+		2BDD7FDAE2E967C6F7529952 /* Assets.xcassets in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 27FDFB70C50488AC14F320AC;
+		};
 		2FCE28DC091B3E0F5E4D2B2F /* ODataIncrementalStore.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 7EE0BBC99032BF20C4EA757C;
@@ -971,6 +975,13 @@
 			sourceTree = "<group>";
 			name = SNFolder.m;
 		};
+		27FDFB70C50488AC14F320AC /* Assets.xcassets */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = iOS/Assets.xcassets;
+			sourceTree = "<group>";
+			name = Assets.xcassets;
+		};
 		30CC25927FABFCBFF08E1D16 /* SNiOSControllers.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1745,6 +1756,7 @@
 				E24E63BBA2A66A746F957E15,
 				60B496EE8C7BBF49E296082F,
 				CCF418C8E3E8B505943CEE74,
+				27FDFB70C50488AC14F320AC,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
 			);
@@ -1986,6 +1998,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9C3052BB2CDEFEE18EF3187B,
+				2BDD7FDAE2E967C6F7529952,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
