@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class SNTableGrid;
 
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
-                                                    NSTableViewDelegate, SNTextViewDelegate, NSMenuDelegate, SNNoteEditorDelegate,
+                                                    NSTableViewDelegate, SNTextViewDelegate, SNNoteEditorDelegate,
                                                     SNTransferPanelDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The sidebar: All Notes, the folders (folders in folders under them),
@@ -37,6 +37,9 @@ NS_ASSUME_NONNULL_BEGIN
 // What the window shows, in words: the folder chosen and the notes listed
 // (a self-test's failures say it).
 - (NSString *)shownText;
+// Move To and Move Folder To filled from the folders and what is chosen
+// (done as they change; for the self-test).
+- (void)fillMoveToMenus;
 // The sidebar's rows, indented two spaces a level; the note list's, a
 // group's heading "## " and its title.
 - (NSArray<NSString *> *)sidebarRows;

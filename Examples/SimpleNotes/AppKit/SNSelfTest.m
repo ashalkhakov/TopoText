@@ -334,24 +334,35 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         [peers stop];
         [peers.trust.identity removeWithError:NULL];
         [[NSFileManager defaultManager] removeItemAtURL:peersDir error:NULL];
-        /* Move To, filled from the folders: an update that changes nothing
-           adds nothing (GNUstep's -update asked its delegate again for
-           each item added, without end, and froze the app). */
+        /* Move To, filled from the folders: filling it again when nothing
+           changed adds nothing (GNUstep's -update asked a delegate again
+           for each item added, without end, and froze the app); and typing
+           fills it not at all (GNUstep updated a menu with a delegate at
+           each key typed, which read every folder each time). */
         NSMenu *moveTo = nil;
         for (NSMenuItem *top in [NSApp mainMenu].itemArray)
             if ((moveTo = [top.submenu itemWithTag:7001].submenu)) break;
         __block NSUInteger added = 0;
         id observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSMenuDidAddItemNotification object:moveTo queue:nil
                                                                     usingBlock:^(NSNotification *n) { added++; }];
-        /* As opening it does (Apple's AppKit), and as -update does (GNUstep's). */
-        [window menuNeedsUpdate:moveTo];
+        [window fillMoveToMenus];
         NSUInteger first = added, filled = moveTo.numberOfItems;
         [moveTo update];
-        [window menuNeedsUpdate:moveTo];
+        [window fillMoveToMenus];
+        NSUInteger again = added;
+        /* The keys go to the menus first (their key equivalents), then to
+           the window, which takes them as no text. */
+        [window.window makeFirstResponder:window.window];
+        for (NSString *key in @[ @"a", @"b", @"c" ]) {
+            NSEvent *down = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+                                         windowNumber:window.window.windowNumber context:nil characters:key charactersIgnoringModifiers:key
+                                            isARepeat:NO keyCode:0];
+            [NSApp sendEvent:down];
+        }
         [[NSNotificationCenter defaultCenter] removeObserver:observer];
-        SNSay(moveTo.delegate == window && filled > 1 && first <= filled && added == first,
-              [NSString stringWithFormat:@"Move To is filled once (%lu items; %lu added, then %lu)", (unsigned long)filled,
-                                         (unsigned long)first, (unsigned long)(added - first)]);
+        SNSay(moveTo.delegate == nil && filled > 1 && first <= filled && again == first && added == first,
+              [NSString stringWithFormat:@"Move To is filled once, not as keys are typed (%lu items; %lu added, then %lu, then %lu)",
+                                         (unsigned long)filled, (unsigned long)first, (unsigned long)(again - first), (unsigned long)(added - again)]);
         /* Move Folder To (where dragging in the sidebar does not work):
            Projects into Home, and back into Work. */
         NSMenu *moveFolderTo = nil;
@@ -359,7 +370,6 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
             if ((moveFolderTo = [top.submenu itemWithTag:7002].submenu)) break;
         BOOL (^moveFolder)(NSString *, NSString *) = ^BOOL(NSString *folder, NSString *into) {
             if (![window showFolderNamed:folder]) return NO;
-            [window menuNeedsUpdate:moveFolderTo];
             for (NSMenuItem *item in moveFolderTo.itemArray)
                 if ([[item.title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]] isEqual:into]) {
                     [window moveFolderToFolder:item];
@@ -372,7 +382,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
             if ([f.name isEqual:@"Projects"]) moved = f;
         BOOL intoHome = moveFolder(@"Projects", @"Home") && [[notes parentOfFolder:moved].name isEqual:@"Home"];
         BOOL backInWork = moveFolder(@"Projects", @"Work") && [[notes parentOfFolder:moved].name isEqual:@"Work"];
-        SNSay(moveFolderTo.delegate == window && intoHome && backInWork, @"Move Folder To moves a folder into another, and back");
+        SNSay(moveFolderTo.delegate == nil && intoHome && backInWork, @"Move Folder To moves a folder into another, and back");
         /* Export, in its panel (TransferPanel.xib): done, and said so. */
         NSURL *exported = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
                                                      [NSString stringWithFormat:@"sn-selftest-%@.zip", [NSProcessInfo processInfo].globallyUniqueString]]];

@@ -29,6 +29,11 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     /* Move To being filled: GNUstep's -[NSMenu update] asks its delegate
        again for each item added (through -menuChanged). */
     BOOL _fillingMoveTo;
+    /* The folders as the sidebar has them (-reloadFolders): in order, and
+       each one's depth and parent, for the Move To menus. */
+    NSArray<SNFolder *> *_tree;
+    NSDictionary<NSManagedObjectID *, NSNumber *> *_depths;
+    NSDictionary<NSManagedObjectID *, SNFolder *> *_parents;
     /* The sidebar, as last read: the folders at the top, each folder's
        (by object ID), and the tags. */
     NSArray<SNFolder *> *_topFolders;
@@ -107,10 +112,6 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [_folderTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
     _collapsed = [NSMutableSet set];
     [_noteTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
-    /* Move To and Move Folder To, filled as they open. */
-    for (NSMenuItem *top in [NSApp mainMenu].itemArray)
-        for (NSNumber *tag in @[ @(SNMoveToMenuTag), @(SNMoveFolderToMenuTag) ])
-            [top.submenu itemWithTag:tag.integerValue].submenu.delegate = self;
     [self reloadFolders];
     [self reloadNotes];
     [self showStatus:_notes.status];
@@ -193,9 +194,12 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     NSMutableArray *top = [NSMutableArray array];
     NSMutableDictionary *children = [NSMutableDictionary dictionary];
     NSMutableDictionary *counts = [NSMutableDictionary dictionary];
+    NSMutableDictionary *depths = [NSMutableDictionary dictionary], *parents = [NSMutableDictionary dictionary];
     for (SNFolder *f in tree) {
         counts[f.objectID] = @([_notes countOfNotesInFolder:f]);
         SNFolder *parent = [_notes parentOfFolder:f];
+        depths[f.objectID] = @(parent ? [depths[parent.objectID] integerValue] + 1 : 0);
+        if (parent) parents[f.objectID] = parent;
         if (!parent) {
             [top addObject:f];
             continue;
@@ -205,6 +209,9 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     _topFolders = top;
     _children = children;
+    _tree = tree;
+    _depths = depths;
+    _parents = parents;
     /* A tag's row keeps its string while the tag is there. */
     NSDictionary<NSString *, NSNumber *> *tagCounts = _notes.tagCounts;
     NSMutableArray *tags = [NSMutableArray array];
@@ -226,6 +233,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if (_shownTag && ![self itemForTag:[@"#" stringByAppendingString:_shownTag]]) _shownTag = nil;
     _reloading = NO;
     [self selectShownItem];
+    [self fillMoveToMenus];
 }
 
 - (void)reloadNotes {
@@ -352,6 +360,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if (!item) return;
     [self showItem:item];
     [self reloadNotes];
+    [self fillMoveToMenus];
 }
 
 /* What the user collapsed stays so through reloads. */
@@ -409,6 +418,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if (_reloading) return;
     SNNote *note = [self selectedNote];
     if (![note.objectID isEqual:_editor.noteID]) [self openNote:note];
+    [self fillMoveToMenus];
 }
 
 #pragma mark dragging notes and folders
@@ -473,21 +483,31 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     SNNote *note = [self selectedNote];
     NSMutableArray *items = [NSMutableArray array];
     [items addObject:@[ @"No Folder", [NSNull null], @(note && !note.folder && !note.deletedAt) ]];
-    for (SNFolder *f in _notes.folderTree) {
+    for (SNFolder *f in _tree) {
         if ([_notes isSmartFolder:f]) continue;
-        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+        NSString *indent = [@"" stringByPaddingToLength:[_depths[f.objectID] unsignedIntegerValue] * 3 withString:@" " startingAtIndex:0];
         [items addObject:@[ [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"], f, @(note.folder == f && !note.deletedAt) ]];
     }
     return items;
 }
 
-/* Filled only when what it says changes: GNUstep updates menus often,
-   and Eau's menu bar is told of every change. */
-- (void)menuNeedsUpdate:(NSMenu *)menu {
+/* Move To and Move Folder To, filled from the sidebar's folders when they
+   or what is chosen change; no delegate filling them as they open:
+   GNUstep's -[NSMenu performKeyEquivalent:] updates every menu with a
+   delegate for each key typed, which read every folder again at each key
+   (typing a second behind on a slower machine). */
+- (void)fillMoveToMenus {
+    for (NSMenuItem *top in [NSApp mainMenu].itemArray) {
+        NSMenu *moveTo = [top.submenu itemWithTag:SNMoveToMenuTag].submenu, *moveFolderTo = [top.submenu itemWithTag:SNMoveFolderToMenuTag].submenu;
+        if (moveTo) [self fill:moveTo folders:NO];
+        if (moveFolderTo) [self fill:moveFolderTo folders:YES];
+    }
+}
+
+/* Filled only when what it says changes: Eau's menu bar is told of every
+   change. */
+- (void)fill:(NSMenu *)menu folders:(BOOL)folders {
     if (_fillingMoveTo) return;
-    BOOL folders = NO;
-    for (NSMenuItem *top in [NSApp mainMenu].itemArray)
-        if ([top.submenu itemWithTag:SNMoveFolderToMenuTag].submenu == menu) folders = YES;
     NSArray<NSArray *> *items = folders ? [self moveFolderToItems] : [self moveToItems];
     SEL action = folders ? @selector(moveFolderToFolder:) : @selector(moveNoteToFolder:);
     NSMutableArray *shown = [NSMutableArray array];
@@ -513,12 +533,22 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
    work (GNUstep's sidebar). */
 - (NSArray<NSArray *> *)moveFolderToItems {
     SNFolder *folder = [self selectedFolder];
-    SNFolder *parent = folder ? [_notes parentOfFolder:folder] : nil;
+    SNFolder *parent = folder ? _parents[folder.objectID] : nil;
     NSMutableArray *items = [NSMutableArray array];
     [items addObject:@[ @"Top Level", [NSNull null], @(folder && !parent) ]];
-    for (SNFolder *f in _notes.folderTree) {
-        if ([_notes isSmartFolder:f] || f == folder || (folder && [_notes folder:f isInFolder:folder])) continue;
-        NSString *indent = [@"" stringByPaddingToLength:[_notes depthOfFolder:f] * 3 withString:@" " startingAtIndex:0];
+    /* Not the folder, nor one in it: the tree's run after it, deeper. */
+    NSUInteger depthOfFolder = folder ? [_depths[folder.objectID] unsignedIntegerValue] : 0;
+    BOOL within = NO;
+    for (SNFolder *f in _tree) {
+        NSUInteger depth = [_depths[f.objectID] unsignedIntegerValue];
+        if (f == folder) {
+            within = YES;
+            continue;
+        }
+        if (within && depth > depthOfFolder) continue;
+        within = NO;
+        if ([_notes isSmartFolder:f]) continue;
+        NSString *indent = [@"" stringByPaddingToLength:depth * 3 withString:@" " startingAtIndex:0];
         [items addObject:@[ [indent stringByAppendingString:f.name.length ? f.name : @"Untitled"], f, @(parent == f) ]];
     }
     return items;
