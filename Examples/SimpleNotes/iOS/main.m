@@ -7,7 +7,7 @@
 @interface SNiOSAppDelegate : UIResponder <UIApplicationDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @property (nonatomic, strong) SNNotes *notes;
-@property (nonatomic, strong) SNSignIn *signIn;
+@property (nonatomic, strong) ODataSignIn *signIn;
 @end
 
 @implementation SNiOSAppDelegate
@@ -27,7 +27,7 @@
     if (server.length) {
         /* Signed in as it was last time: the tokens kept for it. */
         NSURL *root = [NSURL URLWithString:server];
-        _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+        _signIn = SNSignInTo(root, [[SNSecretStore alloc] init]);
         _notes.configuration = _signIn.configuration;
         _notes.serviceRoot = root;
     }

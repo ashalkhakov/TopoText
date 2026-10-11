@@ -16,7 +16,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     SNNotes *_notes;
     SNWindowController *_window;
     /* The server's sign-in (its credentials, for each sync). */
-    SNSignIn *_signIn;
+    ODataSignIn *_signIn;
     SNSyncPanel *_panel;
     /* Devices nearby (nil: this computer has no identity for them). */
     SNPeers *_peers;
@@ -46,7 +46,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     NSURL *root = server.length ? [NSURL URLWithString:server] : nil;
     if (root) {
         /* Signed in as it was last time: the tokens kept for it. */
-        _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+        _signIn = SNSignInTo(root, [[SNSecretStore alloc] init]);
         _notes.configuration = _signIn.configuration;
         _notes.serviceRoot = root;
     }
@@ -129,7 +129,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     [_panel showWindow:nil];
 }
 
-- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(ODataSignIn *)signIn {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setBool:YES forKey:SNSyncChosenDefaultsKey];
     if (root) [defaults setObject:root.absoluteString forKey:SNServerDefaultsKey];

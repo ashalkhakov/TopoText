@@ -17,7 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 // The server's root, as the user set it.
 FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 
-@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, SNSignInDelegate, UIDocumentPickerDelegate,
+@interface SNFoldersViewController : UITableViewController <SNSmartFolderViewControllerDelegate, ODataSignInDelegate, UIDocumentPickerDelegate,
                                                                SNTransferViewControllerDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // A folder with folders in it, open in the list (its chevron) or closed

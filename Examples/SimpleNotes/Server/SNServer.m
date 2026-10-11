@@ -221,7 +221,7 @@ static NSURL *SNURL(id value) {
         return NO;
     }
     /* How to sign in ($metadata's Authorization), to a device not signed
-       in yet: SNSignIn reads it there. AllowAnonymousMetadata NO turns it
+       in yet: ODataSignIn reads it there. AllowAnonymousMetadata NO turns it
        off (ODataServiceModule reads it). */
     _service.allowsAnonymousMetadata = YES;
     /* Devices not yet updated write in their model's version: each version

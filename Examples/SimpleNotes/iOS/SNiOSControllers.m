@@ -78,7 +78,7 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
        drawn. */
     NSDictionary *_counts;
     /* The server being signed in to, until it is (then the notes'). */
-    SNSignIn *_signIn;
+    ODataSignIn *_signIn;
     SNPeers *_peers;
     /* Imports waiting for the one going (each with access to its file
        while it goes), and the export's zip, to save once written. */
@@ -313,15 +313,15 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
     });
 }
 
-/* Signed in as the server asks, then synced with (SNSignIn). */
+/* Signed in as the server asks, then synced with (ODataSignIn). */
 - (void)signInToServer:(NSURL *)root {
     [_signIn cancel];
-    _signIn = [[SNSignIn alloc] initWithServiceRoot:root secrets:[[SNSecretStore alloc] init]];
+    _signIn = SNSignInTo(root, [[SNSecretStore alloc] init]);
     _signIn.delegate = self;
     [_signIn learn];
 }
 
-- (void)useServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+- (void)useServer:(NSURL *)root signIn:(ODataSignIn *)signIn {
     if (root) [[NSUserDefaults standardUserDefaults] setObject:root.absoluteString forKey:SNServerDefaultsKey];
     else [[NSUserDefaults standardUserDefaults] removeObjectForKey:SNServerDefaultsKey];
     signIn.delegate = nil;
@@ -332,12 +332,12 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
 
 #pragma mark signing in
 
-- (void)signInDidLearn:(SNSignIn *)signIn {
+- (void)signInDidLearn:(ODataSignIn *)signIn {
     if (signIn.signedIn) {
         [self useServer:signIn.serviceRoot signIn:signIn];
         return;
     }
-    if (signIn.kind == SNSignInPassword) {
+    if (signIn.kind == ODataSignInPassword) {
         UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In" message:signIn.serviceRoot.host
                                                             preferredStyle:UIAlertControllerStyleAlert];
         [a addTextFieldWithConfigurationHandler:^(UITextField *f) {
@@ -359,7 +359,7 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
 }
 
 /* The code, and the provider's page to enter it on (opened in Safari). */
-- (void)signIn:(SNSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
+- (void)signIn:(ODataSignIn *)signIn showCode:(NSString *)code page:(NSURL *)page completePage:(NSURL *)completePage {
     UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Sign In"
         message:[NSString stringWithFormat:@"Open %@ and enter the code\n\n%@", page.host ?: page.absoluteString, code]
         preferredStyle:UIAlertControllerStyleAlert];
@@ -372,13 +372,13 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
     [self presentViewController:a animated:YES completion:nil];
 }
 
-- (void)signInDidFinish:(SNSignIn *)signIn {
+- (void)signInDidFinish:(ODataSignIn *)signIn {
     if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
     [self useServer:signIn.serviceRoot signIn:signIn];
     if (signIn.userName.length) SNTell(self, @"Signed In", [NSString stringWithFormat:@"Signed in as %@.", signIn.userName]);
 }
 
-- (void)signIn:(SNSignIn *)signIn didFail:(NSError *)error {
+- (void)signIn:(ODataSignIn *)signIn didFail:(NSError *)error {
     if (self.presentedViewController) [self dismissViewControllerAnimated:YES completion:nil];
     SNTell(self, @"Not Signed In", error.localizedDescription ?: @"");
 }

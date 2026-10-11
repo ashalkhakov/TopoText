@@ -13,8 +13,13 @@ NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdURL) {
     return versions;
 }
 
+/* A SQLite store's files: the database, its write-ahead log and shared
+   memory, and the folder of the Binary values it keeps outside itself
+   (.<name>_SUPPORT beside it, as Apple's and FreeCoreData's stores make). */
 static NSArray<NSString *> *SNStoreFiles(NSURL *url) {
-    return @[ url.path, [url.path stringByAppendingString:@"-wal"], [url.path stringByAppendingString:@"-shm"] ];
+    NSString *support = [NSString stringWithFormat:@".%@_SUPPORT", url.lastPathComponent.stringByDeletingPathExtension];
+    return @[ url.path, [url.path stringByAppendingString:@"-wal"], [url.path stringByAppendingString:@"-shm"],
+              [url.path.stringByDeletingLastPathComponent stringByAppendingPathComponent:support] ];
 }
 
 /* A version's model as the store was made: with the bookkeeping its users
@@ -31,6 +36,18 @@ static NSManagedObjectModel *SNVersionAsStored(NSManagedObjectModel *version, Cl
         if ([own containsObject:entity.name] || hashes[entity.name]) [kept addObject:entity];
     if (kept.count != version.entities.count) version.entities = kept;
     return version;
+}
+
+/* A version's model as a store was made before ODataSync let synced Binary
+   values be kept outside the store (allowsExternalBinaryDataStorage, which
+   is part of an entity's version hash): none allowed. */
+static NSManagedObjectModel *SNWithoutExternalStorage(NSManagedObjectModel *model) {
+    NSManagedObjectModel *before = [model copy];
+    for (NSEntityDescription *entity in before.entities)
+        for (NSPropertyDescription *property in entity.properties)
+            if ([property isKindOfClass:[NSAttributeDescription class]])
+                ((NSAttributeDescription *)property).allowsExternalBinaryDataStorage = NO;
+    return before;
 }
 
 BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper, NSError **error) {
@@ -52,6 +69,10 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     for (NSManagedObjectModel *version in SNModelVersions(momdURL)) {
         NSManagedObjectModel *stored = SNVersionAsStored(version, bookkeeper, metadata);
         if ([stored isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = stored;
+        else {
+            NSManagedObjectModel *before = SNWithoutExternalStorage(stored);
+            if ([before isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = before;
+        }
     }
     if (!source) {
         if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSPersistentStoreIncompatibleVersionHashError
@@ -61,8 +82,12 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
 
     NSMappingModel *mapping = [NSMappingModel inferredMappingModelForSourceModel:source destinationModel:current error:error];
     if (!mapping) return NO;
-    NSURL *migrated = [storeURL URLByAppendingPathExtension:@"migrating"];
-    for (NSString *p in SNStoreFiles(migrated)) [[NSFileManager defaultManager] removeItemAtPath:p error:NULL];
+    /* Made under the store's own name, in a folder beside it: the values it
+       keeps outside itself go where they belong once it is moved over. */
+    NSURL *migrating = [[storeURL URLByDeletingLastPathComponent] URLByAppendingPathComponent:[NSString stringWithFormat:@".%@.migrating", storeURL.lastPathComponent] isDirectory:YES];
+    [[NSFileManager defaultManager] removeItemAtURL:migrating error:NULL];
+    if (![[NSFileManager defaultManager] createDirectoryAtURL:migrating withIntermediateDirectories:YES attributes:nil error:error]) return NO;
+    NSURL *migrated = [migrating URLByAppendingPathComponent:storeURL.lastPathComponent];
     NSMigrationManager *manager = [[NSMigrationManager alloc] initWithSourceModel:source destinationModel:current];
     if (![manager migrateStoreFromURL:storeURL type:NSSQLiteStoreType options:options withMappingModel:mapping
                      toDestinationURL:migrated destinationType:NSSQLiteStoreType destinationOptions:options error:error])
@@ -78,6 +103,7 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     }
     for (NSUInteger i = 0; i < from.count; i++)
         if ([fm fileExistsAtPath:from[i]] && ![fm moveItemAtPath:from[i] toPath:to[i] error:error]) return NO;
+    [fm removeItemAtURL:migrating error:NULL];
     return YES;
 }
 

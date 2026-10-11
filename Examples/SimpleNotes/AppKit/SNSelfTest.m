@@ -13,7 +13,7 @@ NSURL *SNSelfTestRoot;
 /* What the Sync window chose. */
 /* A sign-in's secrets kept in memory: the self-test leaves the keychain
    alone (a rebuilt app is another app to it, and is asked about). */
-@interface SNSelfTestSecrets : NSObject <SNSecretStoring>
+@interface SNSelfTestSecrets : NSObject <ODataSecretStoring>
 @end
 
 /* Lets go of a transfer panel when it says it closed, as the window does. */
@@ -44,7 +44,7 @@ NSURL *SNSelfTestRoot;
 @end
 
 @implementation SNSyncChoice
-- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(SNSignIn *)signIn {
+- (void)syncPanel:(SNSyncPanel *)panel didChooseServer:(NSURL *)root signIn:(ODataSignIn *)signIn {
     _root = root;
     _chosen = YES;
 }
@@ -319,7 +319,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         sync.serverField.stringValue = notes.serviceRoot.absoluteString;
         [sync ok:nil];
         SNWait(10, ^BOOL { return choice.chosen; });
-        SNSay(choice.chosen && [choice.root isEqual:notes.serviceRoot] && sync.warningLabel.isHidden && sync.signIn.kind == SNSignInNone,
+        SNSay(choice.chosen && [choice.root isEqual:notes.serviceRoot] && sync.warningLabel.isHidden && sync.signIn.kind == ODataSignInNone,
               [NSString stringWithFormat:@"a server with no sign-in chosen (%@)", choice.root]);
         /* Devices Nearby: its window, and the peer token the server (no
            sign-in: none to give) does not give. */
