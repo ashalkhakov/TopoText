@@ -18,6 +18,9 @@ mkdir -p AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/ap
 install -m 0644 Scripts/appimage/simplenotes.desktop AppDir/usr/share/applications/simplenotes.desktop
 install -m 0644 Examples/SimpleNotes/Icons/SimpleNotes.png AppDir/simplenotes.png
 install -m 0644 Examples/SimpleNotes/Icons/SimpleNotes.png AppDir/usr/share/icons/hicolor/256x256/apps/simplenotes.png
+# What software centres and the AppImage catalog show of it.
+mkdir -p AppDir/usr/share/metainfo
+install -m 0644 Scripts/appimage/io.github.ashalkhakov.SimpleNotes.appdata.xml AppDir/usr/share/metainfo/
 
 # The executables to trace for libraries, found rather than named:
 # gnustep-make decides where they land.
