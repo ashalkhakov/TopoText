@@ -541,6 +541,34 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
             SNSay(SNSnapshotWindow(window.window, @(snapshot)), [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
         }
 
+        /* The panes' widths, kept as they are left (the list's as a list,
+           while the gallery widens it), and put back at a launch. The
+           widths the user had are put back after: a Debug build shares
+           their defaults. */
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        id usersWidths = [defaults objectForKey:@"SNPaneWidths"];
+        NSSplitView *split = window.panes;
+        CGFloat divider = split.dividerThickness;
+        [split setPosition:150 ofDividerAtIndex:0];
+        [split setPosition:150 + divider + 230 ofDividerAtIndex:1];
+        NSArray *kept = [defaults arrayForKey:@"SNPaneWidths"], *keptFirst = kept;
+        BOOL keptBoth = kept.count == 2 && fabs([kept[0] doubleValue] - 150) <= 2 && fabs([kept[1] doubleValue] - 230) <= 2;
+        [tv tryToPerform:@selector(showAsGallery:) with:nil];
+        [window.window setContentSize:NSMakeSize(NSWidth([window.window.contentView frame]) + 20, NSHeight([window.window.contentView frame]))];
+        kept = [defaults arrayForKey:@"SNPaneWidths"];
+        BOOL keptList = kept.count == 2 && fabs([kept[1] doubleValue] - 230) <= 2;
+        [tv tryToPerform:@selector(showAsList:) with:nil];
+        [split setPosition:200 ofDividerAtIndex:0];
+        [split setPosition:500 ofDividerAtIndex:1];
+        [defaults setObject:@[ @150, @230 ] forKey:@"SNPaneWidths"];
+        [window placePanes];
+        CGFloat folders = NSWidth([split.subviews[0] frame]), list = NSWidth([split.subviews[1] frame]);
+        SNSay(keptBoth && keptList && fabs(folders - 150) <= 2 && fabs(list - 230) <= 2,
+              [NSString stringWithFormat:@"the panes' widths kept, the list's as a list, and put back (%@; %@; %.0f, %.0f)",
+                                         [keptFirst componentsJoinedByString:@", "], [kept componentsJoinedByString:@", "], folders, list]);
+        if (usersWidths) [defaults setObject:usersWidths forKey:@"SNPaneWidths"];
+        else [defaults removeObjectForKey:@"SNPaneWidths"];
+
         /* View > as Gallery: the notes as cards, Weekend's with its photo;
            a card chosen opens its note. */
         SNNote *weekendNote = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
