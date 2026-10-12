@@ -6,6 +6,7 @@
 #import "SNSelfTest.h"
 #import "SNSyncPanel.h"
 #import "SNPeersWindow.h"
+#import "SNUpdater.h"
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 /* Whether where to keep the notes was chosen once (else Sync… opens). */
@@ -22,9 +23,30 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     SNSyncPanel *_panel;
     /* Devices nearby (nil: this computer has no identity for them). */
     SNPeers *_peers;
+    SNUpdater *_updater;
     NSError *_peersError;
     NSURL *_store;
     SNPeersWindow *_peersWindow;
+}
+
+/* Updates, set up before the app finishes launching (as Sparkle asks);
+   not started in a self-test. Where there is no updater, no menu item. */
+- (void)applicationWillFinishLaunching:(NSNotification *)n {
+    _updater = [[SNUpdater alloc] initStarting:!SNSelfTestRoot];
+    if (!_updater.available) {
+        NSMenu *appMenu = [[NSApp mainMenu] itemAtIndex:0].submenu;
+        NSMenuItem *check = [appMenu itemWithTag:7100];
+        if (check) [appMenu removeItem:check];
+    }
+}
+
+- (IBAction)checkForUpdates:(id)sender {
+    [_updater checkForUpdates:sender];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem *)item {
+    if (item.action == @selector(checkForUpdates:)) return _updater.canCheckForUpdates;
+    return YES;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {

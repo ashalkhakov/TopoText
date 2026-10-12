@@ -174,25 +174,47 @@ class Remote:
                      {'isa': 'PBXTargetDependency', 'name': t, 'targetProxy': proxy})
 
 
-def native_target(p, name, product_type, product_name, product_ext, phases, deps, configlist, explicit_type):
+class Package:
+    """A Swift package the project takes products from, at an exact version."""
+    def __init__(self, p, name, url, version):
+        self.p, self.name = p, name
+        self.ref = p.add(oid(p.name, 'package', name), 'XCRemoteSwiftPackageReference "%s"' % name,
+                         {'isa': 'XCRemoteSwiftPackageReference', 'repositoryURL': url,
+                          'requirement': {'kind': 'exactVersion', 'version': version}})
+
+    def product(self, target, product):
+        return self.p.add(oid(self.p.name, 'package', self.name, target, product), product,
+                          {'isa': 'XCSwiftPackageProductDependency', 'package': self.ref, 'productName': product})
+
+    def build_file(self, target, phase, product_dep, product):
+        return self.p.add(oid(self.p.name, 'buildfile', target, phase, 'package', product), '%s in %s' % (product, phase),
+                          {'isa': 'PBXBuildFile', 'productRef': product_dep})
+
+
+def native_target(p, name, product_type, product_name, product_ext, phases, deps, configlist, explicit_type, packages=None):
     product = p.add(oid(p.name, 'product', name), product_name + product_ext,
                     {'isa': 'PBXFileReference', 'explicitFileType': explicit_type, 'includeInIndex': '0',
                      'path': product_name + product_ext, 'sourceTree': 'BUILT_PRODUCTS_DIR'})
     tid = oid(p.name, 'target', name)
-    p.add(tid, name, {'isa': 'PBXNativeTarget', 'buildConfigurationList': configlist, 'buildPhases': phases, 'buildRules': [],
-                      'dependencies': deps, 'name': name, 'productName': product_name, 'productReference': product,
-                      'productType': product_type})
+    target = {'isa': 'PBXNativeTarget', 'buildConfigurationList': configlist, 'buildPhases': phases, 'buildRules': [],
+              'dependencies': deps, 'name': name, 'productName': product_name, 'productReference': product,
+              'productType': product_type}
+    if packages:
+        target['packageProductDependencies'] = packages
+    p.add(tid, name, target)
     return tid, product
 
 
-def project_object(p, main_group, products_group, targets, remotes, configlist):
-    p.root = p.add(oid(p.name, 'project'), 'Project object',
-                   {'isa': 'PBXProject', 'attributes': {'BuildIndependentTargetsInParallel': '1', 'LastUpgradeCheck': '1600'},
-                    'buildConfigurationList': configlist, 'compatibilityVersion': 'Xcode 14.0', 'developmentRegion': 'en',
-                    'hasScannedForEncodings': '0', 'knownRegions': ['en', 'Base'], 'mainGroup': main_group,
-                    'productRefGroup': products_group, 'projectDirPath': '',
-                    'projectReferences': [{'ProductGroup': r.group, 'ProjectRef': r.ref} for r in remotes],
-                    'projectRoot': '', 'targets': targets})
+def project_object(p, main_group, products_group, targets, remotes, configlist, packages=None):
+    obj = {'isa': 'PBXProject', 'attributes': {'BuildIndependentTargetsInParallel': '1', 'LastUpgradeCheck': '1600'},
+           'buildConfigurationList': configlist, 'compatibilityVersion': 'Xcode 14.0', 'developmentRegion': 'en',
+           'hasScannedForEncodings': '0', 'knownRegions': ['en', 'Base'], 'mainGroup': main_group,
+           'productRefGroup': products_group, 'projectDirPath': '',
+           'projectReferences': [{'ProductGroup': r.group, 'ProjectRef': r.ref} for r in remotes],
+           'projectRoot': '', 'targets': targets}
+    if packages:
+        obj['packageReferences'] = [k.ref for k in packages]
+    p.root = p.add(oid(p.name, 'project'), 'Project object', obj)
 
 
 FRAMEWORK_SETTINGS = {
@@ -280,7 +302,7 @@ def simplenotes(topotext_ids):
                                            'SNMigration.h', 'SNMigration.m', 'SNMarkdown.h', 'SNMarkdown.m', 'SNZip.h', 'SNZip.m', 'SNTransfer.h', 'SNTransfer.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
-                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNTransferPanel.h', 'SNTransferPanel.m', 'SNGallery.h', 'SNGallery.m', 'SNVersionsPanel.h', 'SNVersionsPanel.m', 'SNMemory.h', 'SNMemory.m', 'SNMemory-Apple.m', 'SNWatchdog.h', 'SNWatchdog.m', 'SNWatchdog-Apple.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
+                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNTransferPanel.h', 'SNTransferPanel.m', 'SNGallery.h', 'SNGallery.m', 'SNVersionsPanel.h', 'SNVersionsPanel.m', 'SNMemory.h', 'SNMemory.m', 'SNMemory-Apple.m', 'SNWatchdog.h', 'SNWatchdog.m', 'SNWatchdog-Apple.m', 'SNUpdater.h', 'SNUpdater.m', 'SNUpdater-Apple.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
                                            'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'VersionsPanel.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNTransferViewController.h', 'SNTransferViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNMenuAction.h', 'SNMenuAction.m', 'SNGalleryViewController.h', 'SNGalleryViewController.m', 'SNVersionsViewController.h', 'SNVersionsViewController.m', 'SNSecretStore.m',
@@ -299,11 +321,16 @@ def simplenotes(topotext_ids):
     def deps(target):
         return [(tt if n in tt.products else odk).dependency(target, n) for n in frameworks]
 
-    def app(target, sources, resources, xcconfig, embed=True):
+    # Sparkle, the Mac app's updates (AppKit/SNUpdater.h); Xcode fetches it,
+    # and embeds it as it does any package's framework.
+    sparkle = Package(p, 'Sparkle', 'https://github.com/sparkle-project/Sparkle', '2.10.0')
+
+    def app(target, sources, resources, xcconfig, embed=True, packages=()):
         src = phase(p, target, 'PBXSourcesBuildPhase', 'Sources',
                     [build_file(p, target, 'Sources', ref, comment) for ref, comment in sources])
         fw = phase(p, target, 'PBXFrameworksBuildPhase', 'Frameworks',
-                   [build_file(p, target, 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
+                   [build_file(p, target, 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks] +
+                   [pkg.build_file(target, 'Frameworks', pkg.product(target, name), name) for pkg, name in packages])
         res = phase(p, target, 'PBXResourcesBuildPhase', 'Resources',
                     [build_file(p, target, 'Resources', ref, comment) for ref, comment in resources])
         phases = [src, fw, res]
@@ -319,13 +346,14 @@ def simplenotes(topotext_ids):
     common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNSmartFilter.m', 'SNResolver.m', 'SNRichText.m', 'SNThumbnails.m', 'SNShares.m', 'SNMarkdownEscape.m', 'SNTableGrid.m', 'SNSignIn.m', 'SNPeers.m', 'SNMigration.m', 'SNMarkdown.m', 'SNZip.m', 'SNTransfer.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
-    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNVersionsPanel.m', 'SNMemory-Apple.m', 'SNWatchdog-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
+    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNVersionsPanel.m', 'SNMemory-Apple.m', 'SNWatchdog-Apple.m', 'SNUpdater-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
                      sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'VersionsPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
-                     appkit['SimpleNotes-macOS.xcconfig'])
+                     appkit['SimpleNotes-macOS.xcconfig'], packages=[(sparkle, 'Sparkle')])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],
-                                                                      appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')
+                                                                      appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application',
+                                     packages=[sparkle.product('SimpleNotes', 'Sparkle')])
     targets.append(('SimpleNotes', tid, 'SimpleNotes.app'))
 
     # The Share extension: what other apps share, into the inbox the app
@@ -378,7 +406,7 @@ def simplenotes(topotext_ids):
         group(p, 'Libraries', [tt.ref, odk.ref]),
         products_group])
     project_object(p, main, products_group, [t[1] for t in targets], [tt, odk],
-                   config_list(p, 'project', {}, {}, configs[1], configs[2]))
+                   config_list(p, 'project', {}, {}, configs[1], configs[2]), packages=[sparkle])
     p.write()
     for name, tid, product in targets:
         if name == 'SimpleNotes-Share':

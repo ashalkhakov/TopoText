@@ -36,10 +36,20 @@ and attach:
   `MACOS_CERTIFICATE_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and
   `NOTARY_PASSWORD`; otherwise it's unsigned, and named so. Either way it
   must pass its self-test first.
+  A release (not a pre-release) also gets `appcast.xml`, the feed the
+  app's Sparkle reads (`SUFeedURL`: the newest release's), its update
+  signed with the EdDSA key in the `SPARKLE_PRIVATE_KEY` secret, whose
+  public half is `SUPublicEDKey` in `AppKit/Info.plist`. Without the
+  secret there is no appcast, and the Mac app isn't offered the release.
 - **Linux** (`release.yml`): `SimpleNotes-<version>-x86_64.AppImage`,
   built on Ubuntu 22.04 so it runs there and on anything newer. It is
   checked on a clean Ubuntu: its own server is started and seeded, and the
   app's self-test runs against it.
+  A release's AppImage carries update information (`gh-releases-zsync`,
+  the newest release), and its `.zsync` is attached beside it, so
+  AppImageUpdate, Gear Lever and the like update it by the blocks that
+  changed. A pre-release's carries none: "latest" would offer it the
+  release before it.
 - **iOS** (`release.yml`): `SimpleNotes-iOS-<version>-unsigned.ipa`, to be
   signed for TestFlight and the App Store once there is an account, and a
   simulator build. The simulator build must pass its self-test.

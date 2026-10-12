@@ -146,6 +146,16 @@ jobs:
           # Signed inside out: every framework embedded (what is there, not a
           # list), then the app, whose signature seals theirs; not --deep,
           # which Apple deprecates.
+          # Sparkle's helpers first, as its documentation has it for a
+          # Developer ID app (the downloader keeps its entitlements); its
+          # framework is then signed with the others.
+          sparkle="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+          if [ -d "$sparkle" ]; then
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/XPCServices/Installer.xpc"
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" --preserve-metadata=entitlements "$sparkle/XPCServices/Downloader.xpc"
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/Autoupdate"
+            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/Updater.app"
+          fi
           for fw in "$APP"/Contents/Frameworks/*.framework; do
             codesign --force --timestamp --options runtime --sign "$IDENTITY" "$fw"
           done
@@ -195,10 +205,37 @@ jobs:
           [ "${{ steps.sign.outputs.signed }}" = "true" ] || suffix="-unsigned"
           ditto -c -k --keepParent "$APP" "SimpleNotes-macOS-${APP_VERSION}${suffix}.zip"
 
+      # The appcast the app's Sparkle reads (SUFeedURL: the newest release's
+      # appcast.xml): this release's zip, signed with the EdDSA key whose
+      # public half is SUPublicEDKey. A release only, signed and notarized:
+      # a pre-release is offered to no one.
+      - name: Appcast
+        if: steps.sign.outputs.signed == 'true' && env.TAG != '' && !contains(env.TAG, '-')
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_VERSION: 2.10.0   # as Scripts/xcodeproj.py
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY not set; no appcast, so the Mac app will not be offered this release"
+            exit 0
+          fi
+          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          mkdir -p "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/updates"
+          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          cp "SimpleNotes-macOS-${APP_VERSION}.zip" "$RUNNER_TEMP/updates/"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/generate_appcast" --ed-key-file - \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            -o appcast.xml "$RUNNER_TEMP/updates"
+          cat appcast.xml
+          grep -q 'sparkle:edSignature' appcast.xml || { echo "::error::the appcast's update is not signed"; exit 1; }
+
       - uses: actions/upload-artifact@v4
         with:
           name: SimpleNotes-macOS-${{ env.APP_VERSION }}
-          path: ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+          path: |
+            ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+            ${{ github.workspace }}/source/appcast.xml
 
       - name: Attach to the release
         if: env.TAG != ''
@@ -206,7 +243,9 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           prerelease: ${{ contains(env.TAG, '-') }}
-          files: ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+          files: |
+            ${{ github.workspace }}/source/SimpleNotes-macOS-*.zip
+            ${{ github.workspace }}/source/appcast.xml
 
   ################################# iOS #################################
   # Unsigned: there is no App Store account to sign it with yet. The device
@@ -406,8 +445,16 @@ jobs:
       - name: Assemble AppDir
         run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/prepare-appdir.sh
 
+      # A release's image updates itself from the newest release (through
+      # AppImageUpdate, Gear Lever and the like), by the .zsync attached
+      # beside it. A pre-release's does not: "latest" would offer it the
+      # release before it.
       - name: Package the AppImage
-        run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+        run: |
+          if [ -n "$TAG" ] && [[ "$TAG" != *-* ]]; then
+            export UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|SimpleNotes-*x86_64.AppImage.zsync"
+          fi
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
 
       # Where it will run: a plain Ubuntu with no GNUstep, and only the
       # libraries every desktop has (AppImage leaves those to the host). The
@@ -434,7 +481,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: SimpleNotes-AppImage-${{ env.APP_VERSION }}
-          path: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+          path: |
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage.zsync
+          if-no-files-found: error
 
       - name: Attach to the release
         if: env.TAG != ''
@@ -442,4 +492,6 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           prerelease: ${{ contains(env.TAG, '-') }}
-          files: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+          files: |
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage.zsync

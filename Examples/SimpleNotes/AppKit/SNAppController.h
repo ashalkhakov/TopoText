@@ -18,6 +18,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)showNotes:(nullable id)sender;
 // Devices Nearby… (SNPeersWindow).
 - (IBAction)showDevicesNearby:(nullable id)sender;
+// Check for Updates… (SNUpdater.h): on macOS only; GNUstep's menu has no
+// such item, the AppImage being updated from outside.
+- (IBAction)checkForUpdates:(nullable id)sender;
 // Services > Add to SimpleNotes (another app's selection: its text, a link,
 // a picture): a new note at the top, shown. As the Share extension does on
 // iOS: through an inbox (SNShares.h), imported at once.
