@@ -173,7 +173,7 @@ jobs:
       # font lacks is given a font by name (menus' ⌘ ⇧ ⌥ drawn, and opening
       # fast with many fonts installed), and a double click on an
       # attachment reaches the text view's delegate (a file attachment
-      # opens); c4f1773 (#11, its branch until merged): a divider moved by
+      # opens); dcbad8f (#11): a divider moved by
       # -setPosition:ofDividerAtIndex: is told of (the panes' widths kept).
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
@@ -182,7 +182,7 @@ jobs:
       # (#72): a context that related objects is let go of; 5247095 (#73):
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
-      GNUSTEP_PATCHES_REF: c4f1773d2f40857b79b5e2c10065f6309cb3a5e6
+      GNUSTEP_PATCHES_REF: dcbad8f6db6db7054bc9152aad3e8686a233809d
       FREECOREDATA_REF: 5bfd5a87179cff43e0a8a55622fc00f01951c88a
     defaults:
       run:
