@@ -169,11 +169,11 @@ jobs:
       # addnamespace-duplicate-prefix-leak (#838) retired, merged upstream;
       # 43dcb1f: #821 and #823 retired, merged; nsxml-placeholder-attributes
       # (the rest of #821, #839); fb112b4 (#8): NSCollectionView makes its
-      # items and lays them out in lines; 57b6e67 (#10, its branch until
-      # merged): a character a font lacks is given a font by name (menus'
-      # ⌘ ⇧ ⌥ drawn, and opening fast with many fonts installed); ac63e2c:
-      # a double click on an attachment reaches the text view's delegate
-      # (a file attachment opens).
+      # items and lays them out in lines; 8fa1baf (#10): a character a
+      # font lacks is given a font by name (menus' ⌘ ⇧ ⌥ drawn, and opening
+      # fast with many fonts installed), and a double click on an
+      # attachment reaches the text view's delegate (a file attachment
+      # opens).
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
       # notes to another store (MoveFrom); 338bc7b (#71): an object and its
@@ -181,7 +181,7 @@ jobs:
       # (#72): a context that related objects is let go of; 5247095 (#73):
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
-      GNUSTEP_PATCHES_REF: ac63e2caeb9aae38b782d5338ca62b89e3cc6574
+      GNUSTEP_PATCHES_REF: 8fa1baf34c7aa75674635a0e069f9526cbf0e4ff
       FREECOREDATA_REF: 5bfd5a87179cff43e0a8a55622fc00f01951c88a
     defaults:
       run:
