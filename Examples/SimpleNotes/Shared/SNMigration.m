@@ -99,9 +99,21 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     if (![[NSFileManager defaultManager] createDirectoryAtURL:migrating withIntermediateDirectories:YES attributes:nil error:error]) return NO;
     NSURL *migrated = [migrating URLByAppendingPathComponent:storeURL.lastPathComponent];
     NSMigrationManager *manager = [[NSMigrationManager alloc] initWithSourceModel:source destinationModel:current];
-    if (![manager migrateStoreFromURL:storeURL type:NSSQLiteStoreType options:options withMappingModel:mapping
-                     toDestinationURL:migrated destinationType:NSSQLiteStoreType destinationOptions:options error:error])
+    /* What the store raises, an error like any other (an update on a
+       thread of its own would otherwise end the app, the user waiting). */
+    BOOL migratedOK = NO;
+    @try {
+        migratedOK = [manager migrateStoreFromURL:storeURL type:NSSQLiteStoreType options:options withMappingModel:mapping
+                                 toDestinationURL:migrated destinationType:NSSQLiteStoreType destinationOptions:options error:error];
+    } @catch (NSException *e) {
+        NSLog(@"SimpleNotes: the store's update raised %@: %@", e.name, e.reason);
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSMigrationError
+                                            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"The update failed: %@", e.reason ?: e.name] }];
+    }
+    if (!migratedOK) {
+        [[NSFileManager defaultManager] removeItemAtURL:migrating error:NULL];
         return NO;
+    }
     /* The migrated store in the old one's place; the old kept beside it, as
        .old, until the next migration. */
     NSArray *from = SNStoreFiles(migrated), *to = SNStoreFiles(storeURL);
