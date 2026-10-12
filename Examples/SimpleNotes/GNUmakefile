@@ -38,20 +38,20 @@ SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServer
 ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
 endif
-SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNMemory.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
+SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNVersionsPanel.m AppKit/SNMemory.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
 	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNThumbnails.m Shared/SNShares.m Shared/SNMarkdownEscape.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNMigration.m \
 	Shared/SNMarkdown.m Shared/SNZip.m Shared/SNTransfer.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS) -lz
 SimpleNotes_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
-SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib AppKit/DevicesNearby.xib AppKit/TransferPanel.xib AppKit/UpdatePanel.xib AppKit/AttachmentsWindow.xib Icons/SimpleNotes.png
+SimpleNotes_RESOURCE_FILES = AppKit/MainMenu.xib AppKit/NotesWindow.xib AppKit/TextPanel.xib AppKit/SmartFolderPanel.xib AppKit/SyncPanel.xib AppKit/DevicesNearby.xib AppKit/TransferPanel.xib AppKit/UpdatePanel.xib AppKit/AttachmentsWindow.xib AppKit/VersionsPanel.xib Icons/SimpleNotes.png
 # SNNote+CoreDataProperties, SNFolder+CoreDataProperties: generated from
 # the model as it builds (Codegen: Category/Extension), as Xcode does.
 SimpleNotes_COREDATA_CODEGEN = yes
 
 TOOL_NAME = simplenotes-server
-simplenotes-server_OBJC_FILES = Server/SNServer.m Server/SNNotebooks.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m
+simplenotes-server_OBJC_FILES = Server/SNServer.m Server/SNNotebooks.m Server/SNVersions.m Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNMigration.m
 simplenotes-server_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
 simplenotes-server_COREDATA_CODEGEN = yes
 simplenotes-server_INCLUDE_DIRS = $(SN_INCLUDES)

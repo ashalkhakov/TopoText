@@ -955,6 +955,31 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:panel.URL]];
 }
 
+#pragma mark version history
+
+- (IBAction)showVersionHistory:(id)sender {
+    SNNote *note = [self selectedNote];
+    if (!note) return;
+    /* What was typed written: the note as it is now, beside each version. */
+    [_notes saveAll];
+    if (![_versionsPanel.note isEqual:note]) {
+        [_versionsPanel close];
+        _versionsPanel = [[SNVersionsPanel alloc] initWithNotes:_notes note:note];
+        _versionsPanel.delegate = self;
+    } else {
+        [_versionsPanel reload];
+    }
+    [_versionsPanel showWindow:nil];
+}
+
+- (void)versionsPanel:(SNVersionsPanel *)panel restoreVersion:(NSManagedObject *)version {
+    if (![_notes restoreNote:panel.note toVersion:version]) {
+        NSBeep();
+        return;
+    }
+    [_grids update];
+}
+
 #pragma mark printing
 
 /* The open note on paper: a text view of the page's width, out of sight,
@@ -1288,6 +1313,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         return YES;
     }
     if (a == @selector(printNote:) || a == @selector(exportNoteAsPDF:)) return _editor != nil;
+    if (a == @selector(showVersionHistory:)) return [self selectedNote] != nil;
     if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
     if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;

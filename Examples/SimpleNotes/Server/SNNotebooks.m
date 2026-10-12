@@ -1,4 +1,7 @@
 #import "SNNotebooks.h"
+#import "SNVersions.h"
+#import <ODataKit/ODataError.h>
+#import "SNModel.h"
 
 static NSString * const SNOwner = @"owner";
 
@@ -10,25 +13,52 @@ static NSString *SNOwnerOf(ODataRequest *request) {
 }
 
 - (NSPredicate *)predicateForVisibleObjectsInRequest:(ODataRequest *)request {
-    NSPredicate *mine = [NSPredicate predicateWithFormat:@"%K == %@", SNOwner, SNOwnerOf(request)];
     NSPredicate *theirs = [super predicateForVisibleObjectsInRequest:request];
+    if (!_perUser) return theirs;
+    NSPredicate *mine = [NSPredicate predicateWithFormat:@"%K == %@", SNOwner, SNOwnerOf(request)];
     return theirs ? [NSCompoundPredicate andPredicateWithSubpredicates:@[ theirs, mine ]] : mine;
 }
 
+/* A note's versions are the server's to make and let go of. */
+- (BOOL)refusesWrites:(ODataReply *)reply {
+    if (![self.entity.name isEqualToString:SNNoteVersionEntity]) return NO;
+    [reply failWithError:ODataServiceError(403, @"A note's versions are the server's: read them, do not write them")];
+    return YES;
+}
+
 - (NSManagedObject *)insertObjectWithValues:(NSDictionary<NSString *, id> *)values request:(ODataRequest *)request reply:(ODataReply *)reply {
+    if ([self refusesWrites:reply]) return nil;
     NSManagedObject *made = [super insertObjectWithValues:values request:request reply:reply];
-    [made setValue:SNOwnerOf(request) forKey:SNOwner];
+    if (_perUser) [made setValue:SNOwnerOf(request) forKey:SNOwner];
     return made;
+}
+
+- (NSManagedObject *)updateObject:(NSManagedObject *)object values:(NSDictionary<NSString *, id> *)values request:(ODataRequest *)request
+                            reply:(ODataReply *)reply {
+    if ([self refusesWrites:reply]) return nil;
+    /* The text it had, kept before it changes: its plain text (a device's
+       write of the row) or its rich text (merged), whichever comes first. */
+    if ([self.entity.name isEqualToString:SNNoteEntity] && (values[@"bodyText"] || values[@"body"])) SNKeepVersionOfNote(object, [NSDate date]);
+    return [super updateObject:object values:values request:request reply:reply];
+}
+
+- (void)deleteObject:(NSManagedObject *)object request:(ODataRequest *)request reply:(ODataReply *)reply {
+    if ([self refusesWrites:reply]) return;
+    /* A note deleted for good: its versions with it. */
+    if ([self.entity.name isEqualToString:SNNoteEntity]) SNForgetVersionsOfNote(object);
+    [super deleteObject:object request:request reply:reply];
 }
 
 @end
 
-void SNServeNotebookPerUser(ODataService *service) {
+void SNServeNotebooks(ODataService *service, BOOL perUser) {
     for (NSEntityDescription *entity in service.model.entities) {
         if (![entity.attributesByName objectForKey:SNOwner] || entity.superentity) continue;
         NSString *set = entity.userInfo[@"OData.entitySet"];
         if (!set.length) continue;
-        [service setHandler:[[SNNotebookHandler alloc] initWithEntity:entity] forEntitySet:set];
+        SNNotebookHandler *handler = [[SNNotebookHandler alloc] initWithEntity:entity];
+        handler.perUser = perUser;
+        [service setHandler:handler forEntitySet:set];
     }
 }
 

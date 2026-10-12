@@ -101,6 +101,11 @@ FOUNDATION_EXPORT void SNSystemTextChanged(id<SNTextViewing> view);
 // A text view's drawing done again (the list markers: a range of its
 // characters, or all).
 FOUNDATION_EXPORT void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range);
+// A version of a note beside it as it is now, as plain text: what
+// restoring the version brings back highlighted, what it takes away struck
+// through (TTStringChanges); the rest as it is.
+FOUNDATION_EXPORT NSAttributedString *SNVersionPreview(NSString *now, NSString *then);
+
 // The headings' chevrons shown beside a note's text (not on paper, nor in
 // a table's cell): drawn with the glyphs where the margin can be drawn in
 // so, else by a view over the text view's.

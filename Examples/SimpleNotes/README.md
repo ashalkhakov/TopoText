@@ -4,11 +4,11 @@ A small Apple Notes: folders (and folders in folders), notes in rich text
 with headings, lists and checklists, block quotes, collapsible sections,
 colours and highlights, links, images and tables, tags, search, find and
 replace in a note, printing and PDF export, a gallery view, an attachments
-browser, sharing from other apps, pinning, sorting and grouping by date,
-Recently Deleted, and moving notes between folders. It runs on macOS and on
-Linux (AppKit, through GNUstep), and on iPhone and iPad. Every note is kept
-on the device and works offline. Notes sync with a server, `simplenotes-
-server`, which serves them over OData.
+browser, sharing from other apps, version history, pinning, sorting and
+grouping by date, Recently Deleted, and moving notes between folders. It
+runs on macOS and on Linux (AppKit, through GNUstep), and on iPhone and
+iPad. Every note is kept on the device and works offline. Notes sync with a
+server, `simplenotes- server`, which serves them over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
@@ -167,6 +167,36 @@ Data.
 To sign the app and its extension for a device, the team in
 `iOS/Local.xcconfig` needs the App Group. If Xcode's automatic signing
 doesn't add it, add it to both identifiers in the Apple Developer account.
+
+## Version history
+
+**File > Version History…** (on iOS, **Version History** in the note's •••
+menu) lists a note's earlier versions, the newest first. Choosing one shows
+it beside the note as it is now: what restoring it brings back is
+highlighted, and what it takes away is struck through. **Restore This
+Version** makes the note as it was then.
+
+The server keeps the versions, so every device has the same history. When a
+write is about to change a note's text and the note's newest version is at
+least ten minutes old, the server keeps the text as it was before the write
+(`Server/SNVersions.h`). A version is a clean copy of the text and its
+formatting, without the deleted characters a note's text accumulates, so it
+stays small. Versions are thinned as they age: all of the last day, the
+newest of each hour for a week, the newest of each day for 30 days, none
+older. They are a synced entity, `NoteVersion` (model version 7), that
+devices only download (`ODataSync.direction` `down`), and the server
+refuses a client's writes to them. A note deleted for good takes its
+versions with it.
+
+Edits made offline make no versions of their own; they reach the server as
+one write when the device syncs. Offline, the versions already downloaded
+still show what has changed since each of them.
+
+Restoring changes the note by the fewest edits it takes. TopoText's
+`-setAttributedString:` diffs the two texts (Myers' algorithm, line by line
+and then character by character), so text that is the same keeps its
+characters. Another device's typing in that text, merged later, stays where
+it was typed. The restore syncs and merges like typing.
 
 ## Gallery and attachments
 
@@ -385,11 +415,13 @@ What import also does:
 - **Version 4** added `Attachment` (images and tables in notes).
 - **Version 5** added `Folder.filter` (smart folders), `Folder.sortOrder`
   (a folder's own order) and `Attachment.name` (files).
+- **Version 6** added `owner` to every entity (a notebook per user).
+- **Version 7** added `NoteVersion` (version history, kept by the server).
 
 To add a version:
 
 1. Add a version in Xcode (or copy the latest `.xcdatamodel` and name it
-   `SimpleNotes 6.xcdatamodel`), and give it the next
+   `SimpleNotes 8.xcdatamodel`), and give it the next
    `userDefinedModelVersionIdentifier`.
 2. Make it current in `.xccurrentversion`.
 3. Run `Scripts/xcodeproj.py`.
@@ -412,6 +444,9 @@ What happens when a store opens:
 - **Devices not yet updated** keep syncing: they name their model's version
   with every request, and the server accepts their writes, renaming
   `Updated` to `Edited` on the way (`SNUpgradeBody`).
+- **A server not yet updated** does not take a newer device: it answers
+  "The service has no schema version N", and the device doesn't sync until
+  the server is updated. So update the server first, then the apps.
 
 Core Data's automatic migration can't do the device's part, because a store
 holding ODataSync's entities wasn't made from any of the compiled models as

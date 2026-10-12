@@ -16,13 +16,18 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// A set's handler that keeps each user to their own rows.
+// A set's handler that keeps each user to their own rows (perUser; else
+// every row is everyone's). Also, for notes, a version kept before a write
+// changes a note's text (SNVersions.h); and the versions' set is the
+// server's alone: a client reads it, never writes it.
 @interface SNNotebookHandler : ODataSyncSetHandler
+@property (nonatomic) BOOL perUser;
 @end
 
-// Each set of an entity with an owner served so; before ODataSyncService
-// is made (it keeps a handler that is already an ODataSyncSetHandler).
-FOUNDATION_EXPORT void SNServeNotebookPerUser(ODataService *service);
+// Each set of an entity with an owner served so (a notebook per user, or
+// one shared); before ODataSyncService is made (it keeps a handler that is
+// already an ODataSyncSetHandler).
+FOUNDATION_EXPORT void SNServeNotebooks(ODataService *service, BOOL perUser);
 // The rows no one owns (made before notebooks were per user), given to
 // owner; how many.
 FOUNDATION_EXPORT NSUInteger SNGiveUnownedRows(NSPersistentStoreCoordinator *coordinator, NSString *owner, NSError **error);

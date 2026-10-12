@@ -6,6 +6,7 @@
 #import "SNUndoTextView.h"
 #import "SNMenuAction.h"
 #import "SNGalleryViewController.h"
+#import "SNVersionsViewController.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
 #import "SNTransferViewController.h"
@@ -933,6 +934,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [actions addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
         SNMenuAction(@"Collapse All Sections", [UIImage systemImageNamed:@"chevron.right"], @selector(collapseAllSections:), self),
         SNMenuAction(@"Expand All Sections", [UIImage systemImageNamed:@"chevron.down"], @selector(expandAllSections:), self) ]]];
+    [actions addObject:SNMenuAction(@"Version History", [UIImage systemImageNamed:@"clock.arrow.circlepath"], @selector(showVersionHistory:), self)];
     [actions addObject:SNMenuAction(@"Print", [UIImage systemImageNamed:@"printer"], @selector(printNote:), self)];
     [actions addObject:SNMenuAction(@"Export as PDF", [UIImage systemImageNamed:@"doc.richtext"], @selector(exportNoteAsPDF:), self)];
     UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
@@ -1008,6 +1010,10 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (NSString *)pdfName {
     NSString *title = [_note.title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
     return [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+}
+
+- (IBAction)showVersionHistory:(id)sender {
+    [self.navigationController pushViewController:[[SNVersionsViewController alloc] initWithNotes:_notes note:_note] animated:YES];
 }
 
 - (IBAction)collapseAllSections:(id)sender {

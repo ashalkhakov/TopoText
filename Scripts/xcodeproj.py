@@ -280,17 +280,17 @@ def simplenotes(topotext_ids):
                                            'SNMigration.h', 'SNMigration.m', 'SNMarkdown.h', 'SNMarkdown.m', 'SNZip.h', 'SNZip.m', 'SNTransfer.h', 'SNTransfer.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
-                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNTransferPanel.h', 'SNTransferPanel.m', 'SNGallery.h', 'SNGallery.m', 'SNMemory.h', 'SNMemory.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
-                                           'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'Info.plist',
+                                           'SNTextView.h', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.h', 'SNSmartFolderPanel.m', 'SNSyncPanel.h', 'SNSyncPanel.m', 'SNPeersWindow.h', 'SNPeersWindow.m', 'SNTransferPanel.h', 'SNTransferPanel.m', 'SNGallery.h', 'SNGallery.m', 'SNVersionsPanel.h', 'SNVersionsPanel.m', 'SNMemory.h', 'SNMemory.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.h', 'SNSelfTest.m', 'MainMenu.xib',
+                                           'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'VersionsPanel.xib', 'Info.plist',
                                            'SimpleNotes-macOS.xcconfig')}
-    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNTransferViewController.h', 'SNTransferViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNMenuAction.h', 'SNMenuAction.m', 'SNGalleryViewController.h', 'SNGalleryViewController.m', 'SNSecretStore.m',
+    ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNTransferViewController.h', 'SNTransferViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNMenuAction.h', 'SNMenuAction.m', 'SNGalleryViewController.h', 'SNGalleryViewController.m', 'SNVersionsViewController.h', 'SNVersionsViewController.m', 'SNSecretStore.m',
                                      'SNEditorViewController.xib', 'Assets.xcassets', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
     share = {n: F('iOS/Share/' + n) for n in ('SNShareViewController.h', 'SNShareViewController.m', 'SNShareInbox.h', 'SNShareInbox.m', 'Info.plist', 'Share.entitlements',
                                              'SimpleNotes-Share.xcconfig')}
     ios_entitlements = F('iOS/SimpleNotes.entitlements')
     icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
-    server = {n: F('Server/' + n) for n in ('SNServer.m', 'SNNotebooks.h', 'SNNotebooks.m')}
+    server = {n: F('Server/' + n) for n in ('SNServer.m', 'SNNotebooks.h', 'SNNotebooks.m', 'SNVersions.h', 'SNVersions.m')}
     tests = {n: F('Tests/' + n) for n in ('seed.py',)}
 
     frameworks = ['TopoText', 'TopoTextSync'] + ODATAKIT_ORDER
@@ -319,9 +319,9 @@ def simplenotes(topotext_ids):
     common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNSmartFilter.m', 'SNResolver.m', 'SNRichText.m', 'SNThumbnails.m', 'SNShares.m', 'SNMarkdownEscape.m', 'SNTableGrid.m', 'SNSignIn.m', 'SNPeers.m', 'SNMigration.m', 'SNMarkdown.m', 'SNZip.m', 'SNTransfer.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
-    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
+    mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNVersionsPanel.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
-                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib']) + sources_of(icons, ['SimpleNotes.icns']),
+                     sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'VersionsPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
                      appkit['SimpleNotes-macOS.xcconfig'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],
@@ -341,7 +341,7 @@ def simplenotes(topotext_ids):
                          'remoteGlobalIDString': share_tid, 'remoteInfo': 'SimpleNotes-Share'})
     share_dep = p.add(oid(p.name, 'dep', 'SimpleNotes-iOS', 'SimpleNotes-Share'), 'PBXTargetDependency',
                       {'isa': 'PBXTargetDependency', 'target': share_tid, 'targetProxy': share_proxy})
-    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNPeersViewController.m', 'SNTransferViewController.m', 'SNUndoTextView.m', 'SNMenuAction.m', 'SNGalleryViewController.m', 'SNSecretStore.m']) + sources_of(share, ['SNShareInbox.m']) + common,
+    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNPeersViewController.m', 'SNTransferViewController.m', 'SNUndoTextView.m', 'SNMenuAction.m', 'SNGalleryViewController.m', 'SNVersionsViewController.m', 'SNSecretStore.m']) + sources_of(share, ['SNShareInbox.m']) + common,
                      sources_of(ios, ['SNEditorViewController.xib', 'Assets.xcassets']), ios['SimpleNotes-iOS.xcconfig'])
     ios_phases.append(phase(p, 'SimpleNotes-iOS', 'PBXCopyFilesBuildPhase', 'Embed App Extensions',
                             [build_file(p, 'SimpleNotes-iOS', 'Embed App Extensions', share_product, 'SimpleNotesShare.appex',
@@ -357,7 +357,7 @@ def simplenotes(topotext_ids):
     # The server: a tool; Xcode compiles its model beside it, where it looks.
     src = phase(p, 'simplenotes-server', 'PBXSourcesBuildPhase', 'Sources',
                 [build_file(p, 'simplenotes-server', 'Sources', ref, c) for ref, c in
-                 sources_of(server, ['SNServer.m', 'SNNotebooks.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
+                 sources_of(server, ['SNServer.m', 'SNNotebooks.m', 'SNVersions.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
     fw = phase(p, 'simplenotes-server', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
     s = {'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'PRODUCT_NAME': 'simplenotes-server', 'SKIP_INSTALL': 'YES',

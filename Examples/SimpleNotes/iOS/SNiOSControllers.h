@@ -136,6 +136,8 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 // Collapse All Sections and Expand All Sections (the ... menu); a heading's
 // chevron, tapped, collapses or expands its own.
 - (IBAction)collapseAllSections:(nullable id)sender;
+// Version History (the ... menu): the note's versions (SNVersionsViewController).
+- (IBAction)showVersionHistory:(nullable id)sender;
 - (IBAction)expandAllSections:(nullable id)sender;
 // Print and Export as PDF (the ... menu): the note on paper (A4, or Letter
 // where inches are used), to the print sheet, or a file to share.

@@ -40,7 +40,9 @@ BOOL SNWriteShare(NSURL *inbox, NSString *title, NSString *text, NSURL *link, NS
     NSFileManager *fm = [NSFileManager defaultManager];
     /* Written under a hidden name, then put in place whole; named for when
        it was shared, to be imported in that order. */
-    NSString *uuid = [NSString stringWithFormat:@"%013.0f-%@", [NSDate date].timeIntervalSince1970 * 1000, [NSUUID UUID].UUIDString];
+    static NSUInteger written;   /* two in the same microsecond, in order too */
+    NSString *uuid = [NSString stringWithFormat:@"%016.0f-%06lu-%@", [NSDate date].timeIntervalSince1970 * 1e6, (unsigned long)(++written % 1000000),
+                                                [NSUUID UUID].UUIDString];
     NSURL *writing = [inbox URLByAppendingPathComponent:[@"." stringByAppendingString:uuid] isDirectory:YES];
     NSURL *done = [inbox URLByAppendingPathComponent:uuid isDirectory:YES];
     if (![fm createDirectoryAtURL:writing withIntermediateDirectories:YES attributes:nil error:error]) return NO;

@@ -9,6 +9,7 @@
 #import "SNTextView.h"
 #import "SNTransferPanel.h"
 #import "SNGallery.h"
+#import "SNVersionsPanel.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -16,7 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
                                                     NSTableViewDelegate, SNTextViewDelegate, SNNoteEditorDelegate,
-                                                    SNTransferPanelDelegate, SNGalleryDelegate, SNAttachmentsWindowDelegate>
+                                                    SNTransferPanelDelegate, SNGalleryDelegate, SNAttachmentsWindowDelegate,
+                                                    SNVersionsPanelDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The sidebar: All Notes, the folders (folders in folders under them),
 // Recently Deleted, and the tags.
@@ -126,6 +128,9 @@ NS_ASSUME_NONNULL_BEGIN
 // colours, images, files' cards, tables (drawn as they look), in the
 // paper's light colours.
 - (IBAction)printNote:(nullable id)sender;
+// File > Version History...: the open note's versions (SNVersionsPanel).
+- (IBAction)showVersionHistory:(nullable id)sender;
+@property (nonatomic, readonly, nullable) SNVersionsPanel *versionsPanel;
 - (IBAction)exportNoteAsPDF:(nullable id)sender;
 // The open note as a PDF at path, with no panel (Export as PDF's, once a
 // file is chosen); NO: none written.

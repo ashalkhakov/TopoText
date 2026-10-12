@@ -594,6 +594,27 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([tv tryToPerform:@selector(expandAllSections:) with:nil] &&
               [tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] == nil, @"Expand All Sections shows it again");
 
+        /* File > Version History: the versions the server kept of Groceries
+           (its text as seeded, kept as the first typing came); the oldest
+           restored, the note as it was then. */
+        [window selectNoteTitled:@"Groceries"];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        SNSay([tv tryToPerform:@selector(showVersionHistory:) with:nil] && window.versionsPanel.window.isVisible &&
+              window.versionsPanel.versions.count >= 1,
+              [NSString stringWithFormat:@"Version History: the server's versions (%lu)", (unsigned long)window.versionsPanel.versions.count]);
+        SNVersionsPanel *history = window.versionsPanel;
+        NSManagedObject *oldest = history.versions.lastObject;
+        NSString *then = oldest ? [notes textOfVersion:oldest].string : nil;
+        [history.versionTable selectRowIndexes:[NSIndexSet indexSetWithIndex:history.versions.count - 1] byExtendingSelection:NO];
+        if (snapshot) SNSnapshotWindow(history.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-versions.png"]);
+        SNSay([then hasPrefix:@"Groceries"] && history.restoreButton.isEnabled && history.previewView.string.length > 0,
+              [NSString stringWithFormat:@"the oldest beside the note (%@)", [then stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        [history restore:nil];
+        SNSay(then && [tv.string isEqual:then], [NSString stringWithFormat:@"Restore This Version: the note as it was (%@)",
+                                                  [tv.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        [history close:nil];
+
         /* Deleted from the window, into Recently Deleted on the other device;
            recovered from Recently Deleted, back there too. */
         [window showAllNotes];

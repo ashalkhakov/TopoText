@@ -239,7 +239,10 @@ static NSURL *SNURL(id value) {
     BOOL signIn = [c setting:@"TrustedUserHeader"] || [c setting:@"JWTIssuer"] || [c setting:@"IntrospectionEndpoint"];
     NSString *peerKey = [c setting:@"PeerKey"];
     BOOL peers = signIn && ![peerKey isEqual:@"None"];
-    if (notebooks ? [notebooks caseInsensitiveCompare:@"PerUser"] == NSOrderedSame : signIn) SNServeNotebookPerUser(_service);
+    /* Every set with an owner served by the notebooks' handler: a user's
+       own rows (PerUser), or everyone's; notes' versions kept, and the
+       server's alone (SNVersions.h). */
+    SNServeNotebooks(_service, notebooks ? [notebooks caseInsensitiveCompare:@"PerUser"] == NSOrderedSame : signIn);
     NSString *heir = [c setting:@"GiveUnownedTo"];
     if (heir.length) {
         NSUInteger given = SNGiveUnownedRows(coordinator, heir, &failure);

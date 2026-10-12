@@ -134,6 +134,18 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 // The note of that id (SNLinkToNote's), deleted or not; nil: none here.
 - (nullable SNNote *)noteWithID:(NSString *)noteID;
+// A note's versions (model version 7: NoteVersion, made at the server and
+// downloaded), the newest first: each its created (date), title and text.
+// None from a server without them, nor while offline: what was typed
+// since the last is the note as it is.
+- (NSArray<NSManagedObject *> *)versionsOfNote:(SNNote *)note;
+// A version's text (nil: not one).
+- (nullable TopoText *)textOfVersion:(NSManagedObject *)version;
+// The note made as it was then: its text and formatting, by the fewest
+// edits it takes (TopoText's -setAttributedString:), which sync and merge
+// as typing does (another device's typing elsewhere in it stays); open
+// editors shown it. NO: not restored.
+- (BOOL)restoreNote:(SNNote *)note toVersion:(NSManagedObject *)version;
 // The note of that object id (an SNAttachmentItem's noteID); nil: gone.
 - (nullable SNNote *)noteForObjectID:(NSManagedObjectID *)objectID;
 // The images (SNAttachmentKindImage) or files (SNAttachmentKindFile) of

@@ -1655,3 +1655,25 @@ static SNRect SNChevronBox(SNRect line, CGFloat left) {
 }
 
 @end
+
+#pragma mark a version beside the text
+
+NSAttributedString *SNVersionPreview(NSString *now, NSString *then) {
+    NSDictionary *plain = @{ NSFontAttributeName: SNSystemFont(SNSystemFontSize(nil), NO), NSForegroundColorAttributeName: SNSystemTextColor() };
+    NSMutableDictionary *back = [plain mutableCopy], *gone = [plain mutableCopy];
+    back[NSBackgroundColorAttributeName] = SNSystemHighlightColor(@"mint");
+    gone[NSBackgroundColorAttributeName] = SNSystemHighlightColor(@"pink");
+    gone[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
+    NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
+    NSUInteger at = 0;   /* in then */
+    for (NSArray<NSValue *> *c in TTStringChanges(now, then)) {
+        NSRange mine = c[0].rangeValue, theirs = c[1].rangeValue;
+        if (theirs.location > at)
+            [out appendAttributedString:[[NSAttributedString alloc] initWithString:[then substringWithRange:NSMakeRange(at, theirs.location - at)] attributes:plain]];
+        if (mine.length) [out appendAttributedString:[[NSAttributedString alloc] initWithString:[now substringWithRange:mine] attributes:gone]];
+        if (theirs.length) [out appendAttributedString:[[NSAttributedString alloc] initWithString:[then substringWithRange:theirs] attributes:back]];
+        at = NSMaxRange(theirs);
+    }
+    if (at < then.length) [out appendAttributedString:[[NSAttributedString alloc] initWithString:[then substringFromIndex:at] attributes:plain]];
+    return out;
+}

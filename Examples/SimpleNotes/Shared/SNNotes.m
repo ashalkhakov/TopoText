@@ -1025,6 +1025,33 @@ static NSUInteger SNAttachmentCharacters(NSString *body) {
     if (attachment && !attachment.hasChanges) [_context refreshObject:attachment mergeChanges:NO];
 }
 
+#pragma mark versions
+
+- (NSArray<NSManagedObject *> *)versionsOfNote:(SNNote *)note {
+    if (!note.id.length || !_coordinator.managedObjectModel.entitiesByName[SNNoteVersionEntity]) return @[];
+    return [self fetch:SNNoteVersionEntity where:[NSPredicate predicateWithFormat:@"noteID == %@", note.id]
+              sortedBy:@[ [NSSortDescriptor sortDescriptorWithKey:@"created" ascending:NO] ]];
+}
+
+- (TopoText *)textOfVersion:(NSManagedObject *)version {
+    NSData *data = [version.entity.name isEqual:SNNoteVersionEntity] ? [version valueForKey:@"text"] : nil;
+    return [data isKindOfClass:[NSData class]] ? [TopoText textWithData:data replica:0 error:NULL] : nil;
+}
+
+- (BOOL)restoreNote:(SNNote *)note toVersion:(NSManagedObject *)version {
+    TopoText *then = [self textOfVersion:version];
+    if (!then || note.deletedAt) return NO;
+    /* What was typed written first; then the note made as it was, by an
+       editor of its own; then the open ones shown what it wrote. */
+    [self saveAll];
+    SNNoteEditor *editor = [self editorForNote:note];
+    [editor.text setAttributedString:then.attributedString];
+    [editor textDidChange];
+    [editor close];
+    [self saveAll];
+    return YES;
+}
+
 - (SNNote *)noteForObjectID:(NSManagedObjectID *)objectID {
     NSManagedObject *o = objectID ? [_context existingObjectWithID:objectID error:NULL] : nil;
     return [o isKindOfClass:[SNNote class]] ? (SNNote *)o : nil;

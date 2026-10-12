@@ -142,6 +142,12 @@ CA
                                     <action selector="exportNoteAsPDF:" target="-1" id="SNm-ac-934"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Version History…" id="SNm-mi-937">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="showVersionHistory:" target="-1" id="SNm-ac-937"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-935"/>
                             <menuItem title="Print…" keyEquivalent="p" id="SNm-mi-936">
                                 <connections>

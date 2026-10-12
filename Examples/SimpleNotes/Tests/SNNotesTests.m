@@ -8,6 +8,7 @@
 #import "SNModel.h"
 #import "SNNotes.h"
 #import "SNNotebooks.h"
+#import "SNVersions.h"
 #import "SNPeers.h"
 #import <ODataIncrementalStore/ODataConfiguration.h>
 
@@ -80,6 +81,8 @@
     XCTAssertNotNil([_server addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:[self temporaryStore]
                                                 options:@{ NSPersistentHistoryTrackingKey: @YES } error:&error], @"%@", error);
     _service = [[ODataService alloc] initWithPersistentStoreCoordinator:_server serviceRoot:[NSURL URLWithString:@"http://notes.test/odata/"]];
+    /* As simplenotes-server serves them: one notebook, notes' versions kept. */
+    SNServeNotebooks(_service, NO);
     _histories = [[ODataSyncService alloc] initWithService:_service];
     SNRegisterMergers(_histories.engine);
 }
@@ -171,17 +174,22 @@
 }
 
 /* Typed into on one device, synced after each pause: no conflict, there
-   being no other writer. */
+   being no other writer; nothing to download but the note's first version
+   (the server keeps one as its text is first written over, which a later
+   sync downloads, and none again so soon). */
 - (void)testTypingOnOneDeviceMeetsNoConflict {
     SNNotes *a = [self device];
     [self edit:[a addNoteInFolder:nil] on:a with:^(TopoText *t) { [t insertString:@"10 - Saturday" atIndex:0 attributes:nil]; }];
     [self sync:a];
+    NSUInteger downloaded = 0;
     for (int i = 0; i < 3; i++) {
         [self edit:[self onlyNote:a] on:a with:^(TopoText *t) { [t insertString:@"\nmore" atIndex:t.length attributes:nil]; }];
         [self sync:a];
         XCTAssertEqual(a.engine.lastResult.conflicts, 0u, @"edit %d: %@", i, a.engine.lastResult);
-        XCTAssertEqual(a.engine.lastResult.downloaded, 0u, @"edit %d: %@", i, a.engine.lastResult);
+        downloaded += a.engine.lastResult.downloaded;
     }
+    XCTAssertEqual(downloaded, 1u, @"one thing came down");
+    XCTAssertEqual([a versionsOfNote:[self onlyNote:a]].count, 1u, @"what came down: a version");
 }
 
 - (void)notesDidChange:(NSNotification *)n {
@@ -822,6 +830,55 @@
     return out;
 }
 
+#pragma mark versions
+
+- (void)testVersionsAreThinned {
+    NSDate *now = [NSDate date];
+    NSArray *ages = @[ @60, @(3600 * 5), @(86400 + 100), @(86400 + 200), @(86400 + 4000), @(86400 * 3), @(86400 * 8 + 10), @(86400 * 8 + 3600),
+                       @(86400 * 9), @(86400 * 31) ];
+    NSMutableArray *dates = [NSMutableArray array];
+    for (NSNumber *age in ages) [dates addObject:[now dateByAddingTimeInterval:-age.doubleValue]];
+    NSIndexSet *forget = SNVersionsToForget(dates, now);
+    /* The last day all; then the newest of each hour; past a week, of each
+       day; past 30 days, none. */
+    NSMutableIndexSet *expected = [NSMutableIndexSet indexSet];
+    [expected addIndex:3];   /* the same hour as 2, older */
+    [expected addIndex:7];   /* the same day as 6, older */
+    [expected addIndex:9];   /* 31 days */
+    XCTAssertEqualObjects(forget, expected);
+}
+
+- (void)testTheServerKeepsANotesVersionsAndOneIsRestored {
+    NSTimeInterval was = SNVersionInterval;
+    SNVersionInterval = 0;
+    SNNotes *a = [self device], *b = [self device];
+    SNNote *note = [a addNoteInFolder:nil];
+    [self edit:note on:a with:^(TopoText *t) { [t insertString:@"Plan\nfirst draft" atIndex:0 attributes:nil]; }];
+    [self sync:a];
+    [self edit:note on:a with:^(TopoText *t) { [t replaceCharactersInRange:NSMakeRange(5, 5) withString:@"second" attributes:nil]; }];
+    [self sync:a];
+    [self edit:note on:a with:^(TopoText *t) { [t replaceCharactersInRange:NSMakeRange(5, 6) withString:@"third" attributes:nil]; }];
+    [self sync:a];
+    SNVersionInterval = was;
+    [self sync:b];
+    SNNote *there = [self onlyNote:b];
+    NSArray<NSManagedObject *> *versions = [b versionsOfNote:there];
+    NSMutableArray *texts = [NSMutableArray array];
+    for (NSManagedObject *v in versions) [texts addObject:[b textOfVersion:v].string];
+    /* The text before each write after the first, the newest first. */
+    XCTAssertEqualObjects(texts, (@[ @"Plan\nsecond draft", @"Plan\nfirst draft" ]));
+    XCTAssertEqualObjects([versions.lastObject valueForKey:@"title"], @"Plan");
+    /* Another device's typing elsewhere in the note stays through a restore. */
+    [self edit:note on:a with:^(TopoText *t) { [t insertString:@"Big " atIndex:0 attributes:nil]; }];
+    XCTAssertTrue([b restoreNote:there toVersion:versions.lastObject]);
+    XCTAssertEqualObjects(there.text.string, @"Plan\nfirst draft");
+    [self sync:b];
+    [self sync:a];
+    [self sync:b];
+    XCTAssertEqualObjects([self onlyNote:a].text.string, @"Big Plan\nfirst draft");
+    XCTAssertEqualObjects([self onlyNote:b].text.string, @"Big Plan\nfirst draft");
+}
+
 #pragma mark attachments
 
 - (void)testAnAttachmentGoesToTheOtherDevice {
@@ -950,7 +1007,7 @@
     jwt.keySet = @{ @"keys": @[ HSPublicKey(key) ] };
     _service.authenticator = jwt;
     _service.allowsAnonymousRequests = YES;   /* as the server's AllowAnonymous */
-    SNServeNotebookPerUser(_service);
+    SNServeNotebooks(_service, YES);
     _histories = [[ODataSyncService alloc] initWithService:_service];
     SNRegisterMergers(_histories.engine);
     return key;
@@ -1011,7 +1068,11 @@
     [self edit:[before addNoteInFolder:[before addFolderNamed:@"Old"]] on:before with:^(TopoText *t) { [t insertString:@"From before" atIndex:0 attributes:nil]; }];
     [self sync:before];
     NSError *error = nil;
-    XCTAssertEqual(SNGiveUnownedRows(_server, @"alice", &error), 2u, @"%@", error);
+    /* The folder, the note, and any version the server kept of it. */
+    NSManagedObjectContext *c = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSMainQueueConcurrencyType];
+    c.persistentStoreCoordinator = _server;
+    NSUInteger versions = [c countForFetchRequest:[NSFetchRequest fetchRequestWithEntityName:SNNoteVersionEntity] error:NULL];
+    XCTAssertEqual(SNGiveUnownedRows(_server, @"alice", &error), 2u + versions, @"%@", error);
     NSDictionary *key = [self serveNotebooksPerUser];
     SNNotes *alice = [self deviceOf:@"alice" key:key];
     [self sync:alice];

@@ -1,6 +1,7 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
 #import "SNGalleryViewController.h"
+#import "SNVersionsViewController.h"
 #import "SNShares.h"
 #import "SNShareInbox.h"
 #import "SNTransfer.h"
@@ -399,6 +400,31 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay(browser.shownItems.count == 1 && [[browser.shownItems.firstObject name] isEqual:@"Lease.pdf"],
               [NSString stringWithFormat:@"and, under Files, the file (%lu)", (unsigned long)browser.shownItems.count]);
         [navigation popViewControllerAnimated:NO];
+        SNWait(0.3, ^BOOL { return NO; });
+
+        /* Version History: the server's version of Groceries (its text as
+           seeded, kept as the first typing came); restored, the note as it
+           was then. */
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        SNNote *groceriesNote = [notes notesInFolder:nil matching:@"Groceries"].firstObject;
+        SNVersionsViewController *history = [[SNVersionsViewController alloc] initWithNotes:notes note:groceriesNote];
+        [navigation pushViewController:history animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay(history.versions.count >= 1, [NSString stringWithFormat:@"Version History: the server's versions (%lu)", (unsigned long)history.versions.count]);
+        if (history.versions.count) {
+            NSManagedObject *oldest = history.versions.lastObject;
+            NSString *then = [notes textOfVersion:oldest].string;
+            SNVersionViewController *version = [[SNVersionViewController alloc] initWithNotes:notes note:groceriesNote version:oldest];
+            [navigation pushViewController:version animated:NO];
+            SNWait(0.5, ^BOOL { return NO; });
+            SNSay([then hasPrefix:@"Groceries"] && version.navigationItem.rightBarButtonItem.enabled && version.previewView.text.length,
+                  [NSString stringWithFormat:@"the oldest beside the note (%@)", [then stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+            [version restore:nil];
+            SNSay([groceriesNote.text.string isEqual:then], [NSString stringWithFormat:@"Restore: the note as it was (%@)",
+                                                             [groceriesNote.text.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        }
+        [navigation popToRootViewControllerAnimated:NO];
         SNWait(0.3, ^BOOL { return NO; });
 
         /* Folders in folders and tags, in the folder list. */
