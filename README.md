@@ -118,7 +118,11 @@ array), with Fugue's ordering:
   a character while others edit around it. An anchor on a deleted character
   resolves to where that character was.
 - `-setString:` and `-setAttributedString:` change the text to a new value
-  with the smallest replacement, for code that has only the new value.
+  by the fewest edits, for code that has only the new value (a snapshot, a
+  version restored). They diff the two (Myers' algorithm, by lines and then
+  by characters within the lines that changed), so what is the same keeps
+  its characters, and another copy's edits in it merge where they were
+  made. `TTStringChanges()` gives the same changes, for showing them.
 
 ### Replicas
 
