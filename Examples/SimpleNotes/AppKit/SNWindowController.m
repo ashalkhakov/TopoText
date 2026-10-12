@@ -25,6 +25,10 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     return r == NSModalResponseStop ? panel.textField.stringValue : nil;
 }
 
+/* The folders' and the list's widths, as the user left them (the list's
+   as a list, while the gallery widened it), put back at the next launch. */
+static NSString * const SNPaneWidthsDefaultsKey = @"SNPaneWidths";
+
 @implementation SNWindowController {
     SNNotes *_notes;
     /* Move To being filled: GNUstep's -[NSMenu update] asks its delegate
@@ -52,6 +56,8 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
        pane's width before it widened for them. */
     SNGallery *_gallery;
     CGFloat _listWidth;
+    /* The panes' widths being put back: not saved meanwhile. */
+    BOOL _placingPanes;
     /* A note on paper while it prints: its binding and tables' grids. */
     SNTextBinding *_paperBinding;
     SNTableGrids *_paperGrids;
@@ -131,12 +137,49 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     _gallery.view.hidden = YES;
     [list.superview addSubview:_gallery.view];
     [self reloadFolders];
+    [self placePanes];
     [self showGallery:[[NSUserDefaults standardUserDefaults] boolForKey:SNGalleryDefaultsKey]];
     [self reloadNotes];
     [self showStatus:_notes.status];
 }
 
 #pragma mark the gallery and the attachments
+
+#pragma mark the panes
+
+/* Folders, notes, the note. */
+- (NSSplitView *)panes {
+    NSView *pane = _noteTable.enclosingScrollView.superview;
+    return [pane.superview isKindOfClass:[NSSplitView class]] ? (NSSplitView *)pane.superview : nil;
+}
+
+/* The widths saved, put back when they still leave the note room. */
+- (void)placePanes {
+    NSSplitView *split = [self panes];
+    NSArray *widths = [[NSUserDefaults standardUserDefaults] arrayForKey:SNPaneWidthsDefaultsKey];
+    split.delegate = self;
+    if (!split || widths.count != 2 || split.subviews.count != 3) return;
+    CGFloat folders = [widths[0] doubleValue], list = [widths[1] doubleValue];
+    if (folders < 1 || list < 1 || folders + list + 2 * split.dividerThickness > NSWidth(split.bounds) - 200) return;
+    _placingPanes = YES;
+    [split setPosition:folders ofDividerAtIndex:0];
+    [split setPosition:folders + split.dividerThickness + list ofDividerAtIndex:1];
+    _placingPanes = NO;
+}
+
+/* A divider moved, or the window resized: the widths kept for the next
+   launch. */
+- (void)splitViewDidResizeSubviews:(NSNotification *)notification {
+    if (!_placingPanes && notification.object == [self panes]) [self savePaneWidths];
+}
+
+- (void)savePaneWidths {
+    NSSplitView *split = [self panes];
+    if (split.subviews.count != 3) return;
+    CGFloat folders = NSWidth([split.subviews[0] frame]);
+    CGFloat list = _gallery.view.isHidden || _listWidth <= 0 ? NSWidth([split.subviews[1] frame]) : _listWidth;
+    [[NSUserDefaults standardUserDefaults] setObject:@[ @(folders), @(list) ] forKey:SNPaneWidthsDefaultsKey];
+}
 
 - (IBAction)showAsList:(id)sender {
     [[NSUserDefaults standardUserDefaults] setBool:NO forKey:SNGalleryDefaultsKey];
@@ -153,8 +196,9 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 - (void)showGallery:(BOOL)cards {
     NSScrollView *list = _noteTable.enclosingScrollView;
     NSView *pane = list.superview;
-    NSSplitView *split = [pane.superview isKindOfClass:[NSSplitView class]] ? (NSSplitView *)pane.superview : nil;
+    NSSplitView *split = [self panes];
     if (cards == !_gallery.view.isHidden) return;
+    _placingPanes = YES;
     if (cards) {
         _listWidth = pane.frame.size.width;
         CGFloat from = NSMinX(pane.frame), room = NSWidth(split.bounds) - from;
@@ -163,6 +207,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     } else if (_listWidth > 0) {
         [split setPosition:NSMinX(pane.frame) + _listWidth ofDividerAtIndex:1];
     }
+    _placingPanes = NO;
     list.hidden = cards;
     _gallery.view.hidden = !cards;
     [self reloadNotes];

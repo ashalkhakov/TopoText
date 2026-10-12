@@ -15,7 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class SNTableGrid;
 
-@interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
+@interface SNWindowController : NSWindowController <NSWindowDelegate, NSSplitViewDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
                                                     NSTableViewDelegate, SNTextViewDelegate, SNNoteEditorDelegate,
                                                     SNTransferPanelDelegate, SNGalleryDelegate, SNAttachmentsWindowDelegate,
                                                     SNVersionsPanelDelegate>
@@ -118,6 +118,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)showAsList:(nullable id)sender;
 - (IBAction)showAsGallery:(nullable id)sender;
 @property (nonatomic, readonly) SNGallery *gallery;
+// The three panes (folders, notes, the note). Their widths are kept as the
+// user leaves them (the list's as a list), and put back at the next launch.
+@property (nonatomic, readonly, nullable) NSSplitView *panes;
+- (void)placePanes;
 // View > Show Attachments (Command-3): every image and file in the notes,
 // in a window of its own; one chosen shows its note, where it is.
 - (IBAction)showAttachments:(nullable id)sender;

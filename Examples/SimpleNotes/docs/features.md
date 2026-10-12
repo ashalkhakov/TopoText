@@ -145,6 +145,13 @@ and then character by character), so text that is the same keeps its
 characters. Another device's typing in that text, merged later, stays where
 it was typed. The restore syncs and merges like typing.
 
+## The window
+
+On the Mac and on Linux, the window keeps its size and place, and the
+widths of its three panes (folders, notes, the note), from one launch to the
+next. The notes pane keeps its width as a list: the gallery widens it while
+it shows, and View > as List puts it back.
+
 ## Gallery and attachments
 
 **View > as Gallery** (⌘2) shows the notes as cards: each note's first
