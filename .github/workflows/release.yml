@@ -195,19 +195,24 @@ jobs:
             exit 1
           fi
           # Stapling fetches the ticket from Apple's CloudKit service, whose
-          # connection has dropped mid-release ("The network connection was
-          # lost", error 68): tried three times before the release fails.
+          # connection the runner has lost mid-release, again and again ("The
+          # network connection was lost", error 68). Tried three times; then
+          # the app ships notarized but unstapled, which Gatekeeper accepts
+          # by fetching the ticket itself when the app is first opened.
+          stapled=false
           for attempt in 1 2 3; do
-            xcrun stapler staple "$APP" && xcrun stapler validate "$APP" && break
-            if [ "$attempt" = 3 ]; then
-              echo "::error::stapling failed three times"
-              exit 1
+            if xcrun stapler staple "$APP" && xcrun stapler validate "$APP"; then
+              stapled=true
+              break
             fi
-            echo "::warning::stapling failed (attempt $attempt of 3); trying again in 30 s"
-            sleep 30
+            [ "$attempt" = 3 ] || { echo "::warning::stapling failed (attempt $attempt of 3); trying again in 60 s"; sleep 60; }
           done
-          # What a downloaded copy meets: Gatekeeper's own assessment.
-          spctl --assess --type execute --verbose=2 "$APP"
+          if [ "$stapled" = true ]; then
+            # What a downloaded copy meets: Gatekeeper's own assessment.
+            spctl --assess --type execute --verbose=2 "$APP"
+          else
+            echo "::warning::the ticket could not be stapled; shipping notarized but unstapled (Gatekeeper fetches the ticket online)"
+          fi
 
       - name: Package
         run: |
