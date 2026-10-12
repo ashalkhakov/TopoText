@@ -40,6 +40,11 @@ and attach:
   built on Ubuntu 22.04 so it runs there and on anything newer. It is
   checked on a clean Ubuntu: its own server is started and seeded, and the
   app's self-test runs against it.
+  A release's AppImage carries update information (`gh-releases-zsync`,
+  the newest release), and its `.zsync` is attached beside it, so
+  AppImageUpdate, Gear Lever and the like update it by the blocks that
+  changed. A pre-release's carries none: "latest" would offer it the
+  release before it.
 - **iOS** (`release.yml`): `SimpleNotes-iOS-<version>-unsigned.ipa`, to be
   signed for TestFlight and the App Store once there is an account, and a
   simulator build. The simulator build must pass its self-test.

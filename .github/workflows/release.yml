@@ -406,8 +406,16 @@ jobs:
       - name: Assemble AppDir
         run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/prepare-appdir.sh
 
+      # A release's image updates itself from the newest release (through
+      # AppImageUpdate, Gear Lever and the like), by the .zsync attached
+      # beside it. A pre-release's does not: "latest" would offer it the
+      # release before it.
       - name: Package the AppImage
-        run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+        run: |
+          if [ -n "$TAG" ] && [[ "$TAG" != *-* ]]; then
+            export UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|SimpleNotes-*x86_64.AppImage.zsync"
+          fi
+          GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
 
       # Where it will run: a plain Ubuntu with no GNUstep, and only the
       # libraries every desktop has (AppImage leaves those to the host). The
@@ -434,7 +442,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: SimpleNotes-AppImage-${{ env.APP_VERSION }}
-          path: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+          path: |
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage.zsync
+          if-no-files-found: error
 
       - name: Attach to the release
         if: env.TAG != ''
@@ -442,4 +453,6 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           prerelease: ${{ contains(env.TAG, '-') }}
-          files: ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+          files: |
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage
+            ${{ github.workspace }}/source/SimpleNotes-*.AppImage.zsync
