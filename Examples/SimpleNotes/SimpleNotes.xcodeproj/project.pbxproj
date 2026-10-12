@@ -191,6 +191,10 @@
 				);
 			};
 		};
+		40497D75F7964A5FC7470710 /* SNWatchdog-Apple.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4D230DE7818CE35266E10216;
+		};
 		4096086CB0EF015B6D5CEC67 /* SNShares.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = AB5FEFCF748915C2804B10BC;
@@ -1261,6 +1265,13 @@
 			sourceTree = "<group>";
 			name = "SNTableGrid+System.h";
 		};
+		4D230DE7818CE35266E10216 /* SNWatchdog-Apple.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNWatchdog-Apple.m";
+			sourceTree = "<group>";
+			name = "SNWatchdog-Apple.m";
+		};
 		4D92007E5ECB86344FC8BEA5 /* SNAttachment.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1386,6 +1397,13 @@
 			path = Shared/SNCheck.h;
 			sourceTree = "<group>";
 			name = SNCheck.h;
+		};
+		72D55CAC2AA66123CA56C5D5 /* SNWatchdog.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNWatchdog.m;
+			sourceTree = "<group>";
+			name = SNWatchdog.m;
 		};
 		73BE747B72F43F189B02E701 /* SimpleNotes.icns */ = {
 			isa = PBXFileReference;
@@ -1785,6 +1803,13 @@
 			sourceTree = "<group>";
 			name = SNSignIn.m;
 		};
+		E7A8EDB5A94723692AC7105C /* SNWatchdog.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNWatchdog.h;
+			sourceTree = "<group>";
+			name = SNWatchdog.h;
+		};
 		E8A487FEE677133CCEA9137F /* SNMarkdown.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1958,6 +1983,9 @@
 				870E686C4171EC7BDA75A2FC,
 				DED814D7F908B806E51A135D,
 				088AFD2695E6A139D1C77D40,
+				E7A8EDB5A94723692AC7105C,
+				72D55CAC2AA66123CA56C5D5,
+				4D230DE7818CE35266E10216,
 				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
@@ -2471,6 +2499,7 @@
 				3CDDEAFB9AD8FB0C59452A77,
 				02DFBE40A80F67B48187616B,
 				EEA04789435666169D25A3C8,
+				40497D75F7964A5FC7470710,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
