@@ -613,7 +613,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         [NSApp postEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:at modifierFlags:0 timestamp:0
                                         windowNumber:tv.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:0]
                  atStart:NO];
-        [[tv.window.contentView.superview hitTest:at] mouseDown:down];
+        [[((NSView *)tv.window.contentView).superview hitTest:at] mouseDown:down];
         SNSay([tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil &&
               [tv.textStorage attribute:SNHiddenAttributeName atIndex:packing effectiveRange:NULL] == nil && [tv.string isEqual:before],
               @"clicked, what is under it is hidden, the text as it was");
