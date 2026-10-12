@@ -92,6 +92,23 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
     return [super validateMenuItem:item];
 }
 
+/* The heading whose chevron is at a point of the view (NSNotFound: none). */
+- (NSUInteger)sectionToggleAt:(NSPoint)p {
+    SNListLayoutManager *lm = (SNListLayoutManager *)self.layoutManager;
+    if (![lm isKindOfClass:[SNListLayoutManager class]]) return NSNotFound;
+    NSPoint origin = self.textContainerOrigin;
+    return [lm sectionToggleAtPoint:NSMakePoint(p.x - origin.x, p.y - origin.y)];
+}
+
+/* macOS's text view leaves a click in its inset to the clip view behind it;
+   the chevrons drawn there are the text view's. */
+- (NSView *)hitTest:(NSPoint)point {
+    NSView *hit = [super hitTest:point];
+    if (hit || !self.isEditable) return hit;
+    NSPoint p = [self convertPoint:point fromView:self.superview];
+    return NSPointInRect(p, self.bounds) && [self sectionToggleAt:p] != NSNotFound ? self : nil;
+}
+
 - (void)mouseDown:(NSEvent *)event {
     SNListLayoutManager *lm = (SNListLayoutManager *)self.layoutManager;
     id<SNTextViewDelegate> delegate = (id<SNTextViewDelegate>)self.delegate;
@@ -104,7 +121,7 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
             [delegate textView:self clickedCheckboxAtIndex:at];
             return;
         }
-        at = [lm sectionToggleAtPoint:NSMakePoint(p.x - origin.x, p.y - origin.y)];
+        at = [self sectionToggleAt:p];
         if (at != NSNotFound && [delegate respondsToSelector:@selector(textView:clickedSectionToggleAtIndex:)]) {
             [delegate textView:self clickedSectionToggleAtIndex:at];
             return;

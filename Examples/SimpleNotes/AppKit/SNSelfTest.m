@@ -586,7 +586,19 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
                                                    effectiveRange:NULL];
         NSUInteger chevron = [slm sectionToggleAtPoint:NSMakePoint(-7, NSMidY(headingLine))];
         SNSay(chevron == packing, [NSString stringWithFormat:@"a chevron beside the heading (%lu)", (unsigned long)chevron]);
-        [window textView:(SNTextView *)tv clickedSectionToggleAtIndex:packing];
+        /* Clicked as the user does: a mouse down where it is drawn, to the
+           view the window finds there (macOS's text view leaves its inset
+           to the clip view). Not through -sendEvent:, which keeps a first
+           click in a window not key (the app runs in the background). */
+        NSPoint at = [tv convertPoint:NSMakePoint(tv.textContainerOrigin.x - 7, tv.textContainerOrigin.y + NSMidY(headingLine)) toView:nil];
+        NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:at modifierFlags:0 timestamp:0
+                                       windowNumber:tv.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+        /* Its mouse up queued: a click the text view takes as its own
+           (selecting) waits for one. */
+        [NSApp postEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:at modifierFlags:0 timestamp:0
+                                        windowNumber:tv.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:0]
+                 atStart:NO];
+        [[tv.window.contentView.superview hitTest:at] mouseDown:down];
         SNSay([tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil &&
               [tv.textStorage attribute:SNHiddenAttributeName atIndex:packing effectiveRange:NULL] == nil && [tv.string isEqual:before],
               @"clicked, what is under it is hidden, the text as it was");
