@@ -392,6 +392,21 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay(moveTo.delegate == nil && filled > 1 && first <= filled && again == first && added == first,
               [NSString stringWithFormat:@"Move To is filled once, not as keys are typed (%lu items; %lu added, then %lu, then %lu)",
                                          (unsigned long)filled, (unsigned long)first, (unsigned long)(again - first), (unsigned long)(added - again)]);
+        /* Another note chosen, in another folder: its mark moved, nothing
+           filled again (Eau's menu bar looks itself up at every item added
+           or removed: a second on each note chosen, with many folders). */
+        NSUInteger beforeChoosing = added;
+        observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSMenuDidAddItemNotification object:moveTo queue:nil
+                                                                 usingBlock:^(NSNotification *n) { added++; }];
+        BOOL chose = [window selectNoteTitled:@"Standup notes"];
+        [window fillMoveToMenus];
+        [[NSNotificationCenter defaultCenter] removeObserver:observer];
+        NSMutableArray *checked = [NSMutableArray array];
+        for (NSMenuItem *item in moveTo.itemArray)
+            if (item.state == NSControlStateValueOn) [checked addObject:[item.title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]];
+        SNSay(chose && added == beforeChoosing && [checked isEqual:@[ @"Work" ]],
+              [NSString stringWithFormat:@"another note chosen: Move To's mark moved, nothing added (%lu added; %@)",
+                                         (unsigned long)(added - beforeChoosing), [checked componentsJoinedByString:@", "]]);
         /* Move Folder To (where dragging in the sidebar does not work):
            Projects into Home, and back into Work. */
         NSMenu *moveFolderTo = nil;

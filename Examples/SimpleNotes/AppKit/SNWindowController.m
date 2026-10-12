@@ -594,18 +594,27 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
 }
 
-/* Filled only when what it says changes: Eau's menu bar is told of every
-   change. */
+/* Filled only when what it says changes, and only its marks moved when the
+   folders are the same (another note chosen): Eau's menu bar is told of
+   every change, each a lookup of its own (a second, with many folders, on
+   every note chosen). */
 - (void)fill:(NSMenu *)menu folders:(BOOL)folders {
     if (_fillingMoveTo) return;
     NSArray<NSArray *> *items = folders ? [self moveFolderToItems] : [self moveToItems];
     SEL action = folders ? @selector(moveFolderToFolder:) : @selector(moveNoteToFolder:);
-    NSMutableArray *shown = [NSMutableArray array];
+    NSMutableArray<NSMenuItem *> *shownItems = [NSMutableArray array];
+    NSMutableArray *shown = [NSMutableArray array], *wanted = [NSMutableArray array];
     for (NSMenuItem *item in menu.itemArray) {
         if (item.isSeparatorItem) continue;
-        [shown addObject:@[ item.title, item.representedObject ?: [NSNull null], @(item.state == NSControlStateValueOn) ]];
+        [shownItems addObject:item];
+        [shown addObject:@[ item.title, item.representedObject ?: [NSNull null] ]];
     }
-    if ([shown isEqual:items]) return;
+    for (NSArray *i in items) [wanted addObject:@[ i[0], i[1] ]];
+    if ([shown isEqual:wanted]) {
+        for (NSUInteger i = 0; i < items.count; i++)
+            shownItems[i].state = [items[i][2] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
+        return;
+    }
     _fillingMoveTo = YES;
     [menu removeAllItems];
     for (NSArray *i in items) {
