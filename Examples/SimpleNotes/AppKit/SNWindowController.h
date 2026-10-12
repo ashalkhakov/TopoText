@@ -32,6 +32,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)selectNoteTitled:(NSString *)title;
 // All Notes, Recently Deleted, a folder or a tag, chosen in the sidebar.
 - (void)showAllNotes;
+// The note chosen in the list (nil: none).
+- (nullable SNNote *)selectedNote;
+
 - (void)showRecentlyDeleted;
 - (BOOL)showFolderNamed:(NSString *)name;
 - (BOOL)showTag:(NSString *)tag;

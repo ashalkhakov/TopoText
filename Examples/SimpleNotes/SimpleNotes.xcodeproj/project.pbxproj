@@ -81,6 +81,10 @@
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
 		};
+		23E902C26C0F30B09B8EB60F /* SNMarkdownEscape.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4FD3C9D01076A426071B18B0;
+		};
 		25879058FDC79CC840CE424F /* SNSignIn.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E432D0D1BDAEABC5F8DE44B6;
@@ -183,6 +187,10 @@
 				);
 			};
 		};
+		4096086CB0EF015B6D5CEC67 /* SNShares.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AB5FEFCF748915C2804B10BC;
+		};
 		42A80778769E29C7DC69B57E /* SNSmartFolderPanel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 41670A389C12C54CF89C242D;
@@ -212,6 +220,10 @@
 		4F515619848A8383B89CB03C /* SNZip.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E9880EC90FE418E43DB29348;
+		};
+		4FA854811EEC0D9FDC22B59F /* SNMarkdownEscape.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4FD3C9D01076A426071B18B0;
 		};
 		4FB387F64E35FE5A9574C4DA /* SNTransfer.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -339,6 +351,10 @@
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
 		};
+		9A6307E125239E8CDF7C06EF /* SNMarkdownEscape.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 4FD3C9D01076A426071B18B0;
+		};
 		9A875137FA1C56A505E3F568 /* SNNotes.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = FC73A466CE6A4BC79D15A841;
@@ -367,6 +383,15 @@
 			settings = {
 				ATTRIBUTES = (
 					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		A16779E4087B6D9B1A7835B7 /* SimpleNotesShare.appex in Embed App Extensions */ = {
+			isa = PBXBuildFile;
+			fileRef = EB0052295D6C56C89697804E;
+			settings = {
+				ATTRIBUTES = (
 					RemoveHeadersOnCopy,
 				);
 			};
@@ -402,6 +427,14 @@
 		B78CA39A9E8041CE0CAC7200 /* SNSecretStore.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = D9DEA82153A953D9E395018F;
+		};
+		B8B596B497A51039FB895260 /* SNShareInbox.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 3C3250BED524529DBA42C2B7;
+		};
+		BAD69090B3DE89BAFDA5AEB4 /* SNShares.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AB5FEFCF748915C2804B10BC;
 		};
 		BBB25EACB49C6339C40C46E8 /* ODataService.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
@@ -455,6 +488,10 @@
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
 		};
+		C648B038EBD0941CAE796894 /* SNShareViewController.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = BF2C20B6C9F13D7295B38920;
+		};
 		C7D5851704839B875F6BE620 /* main.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3A2C9D1C292C6680E66D6F77;
@@ -462,6 +499,10 @@
 		C93C1B38E5CC45EE1BFB472B /* DevicesNearby.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = F311510A21AD054DB71F2A08;
+		};
+		CAE1031790E8BE98EA099DDB /* SNShareInbox.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 3C3250BED524529DBA42C2B7;
 		};
 		CC4B057F37426811B1569081 /* SNPeers.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -561,6 +602,10 @@
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
 		};
+		F56992B1C70CEFED0857517E /* SNShares.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = AB5FEFCF748915C2804B10BC;
+		};
 		F805AB3AE8BCCEE4EF1C9A0E /* SNPeersViewController.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = A498AC792A7B7675377DED03;
@@ -652,6 +697,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 9828CC078A88AE7706B232C7;
 			remoteInfo = HTTPServerKit;
+		};
+		538863D02917102D5EB4E153 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 611ED91EE83D5211DCC24EAE;
+			proxyType = 1;
+			remoteGlobalIDString = 956C2A5864B53EB575F1DBF7;
+			remoteInfo = "SimpleNotes-Share";
 		};
 		5A684DB04D60C58FBB286299 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -835,6 +887,17 @@
 			dstSubfolderSpec = 10;
 			name = "Embed Frameworks";
 		};
+		D55AFB75E515027CCD6C645C /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A16779E4087B6D9B1A7835B7,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			name = "Embed App Extensions";
+		};
 		E8C4510132B6A8A0626BEA54 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -912,6 +975,13 @@
 			sourceTree = "<group>";
 			name = SNTransferViewController.h;
 		};
+		0DC5779BD2303E7C9931677D /* SNShares.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNShares.h;
+			sourceTree = "<group>";
+			name = SNShares.h;
+		};
 		0E28CF600D1F26B783917DFC /* SNNotebooks.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -939,6 +1009,13 @@
 			path = Shared/SNTableGrid.m;
 			sourceTree = "<group>";
 			name = SNTableGrid.m;
+		};
+		124454D239E06A36FC58BC7F /* SNMarkdownEscape.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = Shared/SNMarkdownEscape.h;
+			sourceTree = "<group>";
+			name = SNMarkdownEscape.h;
 		};
 		1369F4A6AED8899F5B91DC93 /* SNTextSystem.h */ = {
 			isa = PBXFileReference;
@@ -1024,6 +1101,13 @@
 			sourceTree = "<group>";
 			name = Assets.xcassets;
 		};
+		2E5390B357C934B4215EEB53 /* SimpleNotes.entitlements */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text;
+			path = iOS/SimpleNotes.entitlements;
+			sourceTree = "<group>";
+			name = SimpleNotes.entitlements;
+		};
 		30CC25927FABFCBFF08E1D16 /* SNiOSControllers.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1044,6 +1128,13 @@
 			path = AppKit/UpdatePanel.xib;
 			sourceTree = "<group>";
 			name = UpdatePanel.xib;
+		};
+		390B5632BF6CB6D42AC63153 /* Info.plist */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = iOS/Share/Info.plist;
+			sourceTree = "<group>";
+			name = Info.plist;
 		};
 		3A2C9D1C292C6680E66D6F77 /* main.m */ = {
 			isa = PBXFileReference;
@@ -1078,6 +1169,13 @@
 			path = AppKit/TextPanel.xib;
 			sourceTree = "<group>";
 			name = TextPanel.xib;
+		};
+		3C3250BED524529DBA42C2B7 /* SNShareInbox.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/Share/SNShareInbox.m;
+			sourceTree = "<group>";
+			name = SNShareInbox.m;
 		};
 		3D0942813D9F6137FA37BAB2 /* SNGalleryViewController.m */ = {
 			isa = PBXFileReference;
@@ -1146,6 +1244,13 @@
 			path = Shared/SNAttachment.h;
 			sourceTree = "<group>";
 			name = SNAttachment.h;
+		};
+		4FD3C9D01076A426071B18B0 /* SNMarkdownEscape.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNMarkdownEscape.m;
+			sourceTree = "<group>";
+			name = SNMarkdownEscape.m;
 		};
 		575D635025FF7766A4A183D2 /* Info.plist */ = {
 			isa = PBXFileReference;
@@ -1217,6 +1322,13 @@
 			sourceTree = "<group>";
 			name = AttachmentsWindow.xib;
 		};
+		6AA409AA9813F275AB6E4342 /* SNShareViewController.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/Share/SNShareViewController.h;
+			sourceTree = "<group>";
+			name = SNShareViewController.h;
+		};
 		6C544B141330E02F70867301 /* SNMenuAction.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1251,6 +1363,13 @@
 			path = AppKit/SNSelfTest.m;
 			sourceTree = "<group>";
 			name = SNSelfTest.m;
+		};
+		79DBCDF9F1D5085B3A816ADB /* SNShareInbox.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = iOS/Share/SNShareInbox.h;
+			sourceTree = "<group>";
+			name = SNShareInbox.h;
 		};
 		7B171DA9ABD39A0E778CE234 /* SyncPanel.xib */ = {
 			isa = PBXFileReference;
@@ -1469,6 +1588,13 @@
 			sourceTree = "<group>";
 			name = SNTransferPanel.m;
 		};
+		AB5FEFCF748915C2804B10BC /* SNShares.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNShares.m;
+			sourceTree = "<group>";
+			name = SNShares.m;
+		};
 		AC94564EB5B357E5DA849A01 /* SNAppController.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1483,11 +1609,25 @@
 			sourceTree = "<group>";
 			name = SNTransferViewController.m;
 		};
+		B9DBB87C7D5CD8834981E25E /* SimpleNotes-Share.xcconfig */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = "iOS/Share/SimpleNotes-Share.xcconfig";
+			sourceTree = "<group>";
+			name = "SimpleNotes-Share.xcconfig";
+		};
 		BCCB2602B0C5007DD193EFB5 /* SimpleNotes 2.xcdatamodel */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.xcdatamodel;
 			path = "SimpleNotes 2.xcdatamodel";
 			sourceTree = "<group>";
+		};
+		BF2C20B6C9F13D7295B38920 /* SNShareViewController.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = iOS/Share/SNShareViewController.m;
+			sourceTree = "<group>";
+			name = SNShareViewController.m;
 		};
 		C44F8D8D21AA72A450BB869A /* Release.xcconfig */ = {
 			isa = PBXFileReference;
@@ -1614,6 +1754,13 @@
 			path = "SimpleNotes 5.xcdatamodel";
 			sourceTree = "<group>";
 		};
+		EB0052295D6C56C89697804E /* SimpleNotesShare.appex */ = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = SimpleNotesShare.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		EBF4039D9DB14DFD733691CF /* SimpleNotes 6.xcdatamodel */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.xcdatamodel;
@@ -1640,6 +1787,13 @@
 			path = AppKit/SNSelfTest.h;
 			sourceTree = "<group>";
 			name = SNSelfTest.h;
+		};
+		F6BDE6DA93B972D785D3BA0E /* Share.entitlements */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = text;
+			path = iOS/Share/Share.entitlements;
+			sourceTree = "<group>";
+			name = Share.entitlements;
 		};
 		FC73A466CE6A4BC79D15A841 /* SNNotes.m */ = {
 			isa = PBXFileReference;
@@ -1767,6 +1921,7 @@
 			children = (
 				11727BCA5E3F352ACF03F26A,
 				25A6B96BDA9EA73C0293E384,
+				EB0052295D6C56C89697804E,
 				17A46F35554F94E6AE1E2C9F,
 			);
 			sourceTree = "<group>";
@@ -1806,6 +1961,10 @@
 				117AF9FFC9CA6E63B5C2C73A,
 				80AE93EBBE422313BB909378,
 				64102D6B6D468822A0B577B2,
+				0DC5779BD2303E7C9931677D,
+				AB5FEFCF748915C2804B10BC,
+				124454D239E06A36FC58BC7F,
+				4FD3C9D01076A426071B18B0,
 				44BFF922A6C593FCEB928AA9,
 				E432D0D1BDAEABC5F8DE44B6,
 				7BE055293592C706F9CD7F11,
@@ -1867,6 +2026,8 @@
 				27FDFB70C50488AC14F320AC,
 				A6FCF053BB4C6B822677D1B5,
 				98D4730F537EE349976C418D,
+				2E5390B357C934B4215EEB53,
+				B0F32F5C4D7EBFFA53C4E463,
 			);
 			sourceTree = "<group>";
 			name = iOS;
@@ -1879,6 +2040,20 @@
 			);
 			sourceTree = "<group>";
 			name = Libraries;
+		};
+		B0F32F5C4D7EBFFA53C4E463 /* Share */ = {
+			isa = PBXGroup;
+			children = (
+				6AA409AA9813F275AB6E4342,
+				BF2C20B6C9F13D7295B38920,
+				79DBCDF9F1D5085B3A816ADB,
+				3C3250BED524529DBA42C2B7,
+				390B5632BF6CB6D42AC63153,
+				F6BDE6DA93B972D785D3BA0E,
+				B9DBB87C7D5CD8834981E25E,
+			);
+			sourceTree = "<group>";
+			name = Share;
 		};
 		B98D5BB73B229DE9BAE90643 /* Tests */ = {
 			isa = PBXGroup;
@@ -1945,6 +2120,7 @@
 				4B481E2723F5FD10B5EBF865,
 				72BC5149026B87960FD849AA,
 				2AF6574709DB595F4555AB0B,
+				D55AFB75E515027CCD6C645C,
 			);
 			buildRules = (
 			);
@@ -1957,11 +2133,27 @@
 				2A6B070CFDC89260329D4135,
 				9E6187B7DA4E4B840CA1270D,
 				D7E7257CD3EC2B97D60BC961,
+				A3DB85430AE55A219ADEE016,
 			);
 			name = "SimpleNotes-iOS";
 			productName = "SimpleNotes-iOS";
 			productReference = 25A6B96BDA9EA73C0293E384;
 			productType = "com.apple.product-type.application";
+		};
+		956C2A5864B53EB575F1DBF7 /* SimpleNotes-Share */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 21FCFF338B33F06C63BB3081;
+			buildPhases = (
+				146FED4CA1A075AA6FE741C6,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "SimpleNotes-Share";
+			productName = SimpleNotesShare;
+			productReference = EB0052295D6C56C89697804E;
+			productType = "com.apple.product-type.app-extension";
 		};
 		AC50AF5AA7D21F87D918ECF4 /* simplenotes-server */ = {
 			isa = PBXNativeTarget;
@@ -2021,6 +2213,7 @@
 			targets = (
 				258E55AA091D836D40018069,
 				7FF68BA089EE6976DC607A79,
+				956C2A5864B53EB575F1DBF7,
 				AC50AF5AA7D21F87D918ECF4,
 			);
 		};
@@ -2115,6 +2308,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		146FED4CA1A075AA6FE741C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C648B038EBD0941CAE796894,
+				CAE1031790E8BE98EA099DDB,
+				BAD69090B3DE89BAFDA5AEB4,
+				4FA854811EEC0D9FDC22B59F,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		5F7714B2D3D67AAC3944D4A5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -2131,6 +2335,7 @@
 				328026118249E60CC6AA53B4,
 				817F0F59EEBD18529E71554D,
 				7E28E0CE996D7FC9B8BE562B,
+				B8B596B497A51039FB895260,
 				62FD998ECE6FA8C402E5CE81,
 				70E9D874D7BD28F143A35A76,
 				37DFBF31EE8E129D11C4F1E0,
@@ -2140,6 +2345,8 @@
 				099EC221977E4E9C431EA752,
 				86BC567CCDCCAB940C7793DF,
 				2F839D3D9FD9C7DD47C21932,
+				F56992B1C70CEFED0857517E,
+				9A6307E125239E8CDF7C06EF,
 				1AEA465EF57405F1763F16F7,
 				25879058FDC79CC840CE424F,
 				CC4B057F37426811B1569081,
@@ -2194,6 +2401,8 @@
 				8325B3AFD178A1008D2AB02F,
 				D0EFBF4E8A299CC4F4ED3DBD,
 				84B7988C15E5217FABDD274A,
+				4096086CB0EF015B6D5CEC67,
+				23E902C26C0F30B09B8EB60F,
 				31315B895C7B07BAF6DA0F94,
 				62A2E8AABDEEBB81A24162A0,
 				08F47A52C6068AE0E8AC7B10,
@@ -2288,6 +2497,11 @@
 			name = ODataService;
 			targetProxy = C0A1C3298291150D396607F6;
 		};
+		A3DB85430AE55A219ADEE016 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 956C2A5864B53EB575F1DBF7;
+			targetProxy = 538863D02917102D5EB4E153;
+		};
 		D0B6BABA9042575F2020794E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ODataKit;
@@ -2338,6 +2552,13 @@
 			name = Debug;
 			baseConfigurationReference = A453D29A1E57E3F3B4AD13AD;
 		};
+		6260D5332AEDACDFBFFC46A6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+			baseConfigurationReference = B9DBB87C7D5CD8834981E25E;
+		};
 		6514DC90A8CDC4945A6971CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2362,6 +2583,13 @@
 			};
 			name = Debug;
 			baseConfigurationReference = 5E850E6E249BC7D03BC7E072;
+		};
+		6ADD2087B1850B769F029BCD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+			baseConfigurationReference = B9DBB87C7D5CD8834981E25E;
 		};
 		79AA9E10FE5DD131CD3AFE2E /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -2412,6 +2640,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		21FCFF338B33F06C63BB3081 /* Build configuration list for SimpleNotes-Share */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6260D5332AEDACDFBFFC46A6,
+				6ADD2087B1850B769F029BCD,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		5774A703C40A1666440C5E89 /* Build configuration list for SimpleNotes-iOS */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

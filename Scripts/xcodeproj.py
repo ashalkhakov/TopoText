@@ -276,7 +276,7 @@ def simplenotes(topotext_ids):
     F = lambda path: file_ref(p, path, os.path.basename(path))
     shared = {n: F('Shared/' + n) for n in ('SNModel.h', 'SNModel.m', 'SNNote.h', 'SNNote.m', 'SNFolder.h', 'SNFolder.m', 'SNAttachment.h', 'SNAttachment.m', 'SNNotes.h',
                                            'SNNotes.m', 'SNSmartFilter.h', 'SNSmartFilter.m', 'SNResolver.h', 'SNResolver.m', 'SNRichText.h', 'SNRichText.m', 'SNTextSystem.h', 'SNTableGrid.h',
-                                           'SNTableGrid+System.h', 'SNTableGrid.m', 'SNThumbnails.h', 'SNThumbnails.m', 'SNSignIn.h', 'SNSignIn.m', 'SNPeers.h', 'SNPeers.m', 'SNCheck.h', 'SNCheck.m',
+                                           'SNTableGrid+System.h', 'SNTableGrid.m', 'SNThumbnails.h', 'SNThumbnails.m', 'SNShares.h', 'SNShares.m', 'SNMarkdownEscape.h', 'SNMarkdownEscape.m', 'SNSignIn.h', 'SNSignIn.m', 'SNPeers.h', 'SNPeers.m', 'SNCheck.h', 'SNCheck.m',
                                            'SNMigration.h', 'SNMigration.m', 'SNMarkdown.h', 'SNMarkdown.m', 'SNZip.h', 'SNZip.m', 'SNTransfer.h', 'SNTransfer.m')}
     model = model_ref(p, 'SimpleNotes.xcdatamodeld')
     appkit = {n: F('AppKit/' + n) for n in ('main.m', 'SNAppController.h', 'SNAppController.m', 'SNWindowController.h', 'SNWindowController.m',
@@ -286,6 +286,9 @@ def simplenotes(topotext_ids):
     ios = {n: F('iOS/' + n) for n in ('main.m', 'SNiOSControllers.h', 'SNiOSControllers.m', 'SNiOSSelfTest.h', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.h', 'SNSmartFolderViewController.m', 'SNPeersViewController.h', 'SNPeersViewController.m', 'SNTransferViewController.h', 'SNTransferViewController.m', 'SNUndoTextView.h', 'SNUndoTextView.m', 'SNMenuAction.h', 'SNMenuAction.m', 'SNGalleryViewController.h', 'SNGalleryViewController.m', 'SNSecretStore.m',
                                      'SNEditorViewController.xib', 'Assets.xcassets', 'Info.plist',
                                      'SimpleNotes-iOS.xcconfig')}
+    share = {n: F('iOS/Share/' + n) for n in ('SNShareViewController.h', 'SNShareViewController.m', 'SNShareInbox.h', 'SNShareInbox.m', 'Info.plist', 'Share.entitlements',
+                                             'SimpleNotes-Share.xcconfig')}
+    ios_entitlements = F('iOS/SimpleNotes.entitlements')
     icons = {n: F('Icons/' + n) for n in ('SimpleNotes.icns',)}
     server = {n: F('Server/' + n) for n in ('SNServer.m', 'SNNotebooks.h', 'SNNotebooks.m')}
     tests = {n: F('Tests/' + n) for n in ('seed.py',)}
@@ -313,7 +316,7 @@ def simplenotes(topotext_ids):
 
     def sources_of(d, names):
         return [(d[n], n) for n in names]
-    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNSmartFilter.m', 'SNResolver.m', 'SNRichText.m', 'SNThumbnails.m', 'SNTableGrid.m', 'SNSignIn.m', 'SNPeers.m', 'SNMigration.m', 'SNMarkdown.m', 'SNZip.m', 'SNTransfer.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
+    common = sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNNotes.m', 'SNSmartFilter.m', 'SNResolver.m', 'SNRichText.m', 'SNThumbnails.m', 'SNShares.m', 'SNMarkdownEscape.m', 'SNTableGrid.m', 'SNSignIn.m', 'SNPeers.m', 'SNMigration.m', 'SNMarkdown.m', 'SNZip.m', 'SNTransfer.m']) + [(model, 'SimpleNotes.xcdatamodeld')]
 
     targets = []
     mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNMemory-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
@@ -325,13 +328,31 @@ def simplenotes(topotext_ids):
                                                                       appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')
     targets.append(('SimpleNotes', tid, 'SimpleNotes.app'))
 
-    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNPeersViewController.m', 'SNTransferViewController.m', 'SNUndoTextView.m', 'SNMenuAction.m', 'SNGalleryViewController.m', 'SNSecretStore.m']) + common,
+    # The Share extension: what other apps share, into the inbox the app
+    # reads (SNShares.h); Foundation and UIKit alone, embedded in the app.
+    share_src = phase(p, 'SimpleNotes-Share', 'PBXSourcesBuildPhase', 'Sources',
+                      [build_file(p, 'SimpleNotes-Share', 'Sources', ref, c) for ref, c in
+                       sources_of(share, ['SNShareViewController.m', 'SNShareInbox.m']) + sources_of(shared, ['SNShares.m', 'SNMarkdownEscape.m'])])
+    share_tid, share_product = native_target(p, 'SimpleNotes-Share', 'com.apple.product-type.app-extension', 'SimpleNotesShare', '.appex',
+                                             [share_src], [], config_list(p, 'SimpleNotes-Share', {}, {}, share['SimpleNotes-Share.xcconfig'],
+                                                                         share['SimpleNotes-Share.xcconfig']), 'wrapper.app-extension')
+    share_proxy = p.add(oid(p.name, 'dep', 'SimpleNotes-iOS', 'SimpleNotes-Share', 'proxy'), 'PBXContainerItemProxy',
+                        {'isa': 'PBXContainerItemProxy', 'containerPortal': oid(p.name, 'project'), 'proxyType': '1',
+                         'remoteGlobalIDString': share_tid, 'remoteInfo': 'SimpleNotes-Share'})
+    share_dep = p.add(oid(p.name, 'dep', 'SimpleNotes-iOS', 'SimpleNotes-Share'), 'PBXTargetDependency',
+                      {'isa': 'PBXTargetDependency', 'target': share_tid, 'targetProxy': share_proxy})
+    ios_phases = app('SimpleNotes-iOS', sources_of(ios, ['main.m', 'SNiOSControllers.m', 'SNiOSSelfTest.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderViewController.m', 'SNPeersViewController.m', 'SNTransferViewController.m', 'SNUndoTextView.m', 'SNMenuAction.m', 'SNGalleryViewController.m', 'SNSecretStore.m']) + sources_of(share, ['SNShareInbox.m']) + common,
                      sources_of(ios, ['SNEditorViewController.xib', 'Assets.xcassets']), ios['SimpleNotes-iOS.xcconfig'])
+    ios_phases.append(phase(p, 'SimpleNotes-iOS', 'PBXCopyFilesBuildPhase', 'Embed App Extensions',
+                            [build_file(p, 'SimpleNotes-iOS', 'Embed App Extensions', share_product, 'SimpleNotesShare.appex',
+                                        {'ATTRIBUTES': ['RemoveHeadersOnCopy']})],
+                            {'dstPath': '', 'dstSubfolderSpec': '13', 'name': 'Embed App Extensions'}))
     tid, ios_product = native_target(p, 'SimpleNotes-iOS', 'com.apple.product-type.application', 'SimpleNotes-iOS', '.app', ios_phases,
-                                     deps('SimpleNotes-iOS'), config_list(p, 'SimpleNotes-iOS', {}, {}, ios['SimpleNotes-iOS.xcconfig'],
+                                     deps('SimpleNotes-iOS') + [share_dep], config_list(p, 'SimpleNotes-iOS', {}, {}, ios['SimpleNotes-iOS.xcconfig'],
                                                                           ios['SimpleNotes-iOS.xcconfig']), 'wrapper.application')
     p.objects[ios_product]['path'] = 'SimpleNotes.app'
     targets.append(('SimpleNotes-iOS', tid, 'SimpleNotes.app'))
+    targets.append(('SimpleNotes-Share', share_tid, 'SimpleNotesShare.appex'))
 
     # The server: a tool; Xcode compiles its model beside it, where it looks.
     src = phase(p, 'simplenotes-server', 'PBXSourcesBuildPhase', 'Sources',
@@ -346,11 +367,11 @@ def simplenotes(topotext_ids):
                                         deps('simplenotes-server'), config_list(p, 'simplenotes-server', s, s), 'compiled.mach-o.executable')
     targets.append(('simplenotes-server', tid, 'simplenotes-server'))
 
-    products_group = group(p, 'Products', [mac_product, ios_product, server_product])
+    products_group = group(p, 'Products', [mac_product, ios_product, share_product, server_product])
     main = group(p, 'SimpleNotes', [
         group(p, 'Shared', list(shared.values()) + [model]),
         group(p, 'AppKit', list(appkit.values())),
-        group(p, 'iOS', list(ios.values())),
+        group(p, 'iOS', list(ios.values()) + [ios_entitlements, group(p, 'Share', list(share.values()))]),
         group(p, 'Server', list(server.values())),
         group(p, 'Tests', list(tests.values())),
         group(p, 'Configs', configs),
@@ -360,6 +381,8 @@ def simplenotes(topotext_ids):
                    config_list(p, 'project', {}, {}, configs[1], configs[2]))
     p.write()
     for name, tid, product in targets:
+        if name == 'SimpleNotes-Share':
+            continue
         scheme('Examples/SimpleNotes/SimpleNotes.xcodeproj', name, tid, product, 'SimpleNotes.xcodeproj', runnable=name != 'SimpleNotes-iOS' or True)
 
 

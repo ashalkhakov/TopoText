@@ -1,6 +1,9 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
 #import "SNGalleryViewController.h"
+#import "SNShares.h"
+#import "SNShareInbox.h"
+#import "SNTransfer.h"
 #import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
@@ -512,6 +515,18 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNWait(30, ^BOOL { return !notes.syncing; });
         [other syncAndWait:NULL];
         SNSay([other notesInFolder:nil matching:@"Groceries"].count == 1, @"recovered here, back there");
+
+        /* The Share extension's inbox, in the App Group the app shares with
+           it: a page shared there, a note at the top. */
+        NSURL *inbox = SNShareAppGroupInbox();
+        SNSay(inbox != nil, [NSString stringWithFormat:@"the App Group's inbox (%@)", inbox.lastPathComponent]);
+        if (inbox) {
+            SNWriteShare(inbox, nil, @"A shared page", [NSURL URLWithString:@"https://example.org/shared"], @[], NULL);
+            NSArray *made = [SNTransfer importSharesIntoNotes:notes fromInbox:inbox];
+            SNNote *shared = made.count ? [notes noteForObjectID:made.firstObject] : nil;
+            SNSay([shared.title isEqual:@"A shared page"] && [shared.body containsString:@"https://example.org/shared"] && !SNSharesIn(inbox).count,
+                  [NSString stringWithFormat:@"what is shared there becomes a note (%@)", shared.title]);
+        }
         fprintf(stderr, "self-test: %s\n", SNFailed ? "FAILED" : "passed");
         exit(SNFailed);
     };

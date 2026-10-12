@@ -8,6 +8,7 @@
 #import "SNNotes.h"
 #import "SNMarkdown.h"
 #import "SNTransfer.h"
+#import "SNShares.h"
 #import "SNZip.h"
 
 /* A 1 x 1 PNG. */
@@ -168,6 +169,35 @@ static NSData *SNTinyPNG(void) {
     XCTAssertNil([other attributesAtIndex:3 effectiveRange:NULL][SNHighlightKey]);
     XCTAssertEqualObjects(other.string, @"hi there\none two");
     XCTAssertEqualObjects([other paragraphAttributesAtIndex:10 keys:SNParagraphKeys()], @{ SNQuoteKey: @YES });
+}
+
+- (void)testWhatIsSharedBecomesANote {
+    SNNotes *device = [self device];
+    NSURL *inbox = [self temporary:@"-inbox"];
+    NSData *png = SNTinyPNG();
+    XCTAssertTrue(SNWriteShare(inbox, nil, @"Groceries\nmilk *and* eggs\n# not a heading", [NSURL URLWithString:@"https://example.com/list?a=(1)"],
+                               @[ png ], NULL));
+    XCTAssertTrue(SNWriteShare(inbox, @"A page", nil, [NSURL URLWithString:@"https://example.org/"], @[], NULL));
+    XCTAssertEqual(SNSharesIn(inbox).count, 2u);
+    NSArray *made = [SNTransfer importSharesIntoNotes:device fromInbox:inbox];
+    XCTAssertEqual(made.count, 2u);
+    XCTAssertEqual(SNSharesIn(inbox).count, 0u, @"taken out of the inbox");
+    SNNote *groceries = (SNNote *)[device.context existingObjectWithID:made.firstObject error:NULL];
+    [device.context refreshObject:groceries mergeChanges:NO];
+    XCTAssertEqualObjects(groceries.title, @"Groceries");
+    TopoText *t = groceries.text;
+    XCTAssertTrue([t.string hasPrefix:@"Groceries\nmilk *and* eggs\n# not a heading\nhttps://example.com/list?a=(1)"], @"%@", t.string);
+    XCTAssertEqualObjects([t paragraphAttributesAtIndex:0 keys:SNParagraphKeys()][SNStyleKey], SNStyleTitle);
+    NSUInteger link = [t.string rangeOfString:@"https://"].location;
+    /* A ")" in a link's address written as %29 (as export writes it): the
+       same address. */
+    XCTAssertEqualObjects([t attributesAtIndex:link effectiveRange:NULL][SNLinkKey], @"https://example.com/list?a=(1%29");
+    NSString *image = [t attributesAtIndex:t.length - 1 effectiveRange:NULL][SNAttachmentKey];
+    XCTAssertEqualObjects([device attachmentWithID:image].kind, SNAttachmentKindImage, @"the image attached");
+    SNNote *page = (SNNote *)[device.context existingObjectWithID:made.lastObject error:NULL];
+    [device.context refreshObject:page mergeChanges:NO];
+    XCTAssertEqualObjects(page.title, @"A page");
+    XCTAssertTrue([page.text.string hasPrefix:@"A page\nhttps://example.org/"], @"%@", page.text.string);
 }
 
 - (void)testOtherAppsMarkdownIsRead {

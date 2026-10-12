@@ -1,5 +1,6 @@
 #import "SNSelfTest.h"
 #import "SNWindowController.h"
+#import "SNAppController.h"
 #import "SNModel.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
@@ -554,6 +555,18 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [[tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.selectedRange.location effectiveRange:NULL] isEqual:leaseItem.attachmentID],
               @"one chosen shows its note, where it is");
         [window.attachmentsWindow close];
+
+        /* Services > Add to SimpleNotes: another app's selection, a note at
+           the top, shown. */
+        NSPasteboard *shared = [NSPasteboard pasteboardWithUniqueName];
+        [shared declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+        [shared setString:@"Quote of the day\nNotes merge what was written apart." forType:NSPasteboardTypeString];
+        NSString *serviceError = nil;
+        [(SNAppController *)NSApp.delegate addToSimpleNotes:shared userData:nil error:&serviceError];
+        SNSay(!serviceError && [tv.string hasPrefix:@"Quote of the day\nNotes merge"] && [[window selectedNote].title isEqual:@"Quote of the day"],
+              [NSString stringWithFormat:@"Services > Add to SimpleNotes: a note, shown (%@)", serviceError ?: [window selectedNote].title]);
+        [shared releaseGlobally];
+        [window selectNoteTitled:@"Weekend"];
 
         /* Collapsed sections: a heading's chevron clicked hides what is
            under it, the text as it was; Expand All Sections shows it. */

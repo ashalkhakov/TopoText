@@ -4,11 +4,11 @@ A small Apple Notes: folders (and folders in folders), notes in rich text
 with headings, lists and checklists, block quotes, collapsible sections,
 colours and highlights, links, images and tables, tags, search, find and
 replace in a note, printing and PDF export, a gallery view, an attachments
-browser, pinning, sorting and grouping by date, Recently Deleted, and moving
-notes between folders. It runs on macOS and on Linux (AppKit, through
-GNUstep), and on iPhone and iPad. Every note is kept on the device and works
-offline. Notes sync with a server, `simplenotes-server`, which serves them
-over OData.
+browser, sharing from other apps, pinning, sorting and grouping by date,
+Recently Deleted, and moving notes between folders. It runs on macOS and on
+Linux (AppKit, through GNUstep), and on iPhone and iPad. Every note is kept
+on the device and works offline. Notes sync with a server, `simplenotes-
+server`, which serves them over OData.
 
 When the same note is edited on two devices that couldn't reach each other,
 both edits end up in the note. The note's body is a [TopoText](../../README.md),
@@ -143,6 +143,30 @@ and merges like other formatting. Hiding is the view's alone: the text is
 unchanged, and export and search see all of it. The insertion point moves
 past a hidden section rather than into it, and Return at the end of a
 collapsed heading expands it first, so what you type next is visible.
+
+## Sharing into SimpleNotes
+
+**On iOS**, SimpleNotes is in the share sheet. Text, a web page (its title
+and link) or pictures shared from another app go into a new note at the
+top, the next time SimpleNotes opens or comes back. The sheet's text can
+be changed before it's posted.
+
+**On the Mac and on Linux**, **Services > Add to SimpleNotes** makes a note
+of what is selected in another app: text, a link or a picture. The note
+opens at once. On GNUstep the service is listed once `make_services` has
+run after the app was installed.
+
+Both go the same way. The item is written as Markdown with its pictures
+beside it, into an inbox: on iOS, the container of the App Group the app
+and the extension share (`group.io.github.ashalkhakov.SimpleNotes`); on the
+Mac and Linux, a temporary folder. The app imports it as a note at the
+top, as File > Import would, and removes it from the inbox
+(`Shared/SNShares.h`). The extension needs neither the store nor Core
+Data.
+
+To sign the app and its extension for a device, the team in
+`iOS/Local.xcconfig` needs the App Group. If Xcode's automatic signing
+doesn't add it, add it to both identifiers in the Apple Developer account.
 
 ## Gallery and attachments
 

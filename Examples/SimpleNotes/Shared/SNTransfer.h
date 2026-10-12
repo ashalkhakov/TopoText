@@ -68,6 +68,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property (atomic, readonly, getter=isCancelled) BOOL cancelled;
 // Why it failed (nil: it did not).
 @property (atomic, readonly, nullable) NSError *error;
+
+// What was shared into SimpleNotes (SNShares.h), waiting in inbox: each
+// imported as a note at the top, here and now, and taken out of the inbox
+// (one that does not import, too: it would not the next time either). The
+// notes they became.
++ (NSArray<NSManagedObjectID *> *)importSharesIntoNotes:(SNNotes *)notes fromInbox:(NSURL *)inbox;
 // The notes made (import), by ID, in the order made.
 @property (atomic, readonly, copy) NSArray<NSManagedObjectID *> *madeNotes;
 // What was left out, and why: a line each ("Board.json: a canvas").

@@ -1,37 +1,10 @@
 #import "SNMarkdown.h"
 #import "SNRichText.h"
+#import "SNMarkdownEscape.h"
 
 static NSString * const SNObjectReplacement = @"￼";
 
 #pragma mark - Export
-
-/* Characters that would read as Markdown, escaped. */
-static NSString *SNEscapeInline(NSString *text) {
-    NSMutableString *out = [NSMutableString stringWithCapacity:text.length];
-    for (NSUInteger i = 0; i < text.length; i++) {
-        unichar c = [text characterAtIndex:i];
-        if (c == '\\' || c == '*' || c == '_' || c == '~' || c == '`' || c == '[' || c == ']' || c == '<' || c == '>')
-            [out appendString:@"\\"];
-        [out appendFormat:@"%C", c];
-    }
-    return out;
-}
-
-/* A line that would begin a block (a heading, a list, a quote) escaped there. */
-static NSString *SNEscapeLineStart(NSString *line) {
-    static NSRegularExpression *start;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        start = [NSRegularExpression regularExpressionWithPattern:@"^(\\s*)(#|[-+]|\\d+[.)])(\\s|$)" options:0 error:NULL];
-    });
-    NSTextCheckingResult *m = [start firstMatchInString:line options:0 range:NSMakeRange(0, line.length)];
-    if (!m) return line;
-    NSRange marker = [m rangeAtIndex:2];
-    /* 1. → 1\. ; # → \# */
-    NSUInteger at = [line characterAtIndex:marker.location] >= '0' && [line characterAtIndex:marker.location] <= '9' ? NSMaxRange(marker) - 1
-                                                                                                                       : marker.location;
-    return [NSString stringWithFormat:@"%@\\%@", [line substringToIndex:at], [line substringFromIndex:at]];
-}
 
 static BOOL SNYes(id value) {
     return [value respondsToSelector:@selector(boolValue)] && [value boolValue];
@@ -82,7 +55,7 @@ static NSString *SNInlineMarkdown(TopoText *text, NSRange range, id<SNMarkdownEx
         while (lead < piece.length && [piece characterAtIndex:lead] == ' ') lead++;
         while (trail < piece.length - lead && [piece characterAtIndex:piece.length - 1 - trail] == ' ') trail++;
         NSString *core = [piece substringWithRange:NSMakeRange(lead, piece.length - lead - trail)];
-        NSMutableString *formatted = [SNEscapeInline(core) mutableCopy];
+        NSMutableString *formatted = [SNMarkdownEscapeInline(core) mutableCopy];
         if (core.length) {
             for (NSArray *marker in SNMarkersOf(attributes).reverseObjectEnumerator) {
                 [formatted insertString:marker[0] atIndex:0];
@@ -109,7 +82,7 @@ NSString *SNMarkdownOfTableRows(NSArray<NSArray<NSString *> *> *rows) {
         [out appendString:@"|"];
         for (NSUInteger c = 0; c < columns; c++) {
             NSString *cell = c < cells.count ? cells[c] : @"";
-            cell = [[SNEscapeInline(cell) stringByReplacingOccurrencesOfString:@"|" withString:@"\\|"]
+            cell = [[SNMarkdownEscapeInline(cell) stringByReplacingOccurrencesOfString:@"|" withString:@"\\|"]
                 stringByReplacingOccurrencesOfString:@"\n" withString:@"<br>"];
             [out appendFormat:@" %@ |", cell];
         }
@@ -178,7 +151,7 @@ NSString *SNMarkdownOfText(TopoText *text, id<SNMarkdownExporting> exporter) {
         if (!inline_.length && !blocks.count) continue;  /* an empty line of the note */
         NSString *prefix = [style isEqual:SNStyleTitle] ? @"# " : [style isEqual:SNStyleHeading] ? @"## " : [style isEqual:SNStyleSubheading] ? @"### " : @"";
         if (inline_.length)
-            [out addObject:[quoted stringByAppendingString:prefix.length ? [prefix stringByAppendingString:inline_] : SNEscapeLineStart(inline_)]];
+            [out addObject:[quoted stringByAppendingString:prefix.length ? [prefix stringByAppendingString:inline_] : SNMarkdownEscapeLineStart(inline_)]];
         [out addObjectsFromArray:blocks];
     }
     flush();
