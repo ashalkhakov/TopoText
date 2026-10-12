@@ -194,8 +194,18 @@ jobs:
             echo "::error::notarization was not accepted (status: ${status:-none})"
             exit 1
           fi
-          xcrun stapler staple "$APP"
-          xcrun stapler validate "$APP"
+          # Stapling fetches the ticket from Apple's CloudKit service, whose
+          # connection has dropped mid-release ("The network connection was
+          # lost", error 68): tried three times before the release fails.
+          for attempt in 1 2 3; do
+            xcrun stapler staple "$APP" && xcrun stapler validate "$APP" && break
+            if [ "$attempt" = 3 ]; then
+              echo "::error::stapling failed three times"
+              exit 1
+            fi
+            echo "::warning::stapling failed (attempt $attempt of 3); trying again in 30 s"
+            sleep 30
+          done
           # What a downloaded copy meets: Gatekeeper's own assessment.
           spctl --assess --type execute --verbose=2 "$APP"
 
