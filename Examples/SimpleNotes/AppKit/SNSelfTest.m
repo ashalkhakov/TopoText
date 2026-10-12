@@ -1,4 +1,5 @@
 #import "SNSelfTest.h"
+#import "SNUpdater.h"
 #import "SNWindowController.h"
 #import "SNAppController.h"
 #import "SNModel.h"
@@ -610,6 +611,14 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [NSString stringWithFormat:@"Services > Add to SimpleNotes: a note, shown (%@)", serviceError ?: [window selectedNote].title]);
         [shared releaseGlobally];
         [window selectNoteTitled:@"Weekend"];
+
+        /* Check for Updates…: in the app menu where there is an updater
+           (Sparkle, on macOS), not where the image is updated from outside
+           (GNUstep's AppImage). */
+        BOOL hasUpdater = [[SNUpdater alloc] initStarting:NO].available;
+        NSMenuItem *checkForUpdates = [[[NSApp mainMenu] itemAtIndex:0].submenu itemWithTag:7100];
+        SNSay((checkForUpdates != nil) == hasUpdater && (!checkForUpdates || checkForUpdates.action == @selector(checkForUpdates:)),
+              [NSString stringWithFormat:@"Check for Updates… %@", hasUpdater ? @"in the app menu" : @"not offered"]);
 
         /* Collapsed sections: a heading's chevron clicked hides what is
            under it, the text as it was; Expand All Sections shows it. */

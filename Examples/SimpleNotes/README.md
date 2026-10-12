@@ -16,7 +16,7 @@ Download from [Releases](https://github.com/ashalkhakov/TopoText/releases/latest
 
 | Platform | Download | |
 |---|---|---|
-| macOS | `SimpleNotes-macOS-*.zip` | Universal, signed and notarized |
+| macOS | `SimpleNotes-macOS-*.zip` | Universal, signed and notarized; updates itself (SimpleNotes > Check for Updates…) |
 | Linux x86_64 | `SimpleNotes-*-x86_64.AppImage` | The app, and the server for a machine without Docker; updated by Gear Lever, AppImageUpdate or AppImagePool |
 | iPhone, iPad | `SimpleNotes-iOS-*-unsigned.ipa` | Unsigned: sign it yourself, or build from source |
 | The server | `ghcr.io/ashalkhakov/simplenotes-server` | A Docker image, amd64 and arm64 |

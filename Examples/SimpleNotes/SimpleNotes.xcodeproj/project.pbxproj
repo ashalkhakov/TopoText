@@ -35,6 +35,10 @@
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
 		};
+		0D4213282FD31E596CE7FFE0 /* Sparkle in Frameworks */ = {
+			isa = PBXBuildFile;
+			productRef = F6D89E1BC574A283AA026CF0;
+		};
 		0FCC9C9E0E329BC98E59E527 /* SyncPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 7B171DA9ABD39A0E778CE234;
@@ -423,6 +427,10 @@
 		A7AD27339233D295C79FC20B /* ODataService.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 241B510EC28BDE743EED0D31;
+		};
+		ABEE2552CD48F68508F0C985 /* SNUpdater-Apple.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = BBC9C0DF84268509E8BCF6B6;
 		};
 		AC1307ED585C96E4A0074734 /* SmartFolderPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
@@ -1307,6 +1315,13 @@
 			sourceTree = "<group>";
 			name = SNZip.h;
 		};
+		5918F5A15C378AA644F04157 /* SNUpdater.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNUpdater.m;
+			sourceTree = "<group>";
+			name = SNUpdater.m;
+		};
 		5AFBCF2EB61C3D05D1B5D2B3 /* VersionsPanel.xib */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = file.xib;
@@ -1334,6 +1349,13 @@
 			path = ../../Xcode/Configs/Debug.xcconfig;
 			sourceTree = "<group>";
 			name = Debug.xcconfig;
+		};
+		5F63153E1910A7B6931749CF /* SNUpdater.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNUpdater.h;
+			sourceTree = "<group>";
+			name = SNUpdater.h;
 		};
 		60B496EE8C7BBF49E296082F /* SNSecretStore.m */ = {
 			isa = PBXFileReference;
@@ -1685,6 +1707,13 @@
 			sourceTree = "<group>";
 			name = "SimpleNotes-Share.xcconfig";
 		};
+		BBC9C0DF84268509E8BCF6B6 /* SNUpdater-Apple.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNUpdater-Apple.m";
+			sourceTree = "<group>";
+			name = "SNUpdater-Apple.m";
+		};
 		BCCB2602B0C5007DD193EFB5 /* SimpleNotes 2.xcdatamodel */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.xcdatamodel;
@@ -1935,6 +1964,7 @@
 				FD65BE028659EA90A14F2E10,
 				A7AD27339233D295C79FC20B,
 				E05ABAA287682CBC6906D83E,
+				0D4213282FD31E596CE7FFE0,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1986,6 +2016,9 @@
 				E7A8EDB5A94723692AC7105C,
 				72D55CAC2AA66123CA56C5D5,
 				4D230DE7818CE35266E10216,
+				5F63153E1910A7B6931749CF,
+				5918F5A15C378AA644F04157,
+				BBC9C0DF84268509E8BCF6B6,
 				D9DEA82153A953D9E395018F,
 				F3FA6CE187CC612529B3727F,
 				78A4C6E4EA29BE4EF02494EB,
@@ -2217,6 +2250,9 @@
 			productName = SimpleNotes;
 			productReference = 11727BCA5E3F352ACF03F26A;
 			productType = "com.apple.product-type.application";
+			packageProductDependencies = (
+				F6D89E1BC574A283AA026CF0,
+			);
 		};
 		7FF68BA089EE6976DC607A79 /* SimpleNotes-iOS */ = {
 			isa = PBXNativeTarget;
@@ -2321,6 +2357,9 @@
 				7FF68BA089EE6976DC607A79,
 				956C2A5864B53EB575F1DBF7,
 				AC50AF5AA7D21F87D918ECF4,
+			);
+			packageReferences = (
+				40211B9E4A779CA8B62E2990,
 			);
 		};
 /* End PBXProject section */
@@ -2500,6 +2539,7 @@
 				02DFBE40A80F67B48187616B,
 				EEA04789435666169D25A3C8,
 				40497D75F7964A5FC7470710,
+				ABEE2552CD48F68508F0C985,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,
@@ -2797,6 +2837,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		40211B9E4A779CA8B62E2990 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F6D89E1BC574A283AA026CF0 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 40211B9E4A779CA8B62E2990;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCVersionGroup section */
 		571D7F2A670DB7D88A910D92 /* SimpleNotes.xcdatamodeld */ = {
