@@ -3,6 +3,7 @@
 NSString * const SNFolderEntity = @"Folder";
 NSString * const SNNoteEntity = @"Note";
 NSString * const SNAttachmentEntity = @"Attachment";
+NSString * const SNNoteVersionEntity = @"NoteVersion";
 
 /* What a line says, read: an attachment's character (U+FFFC) is not
    words. */

@@ -49,6 +49,19 @@ SNColor *SNSystemGridColor(void) {
     return [UIColor systemGray3Color];
 }
 
+SNColor *SNSystemNamedColor(NSString *name) {
+    if ([name isEqual:@"purple"]) return [UIColor systemPurpleColor];
+    if ([name isEqual:@"pink"]) return [UIColor systemPinkColor];
+    if ([name isEqual:@"orange"]) return [UIColor systemOrangeColor];
+    if ([name isEqual:@"mint"]) return [UIColor systemMintColor];
+    if ([name isEqual:@"blue"]) return [UIColor systemBlueColor];
+    return SNSystemTextColor();
+}
+
+SNColor *SNSystemHighlightColor(NSString *name) {
+    return [SNSystemNamedColor(name) colorWithAlphaComponent:0.3];
+}
+
 CGFloat SNSystemIndentStep(void) {
     return 28;
 }
@@ -179,6 +192,12 @@ void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
     NSUInteger len = layoutManager.textStorage.length;
     range = NSIntersectionRange(range, NSMakeRange(0, len));
     if (range.length) [layoutManager invalidateDisplayForCharacterRange:range];
+}
+
+void SNSystemShowChevrons(id<SNTextViewing> view) {
+    if (![(id)view isKindOfClass:[UITextView class]]) return;
+    NSLayoutManager *lm = ((UITextView *)view).layoutManager;
+    if ([lm isKindOfClass:[SNListLayoutManager class]]) ((SNListLayoutManager *)lm).drawsChevrons = YES;
 }
 
 void SNSystemObserveResizing(id view, id observer, SEL selector) {

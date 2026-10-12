@@ -136,6 +136,24 @@ CA
                                     <action selector="exportAllNotes:" target="-1" id="SNm-ac-932"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Export as PDF…" id="SNm-mi-934">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="exportNoteAsPDF:" target="-1" id="SNm-ac-934"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Version History…" id="SNm-mi-937">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="showVersionHistory:" target="-1" id="SNm-ac-937"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-935"/>
+                            <menuItem title="Print…" keyEquivalent="p" id="SNm-mi-936">
+                                <connections>
+                                    <action selector="printNote:" target="-1" id="SNm-ac-936"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-210"/>
                             <menuItem title="Move To" tag="7001" id="SNm-mi-211">
                                 <modifierMask key="keyEquivalentModifierMask"/>
@@ -202,10 +220,49 @@ CA
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-308"/>
-                            <menuItem title="Find" keyEquivalent="f" id="SNm-mi-309">
-                                <connections>
-                                    <action selector="findNote:" target="-1" id="SNm-ac-309"/>
-                                </connections>
+                            <menuItem title="Find" id="SNm-mi-309">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Find" id="SNm-mn-309">
+                                    <items>
+                                        <menuItem title="Search" keyEquivalent="f" id="SNm-mi-310">
+                                            <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="findNote:" target="-1" id="SNm-ac-310"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find…" keyEquivalent="f" tag="1" id="SNm-mi-311">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-311"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find and Replace…" id="SNm-mi-312">
+                                            <connections>
+                                                <action selector="findAndReplace:" target="-1" id="SNm-ac-312"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find Next" keyEquivalent="g" tag="2" id="SNm-mi-313">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-313"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Find Previous" keyEquivalent="g" tag="3" id="SNm-mi-314">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-314"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Use Selection for Find" keyEquivalent="e" tag="7" id="SNm-mi-315">
+                                            <connections>
+                                                <action selector="performFindPanelAction:" target="-1" id="SNm-ac-315"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Jump to Selection" keyEquivalent="j" id="SNm-mi-316">
+                                            <connections>
+                                                <action selector="centerSelectionInVisibleArea:" target="-1" id="SNm-ac-316"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                         </items>
                     </menu>
@@ -299,6 +356,23 @@ CA
                                     <action selector="decreaseIndentation:" target="-1" id="SNm-ac-415"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Block Quote" keyEquivalent="'" id="SNm-mi-421">
+                                <connections>
+                                    <action selector="toggleBlockQuote:" target="-1" id="SNm-ac-421"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Collapse All Sections" id="SNm-mi-422">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="collapseAllSections:" target="-1" id="SNm-ac-422"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Expand All Sections" id="SNm-mi-423">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="expandAllSections:" target="-1" id="SNm-ac-423"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-416"/>
                             <menuItem title="Bold" keyEquivalent="b" id="SNm-mi-417">
                                 <connections>
@@ -320,6 +394,80 @@ CA
                                 <connections>
                                     <action selector="toggleStrikethrough:" target="-1" id="SNm-ac-420"/>
                                 </connections>
+                            </menuItem>
+                            <menuItem title="Highlight" id="SNm-mi-430">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Highlight" id="SNm-mn-430">
+                                    <items>
+                                        <menuItem title="None" tag="0" id="SNm-mi-431">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-431"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Purple" tag="1" id="SNm-mi-432">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-432"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Pink" tag="2" id="SNm-mi-433">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-433"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Orange" tag="3" id="SNm-mi-434">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-434"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Mint" tag="4" id="SNm-mi-435">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-435"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Blue" tag="5" id="SNm-mi-436">
+                                            <connections>
+                                                <action selector="applyHighlightColor:" target="-1" id="SNm-ac-436"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
+                            </menuItem>
+                            <menuItem title="Text Color" id="SNm-mi-440">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <menu key="submenu" title="Text Color" id="SNm-mn-440">
+                                    <items>
+                                        <menuItem title="None" tag="0" id="SNm-mi-441">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-441"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Purple" tag="1" id="SNm-mi-442">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-442"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Pink" tag="2" id="SNm-mi-443">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-443"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Orange" tag="3" id="SNm-mi-444">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-444"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Mint" tag="4" id="SNm-mi-445">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-445"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Blue" tag="5" id="SNm-mi-446">
+                                            <connections>
+                                                <action selector="applyTextColor:" target="-1" id="SNm-ac-446"/>
+                                            </connections>
+                                        </menuItem>
+                                    </items>
+                                </menu>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="SNm-mi-902"/>
                             <menuItem title="Add Link…" keyEquivalent="k" id="SNm-mi-903">
@@ -378,6 +526,23 @@ CA
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="View" id="SNm-mn-800">
                         <items>
+                            <menuItem title="as List" keyEquivalent="1" id="SNm-mi-810">
+                                <connections>
+                                    <action selector="showAsList:" target="-1" id="SNm-ac-810"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="as Gallery" keyEquivalent="2" id="SNm-mi-811">
+                                <connections>
+                                    <action selector="showAsGallery:" target="-1" id="SNm-ac-811"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-812"/>
+                            <menuItem title="Show Attachments" keyEquivalent="3" id="SNm-mi-813">
+                                <connections>
+                                    <action selector="showAttachments:" target="-1" id="SNm-ac-813"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="SNm-mi-814"/>
                             <menuItem title="Sort By" id="SNm-mi-801">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <menu key="submenu" title="Sort By" id="SNm-mn-801">
@@ -483,7 +648,7 @@ CA
                                     <action selector="performMiniaturize:" target="-1" id="SNm-ac-601"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Notes" keyEquivalent="1" id="SNm-mi-602">
+                            <menuItem title="Notes" keyEquivalent="0" id="SNm-mi-602">
                                 <connections>
                                     <action selector="showNotes:" target="SNa-pp-del" id="SNm-ac-602"/>
                                 </connections>

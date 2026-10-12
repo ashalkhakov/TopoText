@@ -13,11 +13,22 @@ NS_ASSUME_NONNULL_BEGIN
 // A checkbox clicked: its paragraph's first character's index (as
 // -textView:clickedOnLink:atIndex: says a link's).
 - (void)textView:(SNTextView *)textView clickedCheckboxAtIndex:(NSUInteger)index;
+// A heading's chevron clicked: its first character's index.
+- (void)textView:(SNTextView *)textView clickedSectionToggleAtIndex:(NSUInteger)index;
 @end
 
 @interface SNTextView : NSTextView
 // Its layout manager made an SNListLayoutManager (once, from the XIB's).
 - (void)useListLayoutManager;
+// Edit > Find in the note: macOS's find bar, GNUstep's Find panel (which
+// has Replace in it too). What they replace is an edit of the storage, as
+// typing is: the note's binding takes it.
+- (void)useFindInterface;
+// Edit > Find > Find and Replace…: the find bar with its Replace row (the
+// Find panel on GNUstep).
+- (IBAction)findAndReplace:(nullable id)sender;
+// The print job's name (a note printed: its title).
+@property (nonatomic, copy, nullable) NSString *printTitle;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -1,5 +1,7 @@
 #import "SNAppController.h"
 #import "SNNotes.h"
+#import "SNShares.h"
+#import "SNTransfer.h"
 #import "SNWindowController.h"
 #import "SNSelfTest.h"
 #import "SNSyncPanel.h"
@@ -26,6 +28,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)n {
+    [NSApp setServicesProvider:self];
     /* -SNStore path: another device on this machine, for trying sync out. */
     NSString *path = [[NSUserDefaults standardUserDefaults] stringForKey:@"SNStore"];
     if (SNSelfTestRoot && !path.length)
@@ -73,7 +76,10 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
         [NSApp terminate:nil];
         return;
     }
-    NSString *server = [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
+    /* A self-test has a store and a server of its own: not the user's, nor
+       the user's tokens in the keychain (a build to test has a signature
+       the keychain asks about, and waits for). */
+    NSString *server = SNSelfTestRoot ? nil : [[NSUserDefaults standardUserDefaults] stringForKey:SNServerDefaultsKey];
     NSURL *root = server.length ? [NSURL URLWithString:server] : nil;
     if (root) {
         /* Signed in as it was last time: the tokens kept for it. */
@@ -103,6 +109,49 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     }
     /* The first time: where to keep the notes, chosen. */
     if (![[NSUserDefaults standardUserDefaults] boolForKey:SNSyncChosenDefaultsKey] && !root) [self chooseServer:nil];
+}
+
+#pragma mark Services
+
+- (void)addToSimpleNotes:(NSPasteboard *)pasteboard userData:(NSString *)userData error:(NSString **)error {
+    if (!_notes) {
+        if (error) *error = @"SimpleNotes is not ready yet.";
+        return;
+    }
+    NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+    NSURL *link = [NSURL URLFromPasteboard:pasteboard];
+    if (link.isFileURL) link = nil;
+    /* A link alone: not its address again as the text. */
+    if (link && [[text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] isEqual:link.absoluteString]) text = nil;
+    NSMutableArray<NSData *> *images = [NSMutableArray array];
+    NSData *picture = [pasteboard dataForType:NSPasteboardTypePNG] ?: [pasteboard dataForType:NSPasteboardTypeTIFF];
+    if (picture) {
+        /* As a PNG: a TIFF is no attachment's kind. */
+        NSBitmapImageRep *rep = [NSBitmapImageRep imageRepWithData:picture];
+#ifdef GNUSTEP
+        NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+        NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+        if (png) [images addObject:png];
+    }
+    if (!text.length && !link && !images.count) {
+        if (error) *error = @"Nothing to add: no text, link or picture.";
+        return;
+    }
+    NSURL *inbox = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:
+                                              [NSString stringWithFormat:@"SimpleNotes Inbox %@", [NSProcessInfo processInfo].globallyUniqueString]]];
+    NSError *failed = nil;
+    NSArray<NSManagedObjectID *> *made = SNWriteShare(inbox, nil, text, link, images, &failed)
+        ? [SNTransfer importSharesIntoNotes:_notes fromInbox:inbox] : @[];
+    [[NSFileManager defaultManager] removeItemAtURL:inbox error:NULL];
+    SNNote *note = made.count ? [_notes noteForObjectID:made.lastObject] : nil;
+    if (!note) {
+        if (error) *error = failed.localizedDescription ?: @"The note was not made.";
+        return;
+    }
+    [self showNotes:nil];
+    [_window showNote:note];
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)app {

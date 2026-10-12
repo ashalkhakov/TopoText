@@ -18,6 +18,10 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)showNotes:(nullable id)sender;
 // Devices Nearby… (SNPeersWindow).
 - (IBAction)showDevicesNearby:(nullable id)sender;
+// Services > Add to SimpleNotes (another app's selection: its text, a link,
+// a picture): a new note at the top, shown. As the Share extension does on
+// iOS: through an inbox (SNShares.h), imported at once.
+- (void)addToSimpleNotes:(NSPasteboard *)pasteboard userData:(nullable NSString *)userData error:(NSString *_Nullable *_Nullable)error;
 @end
 
 NS_ASSUME_NONNULL_END

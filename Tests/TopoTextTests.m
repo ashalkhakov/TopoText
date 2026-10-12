@@ -243,6 +243,37 @@ static void TTSync(TopoText *a, TopoText *b) {
     XCTAssertEqualObjects(t.attributedString, s);
 }
 
+- (void)testSetStringChangesOnlyWhatDiffers {
+    /* The first and last lines changed: the lines between keep their
+       characters, so another copy's typing in them stays where it was. */
+    TopoText *t = TTText(1, @"one\ntwo\nthree\nfour\nfive\n");
+    TopoText *other = [t copyWithReplica:2];
+    [other insertString:@"!" atIndex:13 attributes:nil];   /* "three!" */
+    [t setString:@"ONE\ntwo\nthree\nfour\nFIVE\n"];
+    XCTAssertEqualObjects(t.string, @"ONE\ntwo\nthree\nfour\nFIVE\n");
+    [t mergeText:other];
+    XCTAssertEqualObjects(t.string, @"ONE\ntwo\nthree!\nfour\nFIVE\n");
+    /* Within a line, characters: a word changed keeps its neighbours. */
+    TopoText *u = TTText(1, @"The quick brown fox");
+    TopoText *v = [u copyWithReplica:2];
+    [v insertString:@"very " atIndex:4 attributes:nil];
+    [u setString:@"The quick red fox"];
+    [u mergeText:v];
+    XCTAssertEqualObjects(u.string, @"The very quick red fox");
+    /* An emoji for another: never half of one. */
+    TopoText *e = TTText(1, @"a😀b");
+    [e setString:@"a😁b"];
+    XCTAssertEqualObjects(e.string, @"a😁b");
+    [e setString:@"😁"];
+    XCTAssertEqualObjects(e.string, @"😁");
+    /* Attributed: as many changes, attributes as given. */
+    TopoText *w = TTText(1, @"alpha\nbeta\ngamma");
+    NSMutableAttributedString *want = [[NSMutableAttributedString alloc] initWithString:@"alpha\nBETA\ngamma"];
+    [want addAttribute:@"bold" value:@YES range:NSMakeRange(0, 5)];
+    [w setAttributedString:want];
+    XCTAssertEqualObjects(w.attributedString, want);
+}
+
 - (void)testAnchors {
     TopoText *a = TTText(1, @"hello world");
     TTId *cursor = [a anchorAtIndex:6]; /* after "hello " */

@@ -8,6 +8,8 @@
 #import "SNNotes.h"
 #import "SNTextView.h"
 #import "SNTransferPanel.h"
+#import "SNGallery.h"
+#import "SNVersionsPanel.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -15,7 +17,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface SNWindowController : NSWindowController <NSWindowDelegate, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTableViewDataSource,
                                                     NSTableViewDelegate, SNTextViewDelegate, SNNoteEditorDelegate,
-                                                    SNTransferPanelDelegate>
+                                                    SNTransferPanelDelegate, SNGalleryDelegate, SNAttachmentsWindowDelegate,
+                                                    SNVersionsPanelDelegate>
 - (instancetype)initWithNotes:(SNNotes *)notes;
 // The sidebar: All Notes, the folders (folders in folders under them),
 // Recently Deleted, and the tags.
@@ -31,6 +34,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)selectNoteTitled:(NSString *)title;
 // All Notes, Recently Deleted, a folder or a tag, chosen in the sidebar.
 - (void)showAllNotes;
+// The note chosen in the list (nil: none).
+- (nullable SNNote *)selectedNote;
+
 - (void)showRecentlyDeleted;
 - (BOOL)showFolderNamed:(NSString *)name;
 - (BOOL)showTag:(NSString *)tag;
@@ -96,7 +102,46 @@ NS_ASSUME_NONNULL_BEGIN
 - (IBAction)moveCheckedToBottom:(nullable id)sender;
 - (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)decreaseIndentation:(nullable id)sender;
+// Format > Block Quote (Command-'): the paragraphs quoted, or not.
+- (IBAction)toggleBlockQuote:(nullable id)sender;
+// Format > Collapse All Sections and Expand All Sections: every heading's
+// (a chevron beside each collapses or expands one, as Apple Notes').
+- (IBAction)collapseAllSections:(nullable id)sender;
+- (IBAction)expandAllSections:(nullable id)sender;
+// Format > Highlight and Text Color: the item's tag the colour (0 none,
+// then SNColorNames' order: purple, pink, orange, mint, blue).
+- (IBAction)applyHighlightColor:(nullable id)sender;
+- (IBAction)applyTextColor:(nullable id)sender;
+// View > as List (Command-1) and as Gallery (Command-2): the notes as rows
+// or as cards, in the list's place (the pane wider for cards), from now
+// on; a card chosen opens its note as a row does.
+- (IBAction)showAsList:(nullable id)sender;
+- (IBAction)showAsGallery:(nullable id)sender;
+@property (nonatomic, readonly) SNGallery *gallery;
+// View > Show Attachments (Command-3): every image and file in the notes,
+// in a window of its own; one chosen shows its note, where it is.
+- (IBAction)showAttachments:(nullable id)sender;
+@property (nonatomic, readonly, nullable) SNAttachmentsWindow *attachmentsWindow;
+// Edit > Find > Search: the notes' search field.
+// File > Print… (Command-P) and Export as PDF…: the open note laid out on
+// paper, as it is now (what was typed and not yet saved too): its lists,
+// colours, images, files' cards, tables (drawn as they look), in the
+// paper's light colours.
+- (IBAction)printNote:(nullable id)sender;
+// File > Version History...: the open note's versions (SNVersionsPanel).
+- (IBAction)showVersionHistory:(nullable id)sender;
+@property (nonatomic, readonly, nullable) SNVersionsPanel *versionsPanel;
+- (IBAction)exportNoteAsPDF:(nullable id)sender;
+// The open note as a PDF at path, with no panel (Export as PDF's, once a
+// file is chosen); NO: none written.
+- (BOOL)exportNoteAsPDFTo:(NSString *)path;
 - (IBAction)findNote:(nullable id)sender;
+// Edit > Find's actions in the note (Find…, Find and Replace…, Find Next,
+// ...), from wherever the window's focus is (the notes' list): the note's
+// text view takes them, as when it has the focus.
+- (IBAction)performFindPanelAction:(nullable id)sender;
+- (IBAction)findAndReplace:(nullable id)sender;
+- (IBAction)centerSelectionInVisibleArea:(nullable id)sender;
 // Format > Add Link… (a link on the selection, or the one at the insertion
 // point changed), and File > Copy Link to Note (simplenotes://note/<id>,
 // pasted as a link it opens the note).

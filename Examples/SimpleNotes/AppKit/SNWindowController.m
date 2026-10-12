@@ -1,5 +1,6 @@
 #import "SNWindowController.h"
 #import "SNRichText.h"
+#import "SNTextSystem.h"
 #import "SNModel.h"
 #import "SNTableGrid.h"
 #import "SNSmartFolderPanel.h"
@@ -47,6 +48,13 @@ NSString *SNAskForText(NSString *title, NSString *message, NSString *initial) {
     SNTextBinding *_binding;
     /* The open note's tables, each over its place in the text. */
     SNTableGrids *_grids;
+    /* The notes as cards, in the list's place when chosen; the list's
+       pane's width before it widened for them. */
+    SNGallery *_gallery;
+    CGFloat _listWidth;
+    /* A note on paper while it prints: its binding and tables' grids. */
+    SNTextBinding *_paperBinding;
+    SNTableGrids *_paperGrids;
     BOOL _reloading;
     /* What the window shows: All Notes, a folder, or Recently Deleted. The
        folder table's selection follows it, not the other way round: rows
@@ -93,9 +101,11 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 - (void)windowDidLoad {
     [super windowDidLoad];
     [_textView useListLayoutManager];
+    SNSystemShowChevrons(_textView);
     /* Undo is the binding's: by the characters' ids, so it survives a
        sync's edits; the text view's own (by positions) would not. */
     _textView.allowsUndo = NO;
+    [_textView useFindInterface];
     _textView.textContainerInset = NSMakeSize(14, 14);
     _textView.textContainer.widthTracksTextView = YES;
     /* The whole pane is the note's: a click below its last line is in it
@@ -112,9 +122,82 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [_folderTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
     _collapsed = [NSMutableSet set];
     [_noteTable setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
+    /* The cards, where the list is, shown instead of it when chosen. */
+    NSScrollView *list = _noteTable.enclosingScrollView;
+    _gallery = [[SNGallery alloc] initWithNotes:_notes];
+    _gallery.delegate = self;
+    _gallery.view.frame = list.frame;
+    _gallery.view.autoresizingMask = list.autoresizingMask;
+    _gallery.view.hidden = YES;
+    [list.superview addSubview:_gallery.view];
     [self reloadFolders];
+    [self showGallery:[[NSUserDefaults standardUserDefaults] boolForKey:SNGalleryDefaultsKey]];
     [self reloadNotes];
     [self showStatus:_notes.status];
+}
+
+#pragma mark the gallery and the attachments
+
+- (IBAction)showAsList:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:SNGalleryDefaultsKey];
+    [self showGallery:NO];
+}
+
+- (IBAction)showAsGallery:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:SNGalleryDefaultsKey];
+    [self showGallery:YES];
+}
+
+/* The cards in the list's place, its pane widened for them (half of what
+   the note had); or the list again, its width as it was. */
+- (void)showGallery:(BOOL)cards {
+    NSScrollView *list = _noteTable.enclosingScrollView;
+    NSView *pane = list.superview;
+    NSSplitView *split = [pane.superview isKindOfClass:[NSSplitView class]] ? (NSSplitView *)pane.superview : nil;
+    if (cards == !_gallery.view.isHidden) return;
+    if (cards) {
+        _listWidth = pane.frame.size.width;
+        CGFloat from = NSMinX(pane.frame), room = NSWidth(split.bounds) - from;
+        [split setPosition:from + MAX(_listWidth, room / 2) ofDividerAtIndex:1];
+        _gallery.view.frame = list.frame;
+    } else if (_listWidth > 0) {
+        [split setPosition:NSMinX(pane.frame) + _listWidth ofDividerAtIndex:1];
+    }
+    list.hidden = cards;
+    _gallery.view.hidden = !cards;
+    [self reloadNotes];
+}
+
+- (void)gallery:(SNGallery *)gallery didChooseNote:(SNNote *)note {
+    NSUInteger row = [_rows indexOfObject:note];
+    if (row != NSNotFound) [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
+}
+
+- (IBAction)showAttachments:(id)sender {
+    if (!_attachmentsWindow) {
+        _attachmentsWindow = [[SNAttachmentsWindow alloc] initWithNotes:_notes];
+        _attachmentsWindow.delegate = self;
+    } else {
+        [_attachmentsWindow reload];
+    }
+    [_attachmentsWindow showWindow:nil];
+}
+
+/* Its note, in All Notes, scrolled to where it is. */
+- (void)attachmentsWindow:(SNAttachmentsWindow *)window didChooseAttachment:(SNAttachmentItem *)item {
+    SNNote *note = [_notes noteForObjectID:item.noteID];
+    if (!note) return;
+    [self showAllNotes];
+    [self gallery:_gallery didChooseNote:note];
+    if (![_editor.noteID isEqual:note.objectID]) [self openNote:note];
+    NSTextStorage *storage = _textView.textStorage;
+    for (NSUInteger i = 0; i < storage.length; i++) {
+        if (![[storage attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL] isEqual:item.attachmentID]) continue;
+        _textView.selectedRange = NSMakeRange(i, 1);
+        [_textView scrollRangeToVisible:NSMakeRange(i, 1)];
+        break;
+    }
+    [self.window makeKeyAndOrderFront:nil];
 }
 
 - (void)showStatus:(NSString *)status {
@@ -259,6 +342,13 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         if ([_rows[i] isKindOfClass:[SNNote class]] && [[_rows[i] objectID] isEqual:selected]) row = i;
     if (row != NSNotFound) [_noteTable selectRowIndexes:[NSIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
     else [_noteTable deselectAll:nil];
+    if (!_gallery.view.isHidden) {
+        NSMutableArray *cards = [NSMutableArray array];
+        for (id r in _rows)
+            if ([r isKindOfClass:[SNNote class]]) [cards addObject:r];
+        _gallery.shownNotes = cards;
+        [_gallery chooseNote:row != NSNotFound ? _rows[row] : nil];
+    }
     _reloading = NO;
     /* The open note left this list (deleted, recovered, moved, here or
        elsewhere): closed. One still here follows whether it is deleted. */
@@ -504,18 +594,27 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
 }
 
-/* Filled only when what it says changes: Eau's menu bar is told of every
-   change. */
+/* Filled only when what it says changes, and only its marks moved when the
+   folders are the same (another note chosen): Eau's menu bar is told of
+   every change, each a lookup of its own (a second, with many folders, on
+   every note chosen). */
 - (void)fill:(NSMenu *)menu folders:(BOOL)folders {
     if (_fillingMoveTo) return;
     NSArray<NSArray *> *items = folders ? [self moveFolderToItems] : [self moveToItems];
     SEL action = folders ? @selector(moveFolderToFolder:) : @selector(moveNoteToFolder:);
-    NSMutableArray *shown = [NSMutableArray array];
+    NSMutableArray<NSMenuItem *> *shownItems = [NSMutableArray array];
+    NSMutableArray *shown = [NSMutableArray array], *wanted = [NSMutableArray array];
     for (NSMenuItem *item in menu.itemArray) {
         if (item.isSeparatorItem) continue;
-        [shown addObject:@[ item.title, item.representedObject ?: [NSNull null], @(item.state == NSControlStateValueOn) ]];
+        [shownItems addObject:item];
+        [shown addObject:@[ item.title, item.representedObject ?: [NSNull null] ]];
     }
-    if ([shown isEqual:items]) return;
+    for (NSArray *i in items) [wanted addObject:@[ i[0], i[1] ]];
+    if ([shown isEqual:wanted]) {
+        for (NSUInteger i = 0; i < items.count; i++)
+            shownItems[i].state = [items[i][2] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
+        return;
+    }
     _fillingMoveTo = YES;
     [menu removeAllItems];
     for (NSArray *i in items) {
@@ -717,6 +816,25 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     if (_notes.movesCheckedToBottom) [self moveCheckedToBottomAt:index];
 }
 
+/* A heading's section collapsed or expanded, undoably. */
+- (void)textView:(SNTextView *)tv clickedSectionToggleAtIndex:(NSUInteger)index {
+    if (![self beginFormattingAt:NSMakeRange(index, 0)]) return;
+    [_binding toggleCollapsedAt:index];
+    [self endFormatting];
+    [_grids update];
+}
+
+- (void)setAllSectionsCollapsed:(BOOL)collapsed {
+    NSRange all = NSMakeRange(0, _textView.string.length);
+    if (![self beginFormattingAt:all]) return;
+    [_binding setAllSectionsCollapsed:collapsed];
+    [self endFormatting];
+    [_grids update];
+}
+
+- (IBAction)collapseAllSections:(id)sender { [self setAllSectionsCollapsed:YES]; }
+- (IBAction)expandAllSections:(id)sender { [self setAllSectionsCollapsed:NO]; }
+
 /* Undoably: a move keeps the list's length, so the text view's undo of
    "this range, replaced" puts the old order back. */
 - (void)moveCheckedToBottomAt:(NSUInteger)index {
@@ -846,6 +964,119 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self runTransfer:[SNTransfer exportOfNotes:_notes toURL:panel.URL]];
 }
 
+#pragma mark version history
+
+- (IBAction)showVersionHistory:(id)sender {
+    SNNote *note = [self selectedNote];
+    if (!note) return;
+    /* What was typed written: the note as it is now, beside each version. */
+    [_notes saveAll];
+    if (![_versionsPanel.note isEqual:note]) {
+        [_versionsPanel close];
+        _versionsPanel = [[SNVersionsPanel alloc] initWithNotes:_notes note:note];
+        _versionsPanel.delegate = self;
+    } else {
+        [_versionsPanel reload];
+    }
+    [_versionsPanel showWindow:nil];
+}
+
+- (void)versionsPanel:(SNVersionsPanel *)panel restoreVersion:(NSManagedObject *)version {
+    if (![_notes restoreNote:panel.note toVersion:version]) {
+        NSBeep();
+        return;
+    }
+    [_grids update];
+}
+
+#pragma mark printing
+
+/* The open note on paper: a text view of the page's width, out of sight,
+   the note's editor's text shown in it by a binding of its own (read only:
+   nothing is written back), its tables in grids of their own over it (a
+   view's subviews print with it); let go of once printed. */
+- (SNTextView *)paperViewFor:(NSPrintInfo *)info {
+    CGFloat width = info.paperSize.width - info.leftMargin - info.rightMargin;
+    SNTextView *paper = [[SNTextView alloc] initWithFrame:NSMakeRect(0, 0, width, 100)];
+    [paper useListLayoutManager];
+    paper.editable = NO;
+    paper.selectable = NO;
+    paper.drawsBackground = NO;
+    paper.printTitle = [self selectedNote].title.length ? [self selectedNote].title : @"Note";
+    paper.verticallyResizable = YES;
+    paper.textContainer.widthTracksTextView = YES;
+#ifndef GNUSTEP
+    /* Dark text on white paper, whatever the window is in: the view's
+       colours, and the pictures made for it (a file's card) as well. */
+    paper.appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+    [paper.appearance performAsCurrentDrawingAppearance:^{
+        [self showNoteOnPaper:paper];
+    }];
+#else
+    [self showNoteOnPaper:paper];
+#endif
+    [paper.layoutManager ensureLayoutForTextContainer:paper.textContainer];
+    NSRect used = [paper.layoutManager usedRectForTextContainer:paper.textContainer];
+    [paper setFrameSize:NSMakeSize(width, NSMaxY(used) + paper.textContainerInset.height * 2)];
+    return paper;
+}
+
+- (void)showNoteOnPaper:(SNTextView *)paper {
+    _paperBinding = [[SNTextBinding alloc] initWithTextView:(id<SNTextViewing>)paper editor:_editor];
+    [paper setFrameSize:NSMakeSize(paper.frame.size.width, 100000)];
+    _paperGrids = [[SNTableGrids alloc] initWithBinding:_paperBinding notes:_notes];
+    [_paperGrids update];
+}
+
+- (void)letGoOfPaper {
+    [_paperGrids removeAll];
+    _paperGrids = nil;
+    [_paperBinding unbind];
+    _paperBinding = nil;
+}
+
+- (NSPrintOperation *)printOperationTo:(NSString *)path {
+    NSPrintInfo *info = [[NSPrintInfo sharedPrintInfo] copy];
+    /* From the top of the page, as a document is. */
+    info.verticallyCentered = NO;
+    info.horizontallyCentered = NO;
+    if (path) {
+        info.jobDisposition = NSPrintSaveJob;
+#ifdef GNUSTEP
+        info.dictionary[NSPrintSavePath] = path;
+#else
+        info.dictionary[NSPrintJobSavingURL] = [NSURL fileURLWithPath:path];
+#endif
+    }
+    NSPrintOperation *op = [NSPrintOperation printOperationWithView:[self paperViewFor:info] printInfo:info];
+    return op;
+}
+
+- (IBAction)printNote:(id)sender {
+    if (!_editor) return;
+    [[self printOperationTo:nil] runOperation];
+    [self letGoOfPaper];
+}
+
+- (IBAction)exportNoteAsPDF:(id)sender {
+    if (!_editor) return;
+    NSSavePanel *panel = [NSSavePanel savePanel];
+    NSString *title = [[self selectedNote].title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    panel.nameFieldStringValue = [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+    panel.prompt = @"Export";
+    if ([panel runModal] != NSModalResponseOK || !panel.URL) return;
+    [self exportNoteAsPDFTo:panel.URL.path];
+}
+
+- (BOOL)exportNoteAsPDFTo:(NSString *)path {
+    NSPrintOperation *op = [self printOperationTo:path];
+    op.showsPrintPanel = NO;
+    op.showsProgressPanel = NO;
+    BOOL done = [op runOperation];
+    [self letGoOfPaper];
+    return done;
+}
+
 - (IBAction)renameFolder:(id)sender {
     SNFolder *f = [self selectedFolder];
     if (!f) return;
@@ -918,6 +1149,21 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 - (IBAction)findNote:(id)sender {
     [self.window makeFirstResponder:_searchField];
+}
+
+- (IBAction)performFindPanelAction:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView performFindPanelAction:sender];
+}
+
+- (IBAction)findAndReplace:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView findAndReplace:sender];
+}
+
+- (IBAction)centerSelectionInVisibleArea:(id)sender {
+    [self.window makeFirstResponder:_textView];
+    [_textView centerSelectionInVisibleArea:sender];
 }
 
 #pragma mark links
@@ -1070,6 +1316,15 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     }
     if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
     if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
+    if (a == @selector(collapseAllSections:) || a == @selector(expandAllSections:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
+    if (a == @selector(showAsList:) || a == @selector(showAsGallery:)) {
+        item.state = (a == @selector(showAsGallery:)) == !_gallery.view.isHidden ? NSControlStateValueOn : NSControlStateValueOff;
+        return YES;
+    }
+    if (a == @selector(printNote:) || a == @selector(exportNoteAsPDF:)) return _editor != nil;
+    if (a == @selector(showVersionHistory:)) return [self selectedNote] != nil;
+    if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
+    if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
     if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
     if (a == @selector(moveCheckedToBottom:))
@@ -1155,6 +1410,34 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     [self endFormatting];
 }
 
+/* A colour's name on the selection, undoably; with none, on what is typed
+   next. A menu item's tag says which: 0 none, then SNColorNames' order. */
+- (void)setCharacterColor:(NSString *)key from:(id)sender {
+    SNTextBinding *binding;
+    NSTextView *tv = [self formattedTextView:&binding];
+    if (!binding || !tv.isEditable) return;
+    NSInteger tag = [sender tag];
+    NSString *name = tag > 0 && tag <= (NSInteger)SNColorNames().count ? SNColorNames()[tag - 1] : nil;
+    NSRange range = tv.selectedRange;
+    if (!range.length) {
+        [binding setCharacterValue:name forKey:key inRange:range];
+        return;
+    }
+    if (![tv shouldChangeTextInRange:range replacementString:nil]) return;
+    [binding setCharacterValue:name forKey:key inRange:range];
+    [tv didChangeText];
+}
+
+- (IBAction)applyHighlightColor:(id)sender { [self setCharacterColor:SNHighlightKey from:sender]; }
+- (IBAction)applyTextColor:(id)sender { [self setCharacterColor:SNColorKey from:sender]; }
+
+- (IBAction)toggleBlockQuote:(id)sender {
+    NSRange r = _textView.selectedRange;
+    if (![self beginFormattingAt:r]) return;
+    [_binding toggleQuoteForParagraphsInRange:r];
+    [self endFormatting];
+}
+
 - (IBAction)toggleBold:(id)sender { [self toggle:SNBoldKey]; }
 - (IBAction)toggleItalic:(id)sender { [self toggle:SNItalicKey]; }
 - (IBAction)toggleUnderline:(id)sender { [self toggle:SNUnderlineKey]; }
@@ -1202,7 +1485,19 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
                      NSStringFromSelector(@selector(toggleUnderline:)): SNUnderlineKey, NSStringFromSelector(@selector(toggleStrikethrough:)): SNStrikeKey };
     }
     NSString *name = NSStringFromSelector(a);
-    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:);
+    if (a == @selector(applyHighlightColor:) || a == @selector(applyTextColor:)) {
+        SNTextBinding *binding;
+        NSTextView *tv = [self formattedTextView:&binding];
+        BOOL enabled = binding != nil && tv.isEditable;
+        NSString *now = enabled ? [binding characterValueForKey:a == @selector(applyTextColor:) ? SNColorKey : SNHighlightKey inRange:tv.selectedRange] : nil;
+        NSUInteger at = now ? [SNColorNames() indexOfObject:now] : NSNotFound;
+        NSInteger tag = at == NSNotFound ? 0 : (NSInteger)at + 1;
+        item.state = enabled && item.tag == tag ? NSControlStateValueOn : NSControlStateValueOff;
+        *enabledOut = enabled;
+        return YES;
+    }
+    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:) ||
+                 a == @selector(toggleBlockQuote:);
     if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
     BOOL enabled = _binding != nil && _textView.isEditable;
     if (inline_[name]) {
@@ -1222,6 +1517,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
         enabled = enabled && [p[SNListKey] isEqual:SNListCheck];
     }
     else if (a == @selector(decreaseIndentation:)) enabled = enabled && p[SNIndentKey] != nil;
+    else if (a == @selector(toggleBlockQuote:)) on = p[SNQuoteKey] != nil;
     item.state = on ? NSControlStateValueOn : NSControlStateValueOff;
     *enabledOut = enabled;
     return YES;

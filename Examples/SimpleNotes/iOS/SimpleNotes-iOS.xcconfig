@@ -23,7 +23,10 @@ INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPort
 // zlib: SNZip (export and import).
 OTHER_LDFLAGS = $(inherited) -lz
 LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
-HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/iOS
+HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/iOS $(SRCROOT)/iOS/Share
+
+// The App Group it shares with its Share extension (SNShares.h).
+CODE_SIGN_ENTITLEMENTS = iOS/SimpleNotes.entitlements
 
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = Apple Development

@@ -7,4 +7,12 @@
     NSMainNibFile = "MainMenu.xib";
     NSPrincipalClass = NSApplication;
     NSRole = Application;
+    NSServices = (
+        {
+            NSMenuItem = { default = "Add to SimpleNotes"; };
+            NSMessage = addToSimpleNotes;
+            NSPortName = SimpleNotes;
+            NSSendTypes = (NSStringPboardType, NSURLPboardType, NSTIFFPboardType);
+        }
+    );
 }

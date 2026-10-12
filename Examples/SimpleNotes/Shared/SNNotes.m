@@ -3,6 +3,11 @@
 #import "SNResolver.h"
 #import "SNMigration.h"
 
+@interface SNAttachmentItem ()
+- (instancetype)initWithID:(NSString *)attachmentID name:(id)name created:(id)created noteID:(NSManagedObjectID *)noteID;
+- (NSComparisonResult)compareNewestFirst:(SNAttachmentItem *)other;
+@end
+
 NSNotificationName const SNNotesDidChangeNotification = @"SNNotesDidChange";
 const NSInteger SNRecentlyDeletedDays = 30;
 /* Notes deleted for good a save at a time. */
@@ -938,6 +943,120 @@ static NSPredicate *SNAnd(NSPredicate *a, NSPredicate *b) {
     return [self fetch:SNAttachmentEntity where:[NSPredicate predicateWithFormat:@"id == %@", attachmentID] sortedBy:nil].firstObject;
 }
 
+#pragma mark attachments, all of them
+
+/* An attachment's character's key in a note's text (SNRichText's
+   SNAttachmentKey: the device's code has it without the view system's). */
+static NSString * const SNTextAttachmentKey = @"attachment";
+
+/* The ids of the attachments a text has, in order. */
+static NSArray<NSString *> *SNAttachmentIDsIn(TopoText *text) {
+    NSMutableArray *ids = [NSMutableArray array];
+    for (NSUInteger i = 0; i < text.length; ) {
+        NSRange run;
+        id a = [text attributesAtIndex:i effectiveRange:&run][SNTextAttachmentKey];
+        if ([a isKindOfClass:[NSString class]] && ![ids containsObject:a]) [ids addObject:a];
+        i = NSMaxRange(run) > i ? NSMaxRange(run) : i + 1;
+    }
+    return ids;
+}
+
+/* How many attachments a note's text shows: one character each. */
+static NSUInteger SNAttachmentCharacters(NSString *body) {
+    NSUInteger n = 0;
+    for (NSUInteger i = 0; i < body.length; i++)
+        if ([body characterAtIndex:i] == 0xFFFC) n++;
+    return n;
+}
+
+/* Attachments' id, kind, name, date and note, as dictionaries: no data. */
+- (NSArray<NSDictionary *> *)attachmentRowsWhere:(NSPredicate *)predicate {
+    NSFetchRequest *f = [NSFetchRequest fetchRequestWithEntityName:SNAttachmentEntity];
+    f.predicate = predicate;
+    f.resultType = NSDictionaryResultType;
+    f.propertiesToFetch = _five ? @[ @"id", @"kind", @"created", @"note", @"name" ] : @[ @"id", @"kind", @"created", @"note" ];
+    return [_context executeFetchRequest:f error:NULL] ?: @[];
+}
+
+/* A note read for a moment, a fault again after (unless it has changes of
+   its own). */
+- (void)letGoOfNote:(SNNote *)note {
+    if (!note.hasChanges) [_context refreshObject:note mergeChanges:NO];
+}
+
+- (NSArray<SNAttachmentItem *> *)attachmentsOfKind:(NSString *)kind {
+    if (!_attaches) return @[];
+    NSMutableDictionary<NSManagedObjectID *, NSMutableArray *> *byNote = [NSMutableDictionary dictionary];
+    for (NSDictionary *row in [self attachmentRowsWhere:[NSPredicate predicateWithFormat:@"note != nil AND note.deletedAt == nil"]]) {
+        NSManagedObjectID *note = row[@"note"];
+        if (![note isKindOfClass:[NSManagedObjectID class]] || ![row[@"id"] isKindOfClass:[NSString class]]) continue;
+        if (!byNote[note]) byNote[note] = [NSMutableArray array];
+        [byNote[note] addObject:row];
+    }
+    NSMutableArray<SNAttachmentItem *> *items = [NSMutableArray array];
+    for (NSManagedObjectID *noteID in byNote) {
+        NSArray *rows = byNote[noteID];
+        if (![[rows valueForKey:@"kind"] containsObject:kind]) continue;
+        /* Every one in the text, as its characters say; else the text read
+           for which. */
+        SNNote *note = (SNNote *)[_context objectWithID:noteID];
+        NSArray *inText = SNAttachmentCharacters(note.body) < rows.count ? SNAttachmentIDsIn(note.text) : nil;
+        [self letGoOfNote:note];
+        for (NSDictionary *row in rows) {
+            if (![row[@"kind"] isEqual:kind] || (inText && ![inText containsObject:row[@"id"]])) continue;
+            [items addObject:[[SNAttachmentItem alloc] initWithID:row[@"id"] name:row[@"name"] created:row[@"created"] noteID:noteID]];
+        }
+    }
+    [items sortUsingSelector:@selector(compareNewestFirst:)];
+    return items;
+}
+
+- (NSString *)firstImageIDOfNote:(SNNote *)note {
+    if (!_attaches || !note) return nil;
+    NSArray *rows = [self attachmentRowsWhere:[NSPredicate predicateWithFormat:@"note == %@ AND kind == %@", note, SNAttachmentKindImage]];
+    if (!rows.count) return nil;
+    NSArray *images = [rows valueForKey:@"id"];
+    for (NSString *attachmentID in SNAttachmentIDsIn(note.text))
+        if ([images containsObject:attachmentID]) return attachmentID;
+    return nil;
+}
+
+- (void)letGoOfAttachment:(SNAttachment *)attachment {
+    if (attachment && !attachment.hasChanges) [_context refreshObject:attachment mergeChanges:NO];
+}
+
+#pragma mark versions
+
+- (NSArray<NSManagedObject *> *)versionsOfNote:(SNNote *)note {
+    if (!note.id.length || !_coordinator.managedObjectModel.entitiesByName[SNNoteVersionEntity]) return @[];
+    return [self fetch:SNNoteVersionEntity where:[NSPredicate predicateWithFormat:@"noteID == %@", note.id]
+              sortedBy:@[ [NSSortDescriptor sortDescriptorWithKey:@"created" ascending:NO] ]];
+}
+
+- (TopoText *)textOfVersion:(NSManagedObject *)version {
+    NSData *data = [version.entity.name isEqual:SNNoteVersionEntity] ? [version valueForKey:@"text"] : nil;
+    return [data isKindOfClass:[NSData class]] ? [TopoText textWithData:data replica:0 error:NULL] : nil;
+}
+
+- (BOOL)restoreNote:(SNNote *)note toVersion:(NSManagedObject *)version {
+    TopoText *then = [self textOfVersion:version];
+    if (!then || note.deletedAt) return NO;
+    /* What was typed written first; then the note made as it was, by an
+       editor of its own; then the open ones shown what it wrote. */
+    [self saveAll];
+    SNNoteEditor *editor = [self editorForNote:note];
+    [editor.text setAttributedString:then.attributedString];
+    [editor textDidChange];
+    [editor close];
+    [self saveAll];
+    return YES;
+}
+
+- (SNNote *)noteForObjectID:(NSManagedObjectID *)objectID {
+    NSManagedObject *o = objectID ? [_context existingObjectWithID:objectID error:NULL] : nil;
+    return [o isKindOfClass:[SNNote class]] ? (SNNote *)o : nil;
+}
+
 - (SNNote *)noteWithID:(NSString *)noteID {
     if (!noteID.length) return nil;
     return [self fetch:SNNoteEntity where:[NSPredicate predicateWithFormat:@"id == %@", noteID] sortedBy:nil].firstObject;
@@ -1216,6 +1335,27 @@ static NSPredicate *SNAnd(NSPredicate *a, NSPredicate *b) {
 
 - (void)forgetEditor:(SNNoteEditor *)editor {
     [_editors removeObject:editor];
+}
+
+@end
+
+@implementation SNAttachmentItem
+
+- (instancetype)initWithID:(NSString *)attachmentID name:(id)name created:(id)created noteID:(NSManagedObjectID *)noteID {
+    if (!(self = [super init])) return nil;
+    _attachmentID = [attachmentID copy];
+    _name = [name isKindOfClass:[NSString class]] ? [name copy] : nil;
+    _created = [created isKindOfClass:[NSDate class]] ? created : nil;
+    _noteID = noteID;
+    return self;
+}
+
+/* The newest first; one with no date last. */
+- (NSComparisonResult)compareNewestFirst:(SNAttachmentItem *)other {
+    if (_created && other.created) return [other.created compare:_created];
+    if (_created) return NSOrderedAscending;
+    if (other.created) return NSOrderedDescending;
+    return [_attachmentID compare:other.attachmentID];
 }
 
 @end

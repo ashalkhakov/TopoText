@@ -621,12 +621,147 @@ static void TTDiff(NSString *a, NSString *b, NSRange *mine, NSRange *theirs) {
     *theirs = NSMakeRange(pre, nb - pre - suf);
 }
 
-- (void)setString:(NSString *)string {
+static BOOL TTIsHighSurrogate(unichar c) { return c >= 0xd800 && c < 0xdc00; }
+static BOOL TTIsLowSurrogate(unichar c) { return c >= 0xdc00 && c < 0xe000; }
+
+/* The fewest tokens to change to make x (n of them) y (m): Myers' O(ND)
+   diff. Each change a pair of ranges, in x and in y (a deletion's in y and
+   an insertion's in x are empty), in order. More than maxD of them: nil
+   (the caller replaces the whole instead). Its memory O(D^2). */
+static NSArray<NSArray<NSValue *> *> *TTMyers(const NSInteger *x, NSInteger n, const NSInteger *y, NSInteger m, NSInteger maxD) {
+    NSInteger max = MIN(n + m, maxD);
+    NSMutableArray<NSData *> *trace = [NSMutableArray array];
+    NSInteger *v = calloc((size_t)(2 * max + 3), sizeof(NSInteger));
+    NSInteger off = max + 1, found = -1;
+    for (NSInteger d = 0; d <= max && found < 0; d++) {
+        for (NSInteger k = -d; k <= d; k += 2) {
+            NSInteger i = (k == -d || (k != d && v[off + k - 1] < v[off + k + 1])) ? v[off + k + 1] : v[off + k - 1] + 1;
+            NSInteger j = i - k;
+            while (i < n && j < m && x[i] == y[j]) i++, j++;
+            v[off + k] = i;
+            if (i >= n && j >= m) { found = d; break; }
+        }
+        [trace addObject:[NSData dataWithBytes:v + off - d length:(size_t)(2 * d + 1) * sizeof(NSInteger)]];
+    }
+    free(v);
+    if (found < 0) return nil;
+    /* Back from the end: each step one token in x or y, the snakes between
+       them equal. */
+    NSMutableArray *changes = [NSMutableArray array];
+    NSInteger i = n, j = m, ci = n, cj = m;   /* the change being gathered ends at ci, cj */
+    for (NSInteger d = found; d > 0; d--) {
+        const NSInteger *vd = [trace[(NSUInteger)d - 1] bytes];   /* v after d - 1 steps, k from -(d - 1) */
+        NSInteger k = i - j;
+        BOOL down = k == -d || (k != d && vd[k - 1 + (d - 1)] < vd[k + 1 + (d - 1)]);
+        NSInteger pk = down ? k + 1 : k - 1;
+        NSInteger pi = vd[pk + (d - 1)], pj = pi - pk;
+        NSInteger si = down ? pi : pi + 1, sj = down ? pj + 1 : pj;   /* where the step lands, the snake from there */
+        if (i > si) {   /* a snake: what came after it is a change of its own */
+            if (ci > i || cj > j) [changes insertObject:@[ [NSValue valueWithRange:NSMakeRange((NSUInteger)i, (NSUInteger)(ci - i))],
+                                                          [NSValue valueWithRange:NSMakeRange((NSUInteger)j, (NSUInteger)(cj - j))] ] atIndex:0];
+            ci = si;
+            cj = sj;
+        }
+        i = pi;
+        j = pj;
+    }
+    /* The first snake, from 0: before it, nothing. */
+    if (ci > i || cj > j) [changes insertObject:@[ [NSValue valueWithRange:NSMakeRange((NSUInteger)i, (NSUInteger)(ci - i))],
+                                                  [NSValue valueWithRange:NSMakeRange((NSUInteger)j, (NSUInteger)(cj - j))] ] atIndex:0];
+    return changes;
+}
+
+/* What changes to make a b, as few characters as it takes: past the common
+   prefix and suffix, lines compared, and within changed lines (not too
+   many) characters. Each change a pair of ranges, in a and in b, in order;
+   none splits a surrogate pair. */
+static NSArray<NSArray<NSValue *> *> *TTChanges(NSString *a, NSString *b) {
     NSRange mine, theirs;
-    TTDiff(_string, string, &mine, &theirs);
-    if (!mine.length && !theirs.length) return;
-    NSDictionary *attrs = mine.location ? [self attributesAtIndex:mine.location - 1 effectiveRange:NULL] : nil;
-    [self replaceCharactersInRange:mine withString:[string substringWithRange:theirs] attributes:attrs];
+    TTDiff(a, b, &mine, &theirs);
+    if (!mine.length && !theirs.length) return @[];
+    NSArray *whole = @[ @[ [NSValue valueWithRange:mine], [NSValue valueWithRange:theirs] ] ];
+    if (!mine.length || !theirs.length) return whole;
+    /* Lines, each its own number (the same line, the same number). */
+    NSMutableDictionary<NSString *, NSNumber *> *numbers = [NSMutableDictionary dictionary];
+    NSMutableArray<NSValue *> *la = [NSMutableArray array], *lb = [NSMutableArray array];
+    NSMutableData *xa = [NSMutableData data], *xb = [NSMutableData data];
+    for (int side = 0; side < 2; side++) {
+        NSString *s = side ? b : a;
+        NSRange r = side ? theirs : mine;
+        NSMutableArray *lines = side ? lb : la;
+        NSMutableData *codes = side ? xb : xa;
+        for (NSUInteger i = r.location; i < NSMaxRange(r); ) {
+            NSRange nl = [s rangeOfString:@"\n" options:NSLiteralSearch range:NSMakeRange(i, NSMaxRange(r) - i)];
+            NSUInteger end = nl.location == NSNotFound ? NSMaxRange(r) : NSMaxRange(nl);
+            NSString *line = [s substringWithRange:NSMakeRange(i, end - i)];
+            NSNumber *code = numbers[line];
+            if (!code) numbers[line] = code = @(numbers.count);
+            NSInteger c = code.integerValue;
+            [codes appendBytes:&c length:sizeof c];
+            [lines addObject:[NSValue valueWithRange:NSMakeRange(i, end - i)]];
+            i = end;
+        }
+    }
+    NSArray *lineChanges = TTMyers(xa.bytes, (NSInteger)la.count, xb.bytes, (NSInteger)lb.count, 1000);
+    if (!lineChanges) return whole;
+    NSMutableArray *changes = [NSMutableArray array];
+    for (NSArray<NSValue *> *lc in lineChanges) {
+        NSRange ra = lc[0].rangeValue, rb = lc[1].rangeValue;
+        NSUInteger startA = ra.length ? [la[ra.location] rangeValue].location : (ra.location < la.count ? [la[ra.location] rangeValue].location : NSMaxRange(mine));
+        NSUInteger startB = rb.length ? [lb[rb.location] rangeValue].location : (rb.location < lb.count ? [lb[rb.location] rangeValue].location : NSMaxRange(theirs));
+        NSUInteger endA = ra.length ? NSMaxRange([la[NSMaxRange(ra) - 1] rangeValue]) : startA;
+        NSUInteger endB = rb.length ? NSMaxRange([lb[NSMaxRange(rb) - 1] rangeValue]) : startB;
+        NSRange ca = NSMakeRange(startA, endA - startA), cb = NSMakeRange(startB, endB - startB);
+        NSArray *chars = nil;
+        /* Lines changed on both sides, not too long: their characters. */
+        if (ca.length && cb.length && ca.length + cb.length <= 20000) {
+            NSInteger *x = malloc(ca.length * sizeof(NSInteger)), *y = malloc(cb.length * sizeof(NSInteger));
+            for (NSUInteger i = 0; i < ca.length; i++) x[i] = [a characterAtIndex:ca.location + i];
+            for (NSUInteger i = 0; i < cb.length; i++) y[i] = [b characterAtIndex:cb.location + i];
+            chars = TTMyers(x, (NSInteger)ca.length, y, (NSInteger)cb.length, 1000);
+            free(x);
+            free(y);
+        }
+        if (!chars) {
+            [changes addObject:@[ [NSValue valueWithRange:ca], [NSValue valueWithRange:cb] ]];
+            continue;
+        }
+        for (NSArray<NSValue *> *cc in chars) {
+            NSRange pa = cc[0].rangeValue, pb = cc[1].rangeValue;
+            pa.location += ca.location;
+            pb.location += cb.location;
+            /* Not inside a surrogate pair: back over its high half, on over
+               its low half (what lies either side is the same on both). */
+            if (pa.location > 0 && pb.location > 0 && pa.location < a.length && TTIsLowSurrogate([a characterAtIndex:pa.location]))
+                pa.location--, pa.length++, pb.location--, pb.length++;
+            if (NSMaxRange(pa) > 0 && NSMaxRange(pa) < a.length && NSMaxRange(pb) < b.length &&
+                TTIsHighSurrogate([a characterAtIndex:NSMaxRange(pa) - 1]))
+                pa.length++, pb.length++;
+            NSArray *last = changes.lastObject;
+            /* Grown into the one before: one change. */
+            if (last && NSMaxRange([last[0] rangeValue]) >= pa.location) {
+                NSRange qa = [last[0] rangeValue], qb = [last[1] rangeValue];
+                pa = NSUnionRange(qa, pa);
+                pb = NSUnionRange(qb, pb);
+                [changes removeLastObject];
+            }
+            [changes addObject:@[ [NSValue valueWithRange:pa], [NSValue valueWithRange:pb] ]];
+        }
+    }
+    return changes;
+}
+
+NSArray<NSArray<NSValue *> *> *TTStringChanges(NSString *from, NSString *to) {
+    return TTChanges(from, to);
+}
+
+- (void)setString:(NSString *)string {
+    NSString *was = [_string copy];
+    for (NSArray<NSValue *> *c in TTChanges(was, string).reverseObjectEnumerator) {
+        NSRange mine = c[0].rangeValue, theirs = c[1].rangeValue;
+        NSDictionary *attrs = mine.location ? [self attributesAtIndex:mine.location - 1 effectiveRange:NULL] : nil;
+        [self replaceCharactersInRange:mine withString:[string substringWithRange:theirs] attributes:attrs];
+    }
 }
 
 /* The ranges of s's runs of the same attributes in range, in order
@@ -646,15 +781,19 @@ static NSArray<NSValue *> *TTAttributeRuns(NSAttributedString *s, NSRange range)
 
 - (void)setAttributedString:(NSAttributedString *)target {
     NSString *string = target.string;
-    NSRange mine, theirs;
-    TTDiff(_string, string, &mine, &theirs);
-    [self deleteCharactersInRange:mine];
-    NSUInteger at = mine.location;
-    for (NSValue *v in TTAttributeRuns(target, theirs)) {
-        NSRange range = v.rangeValue;
-        [self insertString:[string substringWithRange:range] atIndex:at
-                attributes:[target attributesAtIndex:range.location effectiveRange:NULL]];
-        at += range.length;
+    NSString *was = [_string copy];
+    /* The fewest characters changed, from the end back (the ranges before
+       stay where they are); then the attributes where they differ. */
+    for (NSArray<NSValue *> *c in TTChanges(was, string).reverseObjectEnumerator) {
+        NSRange mine = c[0].rangeValue, theirs = c[1].rangeValue;
+        [self deleteCharactersInRange:mine];
+        NSUInteger at = mine.location;
+        for (NSValue *v in TTAttributeRuns(target, theirs)) {
+            NSRange range = v.rangeValue;
+            [self insertString:[string substringWithRange:range] atIndex:at
+                    attributes:[target attributesAtIndex:range.location effectiveRange:NULL]];
+            at += range.length;
+        }
     }
     for (NSValue *v in TTAttributeRuns(target, NSMakeRange(0, string.length))) {
         NSRange range = v.rangeValue;

@@ -279,6 +279,14 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
 
 @end
 
+/* What to change to make one string another, as few characters as it
+   takes (the changes -setString: makes): past the common prefix and suffix,
+   lines compared, and within changed lines characters. Each a pair of
+   ranges, in from and in to (a deletion's in to and an insertion's in from
+   empty), in order; none splits a surrogate pair. For showing what differs
+   (a version beside the text as it is). */
+FOUNDATION_EXPORT NSArray<NSArray<NSValue *> *> *TTStringChanges(NSString *from, NSString *to);
+
 NS_ASSUME_NONNULL_END
 
 

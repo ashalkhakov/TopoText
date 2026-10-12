@@ -50,6 +50,10 @@ FOUNDATION_EXPORT SNColor *SNSystemMarkerColor(void);
 FOUNDATION_EXPORT SNColor *SNSystemAccentColor(void);
 // A table's lines.
 FOUNDATION_EXPORT SNColor *SNSystemGridColor(void);
+// A colour's name (SNColorNames) as text in it, and as a highlight behind
+// text (the same colour, see-through).
+FOUNDATION_EXPORT SNColor *SNSystemNamedColor(NSString *name);
+FOUNDATION_EXPORT SNColor *SNSystemHighlightColor(NSString *name);
 // An indent's width (a list marker's column).
 FOUNDATION_EXPORT CGFloat SNSystemIndentStep(void);
 // A checkbox's width, for a font.
@@ -97,6 +101,15 @@ FOUNDATION_EXPORT void SNSystemTextChanged(id<SNTextViewing> view);
 // A text view's drawing done again (the list markers: a range of its
 // characters, or all).
 FOUNDATION_EXPORT void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range);
+// A version of a note beside it as it is now, as plain text: what
+// restoring the version brings back highlighted, what it takes away struck
+// through (TTStringChanges); the rest as it is.
+FOUNDATION_EXPORT NSAttributedString *SNVersionPreview(NSString *now, NSString *then);
+
+// The headings' chevrons shown beside a note's text (not on paper, nor in
+// a table's cell): drawn with the glyphs where the margin can be drawn in
+// so, else by a view over the text view's.
+FOUNDATION_EXPORT void SNSystemShowChevrons(id<SNTextViewing> view);
 // observer sent selector (an NSNotification) when the view's width may
 // have changed; nothing where its controller says so instead (UIKit's
 // -viewDidLayoutSubviews).

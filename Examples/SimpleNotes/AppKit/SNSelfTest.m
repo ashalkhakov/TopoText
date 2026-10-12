@@ -1,5 +1,6 @@
 #import "SNSelfTest.h"
 #import "SNWindowController.h"
+#import "SNAppController.h"
 #import "SNModel.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
@@ -51,6 +52,22 @@ NSURL *SNSelfTestRoot;
 @end
 
 static int SNFailed;
+
+/* A window as it is now, drawn into a picture (the README's screenshots). */
+static BOOL SNSnapshotWindow(NSWindow *w, NSString *path) {
+    NSView *v = w.contentView;
+    /* Drawn whole first: gnustep-gui's cacheDisplayInRect: copies what the
+       window last displayed. */
+    [w display];
+    NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
+    [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
+#ifdef GNUSTEP
+    NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
+#else
+    NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+#endif
+    return [png writeToFile:path atomically:YES];
+}
 
 static void SNSay(BOOL ok, NSString *what) {
     fprintf(stderr, "%s %s\n", ok ? "PASS" : "FAIL", what.UTF8String);
@@ -121,6 +138,17 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         /* From the text view up, as the menu's Bold goes when the window is
            key (an app started from a terminal may have no key window). */
         SNSay([tv tryToPerform:@selector(toggleBold:) with:nil], @"Bold goes up the responder chain");
+        /* Find and Replace: Edit > Find > Find… for the note, and a Replace
+           All as the find bar (the Find panel on GNUstep) does one: asked,
+           replaced, told. */
+        NSMenuItem *findItem = [[NSMenuItem alloc] initWithTitle:@"Find…" action:@selector(performFindPanelAction:) keyEquivalent:@"f"];
+        findItem.tag = NSFindPanelActionShowFindPanel;
+        SNSay([window validateMenuItem:findItem] && [tv respondsToSelector:@selector(findAndReplace:)], @"Find… for the note");
+        NSRange eggs = [tv.string rangeOfString:@"eggs"];
+        if ([tv shouldChangeTextInRanges:@[ [NSValue valueWithRange:eggs] ] replacementStrings:@[ @"free-range eggs" ]]) {
+            [tv.textStorage replaceCharactersInRange:eggs withString:@"free-range eggs"];
+            [tv didChangeText];
+        }
         /* Written a moment after the last keystroke, then synced. */
         SNWait(2, ^BOOL { return NO; });
         [notes sync];
@@ -137,6 +165,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNNote *there = nil;
         for (SNNote *n in [other notesInFolder:nil matching:@"Groceries"]) there = n;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
+        SNSay([there.body containsString:@"milk, free-range eggs, bread"], @"and what was replaced");
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
 
         /* A checklist: two lines made one from the Format menu, the first
@@ -363,6 +392,21 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay(moveTo.delegate == nil && filled > 1 && first <= filled && again == first && added == first,
               [NSString stringWithFormat:@"Move To is filled once, not as keys are typed (%lu items; %lu added, then %lu, then %lu)",
                                          (unsigned long)filled, (unsigned long)first, (unsigned long)(again - first), (unsigned long)(added - again)]);
+        /* Another note chosen, in another folder: its mark moved, nothing
+           filled again (Eau's menu bar looks itself up at every item added
+           or removed: a second on each note chosen, with many folders). */
+        NSUInteger beforeChoosing = added;
+        observer = [[NSNotificationCenter defaultCenter] addObserverForName:NSMenuDidAddItemNotification object:moveTo queue:nil
+                                                                 usingBlock:^(NSNotification *n) { added++; }];
+        BOOL chose = [window selectNoteTitled:@"Standup notes"];
+        [window fillMoveToMenus];
+        [[NSNotificationCenter defaultCenter] removeObserver:observer];
+        NSMutableArray *checked = [NSMutableArray array];
+        for (NSMenuItem *item in moveTo.itemArray)
+            if (item.state == NSControlStateValueOn) [checked addObject:[item.title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]]];
+        SNSay(chose && added == beforeChoosing && [checked isEqual:@[ @"Work" ]],
+              [NSString stringWithFormat:@"another note chosen: Move To's mark moved, nothing added (%lu added; %@)",
+                                         (unsigned long)(added - beforeChoosing), [checked componentsJoinedByString:@", "]]);
         /* Move Folder To (where dragging in the sidebar does not work):
            Projects into Home, and back into Work. */
         NSMenu *moveFolderTo = nil;
@@ -457,24 +501,146 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
               [written.lastPathComponent isEqual:@"Lease.pdf"] && [[NSData dataWithContentsOfURL:written] isEqual:pdf],
               [NSString stringWithFormat:@"shown as a card, written out to be opened (%@)", written.path]);
 
+        /* A quote, a highlight and a colour, from the Format menu. */
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertText:@"Bring a warm jacket"];
+        NSUInteger said = tv.string.length - 19;
+        SNSay([tv tryToPerform:@selector(toggleBlockQuote:) with:nil] &&
+              [[tv.textStorage attribute:SNQuoteAttributeName atIndex:said effectiveRange:NULL] boolValue], @"Block Quote from the menu");
+        NSMenuItem *mint = [[NSMenuItem alloc] initWithTitle:@"Mint" action:@selector(applyHighlightColor:) keyEquivalent:@""];
+        mint.tag = 4;
+        tv.selectedRange = NSMakeRange(said + 8, 4);
+        [tv tryToPerform:@selector(applyHighlightColor:) with:mint];
+        NSMenuItem *purple = [[NSMenuItem alloc] initWithTitle:@"Purple" action:@selector(applyTextColor:) keyEquivalent:@""];
+        purple.tag = 1;
+        tv.selectedRange = NSMakeRange(said + 13, 6);
+        [tv tryToPerform:@selector(applyTextColor:) with:purple];
+        SNSay([[tv.textStorage attribute:SNHighlightAttributeName atIndex:said + 8 effectiveRange:NULL] isEqual:@"mint"] &&
+              [[tv.textStorage attribute:SNColorAttributeName atIndex:said + 13 effectiveRange:NULL] isEqual:@"purple"] &&
+              [window validateMenuItem:purple] && purple.state == NSControlStateValueOn,
+              @"Highlight and Text Color from the menu");
+
+        /* Export as PDF: the note on paper, pages of it. Beside the snapshot
+           when one is asked for, else a file of its own, gone after. */
+        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
+        NSString *pdfPath = snapshot ? [@(snapshot).stringByDeletingPathExtension stringByAppendingPathExtension:@"pdf"]
+                                     : [NSTemporaryDirectory() stringByAppendingPathComponent:
+                                           [NSString stringWithFormat:@"sn-selftest-%@.pdf", [NSProcessInfo processInfo].globallyUniqueString]];
+        BOOL printed = [window exportNoteAsPDFTo:pdfPath];
+        NSData *pdfData = [NSData dataWithContentsOfFile:pdfPath];
+        SNSay(printed && pdfData.length > 1000 && [[[NSString alloc] initWithData:[pdfData subdataWithRange:NSMakeRange(0, 5)]
+                                                                           encoding:NSASCIIStringEncoding] isEqual:@"%PDF-"],
+              [NSString stringWithFormat:@"Export as PDF (%lu bytes)", (unsigned long)pdfData.length]);
+        if (!snapshot) [[NSFileManager defaultManager] removeItemAtPath:pdfPath error:NULL];
+
         /* SN_SELF_TEST_SNAPSHOT=<path.png>: the window as it is now, drawn
            into a picture (the README's screenshots). */
-        const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
             tv.selectedRange = NSMakeRange(tv.string.length, 0);
-            NSView *v = window.window.contentView;
-            /* Drawn whole first: gnustep-gui's cacheDisplayInRect: copies
-               what the window last displayed. */
-            [window.window display];
-            NSBitmapImageRep *rep = [v bitmapImageRepForCachingDisplayInRect:v.bounds];
-            [v cacheDisplayInRect:v.bounds toBitmapImageRep:rep];
-#ifdef GNUSTEP
-            NSData *png = [rep representationUsingType:NSPNGFileType properties:@{}];
-#else
-            NSData *png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
-#endif
-            SNSay([png writeToFile:@(snapshot) atomically:YES], [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
+            SNSay(SNSnapshotWindow(window.window, @(snapshot)), [NSString stringWithFormat:@"a snapshot in %s", snapshot]);
         }
+
+        /* View > as Gallery: the notes as cards, Weekend's with its photo;
+           a card chosen opens its note. */
+        SNNote *weekendNote = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
+        SNNote *groceriesNote = [notes notesInFolder:nil matching:@"Groceries"].firstObject;
+        SNSay([tv tryToPerform:@selector(showAsGallery:) with:nil] && !window.gallery.view.isHidden && window.noteTable.enclosingScrollView.isHidden &&
+              [window.gallery.shownNotes containsObject:weekendNote] && [window.gallery.shownNotes containsObject:groceriesNote],
+              [NSString stringWithFormat:@"View as Gallery: the notes as cards (%lu)", (unsigned long)window.gallery.shownNotes.count]);
+        SNWait(5, ^BOOL { return [window.gallery pictureOfNote:weekendNote] != nil; });
+        SNSay([window.gallery pictureOfNote:weekendNote] != nil, @"and Weekend's card its photo");
+        if (snapshot) SNSnapshotWindow(window.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-gallery.png"]);
+        [window gallery:window.gallery didChooseNote:groceriesNote];
+        SNSay([tv.string hasPrefix:@"Groceries"], @"a card chosen opens its note");
+        SNSay([tv tryToPerform:@selector(showAsList:) with:nil] && window.gallery.view.isHidden && !window.noteTable.enclosingScrollView.isHidden,
+              @"View as List: the list again");
+        /* View > Show Attachments: the photo, the file; one chosen shows its
+           note, where it is. */
+        SNSay([tv tryToPerform:@selector(showAttachments:) with:nil] && window.attachmentsWindow.window.isVisible &&
+              window.attachmentsWindow.shownItems.count == 1 && [window.attachmentsWindow.shownItems.firstObject.noteID isEqual:weekendNote.objectID],
+              [NSString stringWithFormat:@"Show Attachments: the photo (%lu)", (unsigned long)window.attachmentsWindow.shownItems.count]);
+        if (snapshot) SNWait(1, ^BOOL { return NO; });
+        if (snapshot) SNSnapshotWindow(window.attachmentsWindow.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-attachments.png"]);
+        window.attachmentsWindow.showsFiles = YES;
+        SNAttachmentItem *leaseItem = window.attachmentsWindow.shownItems.firstObject;
+        SNSay(window.attachmentsWindow.shownItems.count == 1 && [leaseItem.name isEqual:@"Lease.pdf"], @"and, under Files, the file");
+        [window attachmentsWindow:window.attachmentsWindow didChooseAttachment:leaseItem];
+        SNSay([tv.string hasPrefix:@"Weekend"] && tv.selectedRange.location < tv.string.length &&
+              [[tv.textStorage attribute:SNAttachmentAttributeName atIndex:tv.selectedRange.location effectiveRange:NULL] isEqual:leaseItem.attachmentID],
+              @"one chosen shows its note, where it is");
+        [window.attachmentsWindow close];
+
+        /* Services > Add to SimpleNotes: another app's selection, a note at
+           the top, shown. */
+        NSPasteboard *shared = [NSPasteboard pasteboardWithUniqueName];
+        [shared declareTypes:@[ NSPasteboardTypeString ] owner:nil];
+        [shared setString:@"Quote of the day\nNotes merge what was written apart." forType:NSPasteboardTypeString];
+        NSString *serviceError = nil;
+        [(SNAppController *)NSApp.delegate addToSimpleNotes:shared userData:nil error:&serviceError];
+        SNSay(!serviceError && [tv.string hasPrefix:@"Quote of the day\nNotes merge"] && [[window selectedNote].title isEqual:@"Quote of the day"],
+              [NSString stringWithFormat:@"Services > Add to SimpleNotes: a note, shown (%@)", serviceError ?: [window selectedNote].title]);
+        [shared releaseGlobally];
+        [window selectNoteTitled:@"Weekend"];
+
+        /* Collapsed sections: a heading's chevron clicked hides what is
+           under it, the text as it was; Expand All Sections shows it. */
+        tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        [tv insertNewline:nil];
+        [tv insertText:@"Packing"];
+        NSUInteger packing = tv.string.length - 7;
+        [tv tryToPerform:@selector(styleHeading:) with:nil];
+        [tv insertNewline:nil];
+        [tv insertText:@"socks"];
+        [tv insertNewline:nil];
+        [tv insertText:@"boots"];
+        NSUInteger socks = packing + 8;
+        NSString *before = tv.string;
+        SNListLayoutManager *slm = (SNListLayoutManager *)tv.layoutManager;
+        NSRect headingLine = [slm lineFragmentRectForGlyphAtIndex:[slm glyphRangeForCharacterRange:NSMakeRange(packing, 1) actualCharacterRange:NULL].location
+                                                   effectiveRange:NULL];
+        NSUInteger chevron = [slm sectionToggleAtPoint:NSMakePoint(-7, NSMidY(headingLine))];
+        SNSay(chevron == packing, [NSString stringWithFormat:@"a chevron beside the heading (%lu)", (unsigned long)chevron]);
+        /* Clicked as the user does: a mouse down where it is drawn, to the
+           view the window finds there (macOS's text view leaves its inset
+           to the clip view). Not through -sendEvent:, which keeps a first
+           click in a window not key (the app runs in the background). */
+        NSPoint at = [tv convertPoint:NSMakePoint(tv.textContainerOrigin.x - 7, tv.textContainerOrigin.y + NSMidY(headingLine)) toView:nil];
+        NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:at modifierFlags:0 timestamp:0
+                                       windowNumber:tv.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:1];
+        /* Its mouse up queued: a click the text view takes as its own
+           (selecting) waits for one. */
+        [NSApp postEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:at modifierFlags:0 timestamp:0
+                                        windowNumber:tv.window.windowNumber context:nil eventNumber:0 clickCount:1 pressure:0]
+                 atStart:NO];
+        [[((NSView *)tv.window.contentView).superview hitTest:at] mouseDown:down];
+        SNSay([tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil &&
+              [tv.textStorage attribute:SNHiddenAttributeName atIndex:packing effectiveRange:NULL] == nil && [tv.string isEqual:before],
+              @"clicked, what is under it is hidden, the text as it was");
+        if (snapshot) SNSnapshotWindow(window.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-collapsed.png"]);
+        SNSay([tv tryToPerform:@selector(expandAllSections:) with:nil] &&
+              [tv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] == nil, @"Expand All Sections shows it again");
+
+        /* File > Version History: the versions the server kept of Groceries
+           (its text as seeded, kept as the first typing came); the oldest
+           restored, the note as it was then. */
+        [window selectNoteTitled:@"Groceries"];
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        SNSay([tv tryToPerform:@selector(showVersionHistory:) with:nil] && window.versionsPanel.window.isVisible &&
+              window.versionsPanel.versions.count >= 1,
+              [NSString stringWithFormat:@"Version History: the server's versions (%lu)", (unsigned long)window.versionsPanel.versions.count]);
+        SNVersionsPanel *history = window.versionsPanel;
+        NSManagedObject *oldest = history.versions.lastObject;
+        NSString *then = oldest ? [notes textOfVersion:oldest].string : nil;
+        [history.versionTable selectRowIndexes:[NSIndexSet indexSetWithIndex:history.versions.count - 1] byExtendingSelection:NO];
+        if (snapshot) SNSnapshotWindow(history.window, [@(snapshot).stringByDeletingPathExtension stringByAppendingString:@"-versions.png"]);
+        SNSay([then hasPrefix:@"Groceries"] && history.restoreButton.isEnabled && history.previewView.string.length > 0,
+              [NSString stringWithFormat:@"the oldest beside the note (%@)", [then stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        [history restore:nil];
+        SNSay(then && [tv.string isEqual:then], [NSString stringWithFormat:@"Restore This Version: the note as it was (%@)",
+                                                  [tv.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        [history close:nil];
 
         /* Deleted from the window, into Recently Deleted on the other device;
            recovered from Recently Deleted, back there too. */

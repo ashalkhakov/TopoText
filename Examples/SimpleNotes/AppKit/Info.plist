@@ -33,6 +33,27 @@
 	<array>
 		<string>_odatasync._tcp</string>
 	</array>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Add to SimpleNotes</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>addToSimpleNotes</string>
+			<key>NSPortName</key>
+			<string>SimpleNotes</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>public.utf8-plain-text</string>
+				<string>public.url</string>
+				<string>public.png</string>
+				<string>public.tiff</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>SimpleNotes syncs your notes with your devices on the same network.</string>
 </dict>

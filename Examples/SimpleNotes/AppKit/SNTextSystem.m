@@ -49,6 +49,28 @@ SNColor *SNSystemGridColor(void) {
     return [[NSColor grayColor] colorWithAlphaComponent:0.6];
 }
 
+SNColor *SNSystemNamedColor(NSString *name) {
+#ifdef GNUSTEP
+    /* Its colour lists have no system purple, pink, mint: macOS's light
+       ones. */
+    NSDictionary *rgb = @{ @"purple": @[ @0.69, @0.32, @0.87 ], @"pink": @[ @1.0, @0.18, @0.33 ], @"orange": @[ @1.0, @0.58, @0.0 ],
+                           @"mint": @[ @0.0, @0.78, @0.75 ], @"blue": @[ @0.0, @0.48, @1.0 ] };
+    NSArray *c = rgb[name];
+    return c ? [NSColor colorWithCalibratedRed:[c[0] doubleValue] green:[c[1] doubleValue] blue:[c[2] doubleValue] alpha:1] : SNSystemTextColor();
+#else
+    if ([name isEqual:@"purple"]) return [NSColor systemPurpleColor];
+    if ([name isEqual:@"pink"]) return [NSColor systemPinkColor];
+    if ([name isEqual:@"orange"]) return [NSColor systemOrangeColor];
+    if ([name isEqual:@"mint"]) return [NSColor systemMintColor];
+    if ([name isEqual:@"blue"]) return [NSColor systemBlueColor];
+    return SNSystemTextColor();
+#endif
+}
+
+SNColor *SNSystemHighlightColor(NSString *name) {
+    return [SNSystemNamedColor(name) colorWithAlphaComponent:0.3];
+}
+
 CGFloat SNSystemIndentStep(void) {
     return 24;
 }
@@ -221,8 +243,44 @@ void SNSystemTextChanged(id<SNTextViewing> view) {
     if ([(id)view isKindOfClass:[NSTextView class]]) [(NSTextView *)view didChangeText];
 }
 
+/* The headings' chevrons, over a text view: AppKit's covers its margin
+   (macOS's draws its background in a layer above what -drawRect: draws,
+   and clips the layout manager's drawing to the text container). Clicks go
+   through, to the text view. */
+@interface SNChevronsView : NSView
+@end
+
+@implementation SNChevronsView
+
+- (BOOL)isFlipped {
+    return YES;
+}
+
+- (NSView *)hitTest:(NSPoint)point {
+    return nil;
+}
+
+- (void)drawRect:(NSRect)rect {
+    NSTextView *tv = (NSTextView *)self.superview;
+    if (![tv isKindOfClass:[NSTextView class]] || ![tv.layoutManager isKindOfClass:[SNListLayoutManager class]]) return;
+    [(SNListLayoutManager *)tv.layoutManager drawChevronsAtPoint:tv.textContainerOrigin];
+}
+
+@end
+
+void SNSystemShowChevrons(id<SNTextViewing> view) {
+    if (![(id)view isKindOfClass:[NSTextView class]]) return;
+    NSTextView *tv = (NSTextView *)view;
+    for (NSView *v in tv.subviews) if ([v isKindOfClass:[SNChevronsView class]]) return;
+    SNChevronsView *chevrons = [[SNChevronsView alloc] initWithFrame:tv.bounds];
+    chevrons.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [tv addSubview:chevrons];
+}
+
 void SNSystemRedisplay(NSLayoutManager *layoutManager, NSRange range) {
-    [layoutManager.firstTextView setNeedsDisplay:YES];
+    NSTextView *tv = layoutManager.firstTextView;
+    [tv setNeedsDisplay:YES];
+    for (NSView *v in tv.subviews) if ([v isKindOfClass:[SNChevronsView class]]) [v setNeedsDisplay:YES];
 }
 
 void SNSystemObserveResizing(id view, id observer, SEL selector) {

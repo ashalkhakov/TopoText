@@ -1,6 +1,7 @@
 /* AppKit before Core Data, as SNRichText.m: gnustep-gui's headers clash otherwise. */
 #import "SNRichText.h"
 #import "SNTransfer.h"
+#import "SNShares.h"
 #import "SNModel.h"
 #import "SNMarkdown.h"
 #import "SNZip.h"
@@ -174,6 +175,16 @@ static NSString *SNResolvePath(NSString *dir, NSString *link) {
 
 + (instancetype)exportOfNotes:(SNNotes *)notes toURL:(NSURL *)url {
     return [[self alloc] initWithNotes:notes URL:url import:NO folder:nil];
+}
+
++ (NSArray<NSManagedObjectID *> *)importSharesIntoNotes:(SNNotes *)notes fromInbox:(NSURL *)inbox {
+    NSMutableArray *made = [NSMutableArray array];
+    for (NSURL *md in SNSharesIn(inbox)) {
+        SNTransfer *t = [self importIntoNotes:notes fromURL:md folder:nil];
+        if ([t runAndWait:NULL]) [made addObjectsFromArray:t.madeNotes];
+        [[NSFileManager defaultManager] removeItemAtURL:md.URLByDeletingLastPathComponent error:NULL];
+    }
+    return made;
 }
 
 + (instancetype)importIntoNotes:(SNNotes *)notes fromURL:(NSURL *)url folder:(SNFolder *)folder {

@@ -1,0 +1,26 @@
+// SimpleNotes' Share extension, embedded in the iOS app (its PlugIns). The
+// shared settings (Debug.xcconfig or Release.xcconfig) come first, in the
+// project. It shares an App Group with the app (Share.entitlements): the
+// inbox it writes and the app reads (SNShares.h). On a device it is signed
+// as the app is: Local.xcconfig's team.
+
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+TARGETED_DEVICE_FAMILY = 1,2
+PRODUCT_NAME = SimpleNotesShare
+PRODUCT_BUNDLE_IDENTIFIER = io.github.ashalkhakov.SimpleNotes.Share
+INFOPLIST_FILE = iOS/Share/Info.plist
+CODE_SIGN_ENTITLEMENTS = iOS/Share/Share.entitlements
+APPLICATION_EXTENSION_API_ONLY = YES
+SKIP_INSTALL = YES
+OTHER_LDFLAGS = $(inherited) -framework Social
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks @executable_path/../../Frameworks
+HEADER_SEARCH_PATHS = $(SRCROOT)/Shared $(SRCROOT)/iOS/Share
+
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+CODE_SIGN_IDENTITY[sdk=iphonesimulator*] = -
+CODE_SIGNING_REQUIRED[sdk=iphoneos*] = YES
+CODE_SIGNING_ALLOWED[sdk=iphoneos*] = YES
+
+#include? "../Local.xcconfig"

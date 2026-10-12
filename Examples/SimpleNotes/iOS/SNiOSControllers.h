@@ -47,6 +47,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)sortByDateCreated:(nullable id)sender;
 - (IBAction)sortByTitle:(nullable id)sender;
 - (IBAction)toggleGroupByDate:(nullable id)sender;
+// View as Gallery (its ... menu): the cards in its place
+// (SNGalleryViewController), and from now on.
+- (IBAction)viewAsGallery:(nullable id)sender;
 // Sort Folder By: the folder shown, its own order (Default: the device's).
 - (IBAction)sortFolderByDefault:(nullable id)sender;
 - (IBAction)sortFolderByDateEdited:(nullable id)sender;
@@ -65,6 +68,9 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
                                                        PHPickerViewControllerDelegate, UIDocumentPickerDelegate,
                                                        QLPreviewControllerDataSource>
 - (instancetype)initWithNotes:(SNNotes *)notes note:(SNNote *)note;
+// An attachment of the note scrolled to once it shows (the attachments
+// browser's).
+@property (nonatomic, copy, nullable) NSString *attachmentToShow;
 @property (nonatomic, strong) IBOutlet UITextView *textView;
 // Over the keyboard: the text view's input accessory, as Apple Notes'
 // (an iPhone's width): a table, Aa (styles, and bold, italic, underline,
@@ -87,6 +93,11 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)subheading:(nullable id)sender;
 - (IBAction)body:(nullable id)sender;
 - (IBAction)mono:(nullable id)sender;
+// In the Aa menu too: Block Quote, and Highlight and Text Color (the
+// sender's title the colour: None, Purple, Pink, Orange, Mint, Blue).
+- (IBAction)blockQuote:(nullable id)sender;
+- (IBAction)applyHighlightColor:(nullable id)sender;
+- (IBAction)applyTextColor:(nullable id)sender;
 - (IBAction)bulletList:(nullable id)sender;
 - (IBAction)dashList:(nullable id)sender;
 - (IBAction)numberList:(nullable id)sender;
@@ -119,6 +130,21 @@ FOUNDATION_EXPORT NSString * const SNServerDefaultsKey;   // @"SNServer"
 - (IBAction)toggleKeepCheckedAtBottom:(nullable id)sender;
 - (IBAction)indent:(nullable id)sender;
 - (IBAction)outdent:(nullable id)sender;
+// Find in Note (the ... menu): the system's find navigator, Replace in it
+// too (iOS 16 and later).
+- (IBAction)findInNote:(nullable id)sender;
+// Collapse All Sections and Expand All Sections (the ... menu); a heading's
+// chevron, tapped, collapses or expands its own.
+- (IBAction)collapseAllSections:(nullable id)sender;
+// Version History (the ... menu): the note's versions (SNVersionsViewController).
+- (IBAction)showVersionHistory:(nullable id)sender;
+- (IBAction)expandAllSections:(nullable id)sender;
+// Print and Export as PDF (the ... menu): the note on paper (A4, or Letter
+// where inches are used), to the print sheet, or a file to share.
+- (IBAction)printNote:(nullable id)sender;
+- (IBAction)exportNoteAsPDF:(nullable id)sender;
+// The note on paper, as a PDF's data.
+- (NSData *)pdfOfNote;
 // A note in Recently Deleted, recovered (the button over it).
 - (IBAction)recover:(nullable id)sender;
 @end

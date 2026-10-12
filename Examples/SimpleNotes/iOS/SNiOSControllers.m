@@ -1,9 +1,12 @@
 #import "SNiOSControllers.h"
 #import "SNPeersViewController.h"
 #import "SNRichText.h"
+#import "SNTextSystem.h"
 #import "SNTableGrid.h"
 #import "SNUndoTextView.h"
 #import "SNMenuAction.h"
+#import "SNGalleryViewController.h"
+#import "SNVersionsViewController.h"
 #import "SNModel.h"
 #import "SNTransfer.h"
 #import "SNTransferViewController.h"
@@ -118,7 +121,9 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
             }],
             [UIAction actionWithTitle:@"Export All Notes" image:[UIImage systemImageNamed:@"square.and.arrow.up"] identifier:nil handler:^(UIAction *a) {
                 [self exportAllNotes:nil];
-            }] ]] ]];
+            }] ]],
+        /* Every image and file in the notes (Apple Notes' View Attachments). */
+        SNMenuAction(@"View Attachments", [UIImage systemImageNamed:@"paperclip"], @selector(viewAttachments:), self) ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItems = @[
         [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
@@ -453,9 +458,13 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 - (void)tableView:(UITableView *)t didSelectRowAtIndexPath:(NSIndexPath *)ip {
     UIViewController *next;
     if (ip.section == SNDeletedSection) next = [[SNNotesViewController alloc] initRecentlyDeletedWithNotes:_notes];
-    else if (ip.section == SNTagsSection) next = [[SNNotesViewController alloc] initWithNotes:_notes tag:_tags[(NSUInteger)ip.row]];
-    else next = [[SNNotesViewController alloc] initWithNotes:_notes folder:ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil];
+    else if (ip.section == SNTagsSection) next = SNNotesControllerFor(_notes, nil, _tags[(NSUInteger)ip.row]);
+    else next = SNNotesControllerFor(_notes, ip.section == SNFoldersSection ? _folders[(NSUInteger)ip.row] : nil, nil);
     [self.navigationController pushViewController:next animated:YES];
+}
+
+- (IBAction)viewAttachments:(id)sender {
+    [self.navigationController pushViewController:[[SNAttachmentsViewController alloc] initWithNotes:_notes] animated:YES];
 }
 
 - (BOOL)isOpen:(SNFolder *)folder {
@@ -625,7 +634,8 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortByDateEdited:) on:order == SNSortByDateEdited],
         [self sortCommand:@"Date Created" action:@selector(sortByDateCreated:) on:order == SNSortByDateCreated],
         [self sortCommand:@"Title" action:@selector(sortByTitle:) on:order == SNSortByTitle] ]];
-    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ sortBy, group ]];
+    UIAction *gallery = SNMenuAction(@"View as Gallery", [UIImage systemImageNamed:@"square.grid.2x2"], @selector(viewAsGallery:), self);
+    if (!_folder || _tag) return [UIMenu menuWithTitle:@"" children:@[ gallery, sortBy, group ]];
     /* The folder's own order, synced with it (Default: the device's). */
     NSNumber *own = [_notes sortOrderOfFolder:_folder];
     UIMenu *folderBy = [UIMenu menuWithTitle:@"Sort Folder By" image:[UIImage systemImageNamed:@"folder"] identifier:nil options:0 children:@[
@@ -633,7 +643,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [self sortCommand:@"Date Edited" action:@selector(sortFolderByDateEdited:) on:[own isEqual:@(SNSortByDateEdited)]],
         [self sortCommand:@"Date Created" action:@selector(sortFolderByDateCreated:) on:[own isEqual:@(SNSortByDateCreated)]],
         [self sortCommand:@"Title" action:@selector(sortFolderByTitle:) on:[own isEqual:@(SNSortByTitle)]] ]];
-    return [UIMenu menuWithTitle:@"" children:@[ folderBy, sortBy, group ]];
+    return [UIMenu menuWithTitle:@"" children:@[ gallery, folderBy, sortBy, group ]];
+}
+
+- (IBAction)viewAsGallery:(id)sender {
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:SNGalleryDefaultsKey];
+    UINavigationController *nav = self.navigationController;
+    NSMutableArray *stack = [nav.viewControllers mutableCopy];
+    NSUInteger i = [stack indexOfObject:self];
+    if (i == NSNotFound) return;
+    stack[i] = SNNotesControllerFor(_notes, _tag ? nil : _folder, _tag);
+    [nav setViewControllers:stack animated:NO];
 }
 
 - (UICommand *)sortCommand:(NSString *)title action:(SEL)action on:(BOOL)on {
@@ -868,6 +888,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [super viewDidLoad];
     _editor = [_notes editorForNote:_note];
     [self useListLayoutManager];
+    SNSystemShowChevrons(_textView);
     _editor.delegate = self;
     _binding = [[SNTextBinding alloc] initWithTextView:_textView editor:_editor];
     _textView.delegate = self;
@@ -878,6 +899,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [self makeFormatMenus];
     _textView.textContainerInset = UIEdgeInsetsMake(12, 12, 12, 12);
     _textView.keyboardDismissMode = UIScrollViewKeyboardDismissModeInteractive;
+    if (@available(iOS 16.0, *)) _textView.findInteractionEnabled = YES;
     [_formatBar sizeToFit];
     _textView.inputAccessoryView = _formatBar;
     _grids = [[SNTableGrids alloc] initWithBinding:_binding notes:_notes];
@@ -899,9 +921,142 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     _textView.editable = !deleted;
     /* A table's cells can have been typed into elsewhere. */
     [_grids reload];
-    self.navigationItem.rightBarButtonItem = deleted
-        ? [[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]
-        : nil;
+    NSMutableArray *items = [NSMutableArray arrayWithObject:[self noteMenuItem]];
+    if (deleted) [items addObject:[[UIBarButtonItem alloc] initWithTitle:@"Recover" style:UIBarButtonItemStylePlain target:self action:@selector(recover:)]];
+    self.navigationItem.rightBarButtonItems = items;
+}
+
+/* The note's ... menu (Apple Notes' too): Find in Note, Print, Export as
+   PDF. */
+- (UIBarButtonItem *)noteMenuItem {
+    NSMutableArray *actions = [NSMutableArray array];
+    if (@available(iOS 16.0, *)) [actions addObject:SNMenuAction(@"Find in Note", [UIImage systemImageNamed:@"magnifyingglass"], @selector(findInNote:), self)];
+    [actions addObject:[UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+        SNMenuAction(@"Collapse All Sections", [UIImage systemImageNamed:@"chevron.right"], @selector(collapseAllSections:), self),
+        SNMenuAction(@"Expand All Sections", [UIImage systemImageNamed:@"chevron.down"], @selector(expandAllSections:), self) ]]];
+    [actions addObject:SNMenuAction(@"Version History", [UIImage systemImageNamed:@"clock.arrow.circlepath"], @selector(showVersionHistory:), self)];
+    [actions addObject:SNMenuAction(@"Print", [UIImage systemImageNamed:@"printer"], @selector(printNote:), self)];
+    [actions addObject:SNMenuAction(@"Export as PDF", [UIImage systemImageNamed:@"doc.richtext"], @selector(exportNoteAsPDF:), self)];
+    UIBarButtonItem *item = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"ellipsis.circle"]
+                                                              menu:[UIMenu menuWithTitle:@"" children:actions]];
+    item.accessibilityLabel = @"More";
+    return item;
+}
+
+#pragma mark printing
+
+/* The note on paper, as a PDF: a text view of the page's width, out of
+   sight, the open note's text in it by a binding of its own (read only),
+   its tables in grids of their own, in light colours; drawn a page at a
+   time, each page ending after the last line that fits on it. A4, or
+   Letter where inches are used. */
+- (NSData *)pdfOfNote {
+    BOOL metric = [[[NSLocale currentLocale] objectForKey:NSLocaleUsesMetricSystem] boolValue];
+    CGRect page = metric ? CGRectMake(0, 0, 595, 842) : CGRectMake(0, 0, 612, 792);
+    CGFloat margin = 54;
+    CGRect content = CGRectInset(page, margin, margin);
+    NSTextStorage *storage = [[NSTextStorage alloc] init];
+    SNListLayoutManager *lm = [[SNListLayoutManager alloc] init];
+    [storage addLayoutManager:lm];
+    NSTextContainer *container = [[NSTextContainer alloc] initWithSize:CGSizeMake(content.size.width, CGFLOAT_MAX)];
+    [lm addTextContainer:container];
+    UITextView *paper = [[UITextView alloc] initWithFrame:CGRectMake(0, 0, content.size.width, 100000) textContainer:container];
+    paper.editable = NO;
+    paper.scrollEnabled = NO;
+    paper.backgroundColor = [UIColor whiteColor];
+    paper.textContainerInset = UIEdgeInsetsZero;
+    paper.overrideUserInterfaceStyle = UIUserInterfaceStyleLight;
+    __block SNTextBinding *binding = nil;
+    __block SNTableGrids *grids = nil;
+    [[UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight] performAsCurrentTraitCollection:^{
+        binding = [[SNTextBinding alloc] initWithTextView:paper editor:self->_editor];
+        [binding textWidthMayHaveChanged];
+        grids = [[SNTableGrids alloc] initWithBinding:binding notes:self->_notes];
+        [grids update];
+    }];
+    [lm ensureLayoutForTextContainer:container];
+    CGFloat height = CGRectGetMaxY([lm usedRectForTextContainer:container]);
+    paper.frame = CGRectMake(0, 0, content.size.width, MAX(height, 1));
+    [paper layoutIfNeeded];
+    /* Where each page begins: at the top of the first line that would not
+       fit on the one before. */
+    NSMutableArray<NSNumber *> *tops = [NSMutableArray arrayWithObject:@0];
+    NSRange glyphs = [lm glyphRangeForTextContainer:container];
+    for (NSUInteger g = glyphs.location; g < NSMaxRange(glyphs); ) {
+        NSRange line;
+        CGRect r = [lm lineFragmentRectForGlyphAtIndex:g effectiveRange:&line];
+        if (CGRectGetMaxY(r) - tops.lastObject.doubleValue > content.size.height && r.origin.y > tops.lastObject.doubleValue)
+            [tops addObject:@(r.origin.y)];
+        g = NSMaxRange(line);
+    }
+    UIGraphicsPDFRenderer *renderer = [[UIGraphicsPDFRenderer alloc] initWithBounds:page format:[UIGraphicsPDFRendererFormat defaultFormat]];
+    NSData *pdf = [renderer PDFDataWithActions:^(UIGraphicsPDFRendererContext *context) {
+        for (NSUInteger i = 0; i < tops.count; i++) {
+            CGFloat top = tops[i].doubleValue, bottom = i + 1 < tops.count ? tops[i + 1].doubleValue : height;
+            [context beginPage];
+            CGContextRef c = context.CGContext;
+            CGContextSaveGState(c);
+            CGContextClipToRect(c, CGRectMake(content.origin.x, content.origin.y, content.size.width, bottom - top));
+            CGContextTranslateCTM(c, content.origin.x, content.origin.y - top);
+            [paper.layer renderInContext:c];
+            CGContextRestoreGState(c);
+        }
+    }];
+    [grids removeAll];
+    [binding unbind];
+    return pdf;
+}
+
+- (NSString *)pdfName {
+    NSString *title = [_note.title stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    return [(title.length ? title : @"Note") stringByAppendingPathExtension:@"pdf"];
+}
+
+- (IBAction)showVersionHistory:(id)sender {
+    [self.navigationController pushViewController:[[SNVersionsViewController alloc] initWithNotes:_notes note:_note] animated:YES];
+}
+
+- (IBAction)collapseAllSections:(id)sender {
+    if (!_textView.editable) return;
+    NSRange sel = _textView.selectedRange;
+    [_binding setAllSectionsCollapsed:YES];
+    [self formatted:sel];
+}
+
+- (IBAction)expandAllSections:(id)sender {
+    if (!_textView.editable) return;
+    NSRange sel = _textView.selectedRange;
+    [_binding setAllSectionsCollapsed:NO];
+    [self formatted:sel];
+}
+
+/* The system's print sheet, the note on paper given to it. */
+- (IBAction)printNote:(id)sender {
+    UIPrintInteractionController *print = [UIPrintInteractionController sharedPrintController];
+    UIPrintInfo *info = [UIPrintInfo printInfo];
+    info.jobName = _note.title.length ? _note.title : @"Note";
+    info.outputType = UIPrintInfoOutputGeneral;
+    print.printInfo = info;
+    print.printingItem = [self pdfOfNote];
+    [print presentAnimated:YES completionHandler:nil];
+}
+
+/* The note on paper as a file, offered as any file is (Save to Files,
+   AirDrop, Mail...). */
+- (IBAction)exportNoteAsPDF:(id)sender {
+    NSURL *file = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[self pdfName]]];
+    if (![[self pdfOfNote] writeToURL:file atomically:YES]) return;
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[ file ] applicationActivities:nil];
+    share.popoverPresentationController.barButtonItem = self.navigationItem.rightBarButtonItems.firstObject;
+    [self presentViewController:share animated:YES completion:nil];
+}
+
+/* The system's find navigator, over the keyboard: Replace too, in a note
+   that can be written (what it replaces is an edit of the text, which the
+   binding takes as typing); a hardware keyboard's Command-F opens it as
+   well. */
+- (IBAction)findInNote:(id)sender {
+    if (@available(iOS 16.0, *)) [_textView.findInteraction presentFindNavigatorShowingReplace:NO];
 }
 
 - (void)recover:(id)sender {
@@ -913,6 +1068,19 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     [super viewWillAppear:animated];
     self.navigationController.toolbarHidden = YES;
     if (!_textView.text.length && !_note.deletedAt) [_textView becomeFirstResponder];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (!_attachmentToShow) return;
+    NSTextStorage *storage = _textView.textStorage;
+    for (NSUInteger i = 0; i < storage.length; i++) {
+        if ([[storage attribute:SNAttachmentAttributeName atIndex:i effectiveRange:NULL] isEqual:_attachmentToShow]) {
+            [_textView scrollRangeToVisible:NSMakeRange(i, 1)];
+            break;
+        }
+    }
+    _attachmentToShow = nil;
 }
 
 /* Wider or narrower (turned, a split view, first laid out): images sized
@@ -997,6 +1165,16 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     return [lm checkboxAtPoint:CGPointMake(p.x - inset.left, p.y - inset.top)];
 }
 
+/* A heading's chevron under a tap: its index; NSNotFound: none. */
+- (NSUInteger)sectionToggleAt:(UIGestureRecognizer *)g {
+    if (!_textView.editable) return NSNotFound;
+    CGPoint p = [g locationInView:_textView];
+    UIEdgeInsets inset = _textView.textContainerInset;
+    SNListLayoutManager *lm = (SNListLayoutManager *)_textView.layoutManager;
+    if (![lm isKindOfClass:[SNListLayoutManager class]]) return NSNotFound;
+    return [lm sectionToggleAtPoint:CGPointMake(p.x - inset.left, p.y - inset.top)];
+}
+
 /* Only a tap on a checkbox: the text view has the others. */
 /* The link under a tap: a given one or one detected; nil for none. */
 - (NSURL *)linkAt:(UIGestureRecognizer *)g {
@@ -1031,7 +1209,7 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 
 /* Only a tap on a checkbox, a link or a file: the text view has the others. */
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    return [self checkboxAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
+    return [self checkboxAt:g] != NSNotFound || [self sectionToggleAt:g] != NSNotFound || [self linkAt:g] != nil || [self fileAt:g] != nil;
 }
 
 /* A link to a note opens its editor; any other, in its own application. */
@@ -1050,6 +1228,13 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
 }
 
 - (void)tapped:(UITapGestureRecognizer *)g {
+    NSUInteger heading = [self sectionToggleAt:g];
+    if (heading != NSNotFound) {
+        NSRange sel = _textView.selectedRange;
+        [_binding toggleCollapsedAt:heading];
+        [self formatted:sel];
+        return;
+    }
     NSString *file = [self checkboxAt:g] == NSNotFound ? [self fileAt:g] : nil;
     if (file) {
         [self previewFileOfAttachment:file];
@@ -1085,8 +1270,12 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
             SNMenuAction(@"Heading", nil, @selector(heading:), self),
             SNMenuAction(@"Subheading", nil, @selector(subheading:), self),
             SNMenuAction(@"Body", nil, @selector(body:), self),
-            SNMenuAction(@"Monostyled", nil, @selector(mono:), self) ]],
-        traits ]];
+            SNMenuAction(@"Monostyled", nil, @selector(mono:), self),
+            SNMenuAction(@"Block Quote", [UIImage systemImageNamed:@"text.quote"], @selector(blockQuote:), self) ]],
+        traits,
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            [self colorMenu:@"Highlight" image:@"highlighter" action:@selector(applyHighlightColor:)],
+            [self colorMenu:@"Text Color" image:@"paintpalette" action:@selector(applyTextColor:)] ]] ]];
     _attachItem.menu = [UIMenu menuWithTitle:@"" children:@[
         SNMenuAction(@"Choose Photo", [UIImage systemImageNamed:@"photo.on.rectangle"], @selector(attachPhoto:), self),
         SNMenuAction(@"Attach File", [UIImage systemImageNamed:@"doc"], @selector(attachFile:), self),
@@ -1101,6 +1290,17 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
         [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
             SNMenuAction(@"Increase Indentation", [UIImage systemImageNamed:@"increase.indent"], @selector(indent:), self),
             SNMenuAction(@"Decrease Indentation", [UIImage systemImageNamed:@"decrease.indent"], @selector(outdent:), self) ]] ]];
+}
+
+/* None, then the five colours, each a dot of itself. */
+- (UIMenu *)colorMenu:(NSString *)title image:(NSString *)image action:(SEL)action {
+    NSMutableArray *items = [NSMutableArray arrayWithObject:SNMenuAction(@"None", [UIImage systemImageNamed:@"circle.slash"], action, self)];
+    for (NSString *name in SNColorNames()) {
+        UIImage *dot = [[UIImage systemImageNamed:@"circle.fill"] imageWithTintColor:SNSystemNamedColor(name)
+                                                                        renderingMode:UIImageRenderingModeAlwaysOriginal];
+        [items addObject:SNMenuAction(name.capitalizedString, dot, action, self)];
+    }
+    return [UIMenu menuWithTitle:title image:[UIImage systemImageNamed:image] identifier:nil options:0 children:items];
 }
 
 - (UIAction *)keepCheckedAction {
@@ -1135,6 +1335,29 @@ enum { SNAllSection, SNFoldersSection, SNDeletedSection, SNTagsSection };
     NSRange r = tv.selectedRange;
     [binding toggle:key inRange:r];
     if (r.length) tv.selectedRange = r;
+}
+
+/* A colour's name on the selection (a cell's too), or on what is typed
+   next; the action's title says which (None: taken off). */
+- (void)setCharacterColor:(NSString *)key from:(id)sender {
+    SNTextBinding *binding;
+    UITextView *tv = [self formattedTextView:&binding];
+    if (!tv.editable) return;
+    NSString *title = [sender respondsToSelector:@selector(title)] ? [[sender title] lowercaseString] : nil;
+    NSString *name = [SNColorNames() containsObject:title] ? title : nil;
+    NSRange r = tv.selectedRange;
+    [binding setCharacterValue:name forKey:key inRange:r];
+    if (r.length) tv.selectedRange = r;
+}
+
+- (IBAction)applyHighlightColor:(id)sender { [self setCharacterColor:SNHighlightKey from:sender]; }
+- (IBAction)applyTextColor:(id)sender { [self setCharacterColor:SNColorKey from:sender]; }
+
+- (IBAction)blockQuote:(id)sender {
+    if (!_textView.editable) return;
+    NSRange r = _textView.selectedRange;
+    [_binding toggleQuoteForParagraphsInRange:r];
+    [self formatted:r];
 }
 
 - (void)style:(NSString *)style {

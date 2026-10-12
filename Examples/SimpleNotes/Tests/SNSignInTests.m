@@ -147,7 +147,7 @@ static NSString *SNFormValue(NSString *form, NSString *name) {
     jwt.keySet = @{ @"keys": @[ HSPublicKey(_key) ] };
     _service.authenticator = jwt;
     _service.allowsAnonymousMetadata = YES;
-    SNServeNotebookPerUser(_service);
+    SNServeNotebooks(_service, YES);
     _histories = [[ODataSyncService alloc] initWithService:_service];
     SNRegisterMergers(_histories.engine);
 }

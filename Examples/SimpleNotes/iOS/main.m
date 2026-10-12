@@ -3,6 +3,9 @@
 #import <UIKit/UIKit.h>
 #import "SNiOSControllers.h"
 #import "SNiOSSelfTest.h"
+#import "SNShares.h"
+#import "SNShareInbox.h"
+#import "SNTransfer.h"
 
 @interface SNiOSAppDelegate : UIResponder <UIApplicationDelegate>
 @property (nonatomic, strong) UIWindow *window;
@@ -106,8 +109,17 @@
     }
 }
 
-/* Opened, or back: the server's changes met, what waits sent. */
+/* What the Share extension has written meanwhile (SNShares.h): notes at
+   the top now, which the lists show as any change. */
+- (void)importShares {
+    NSURL *inbox = SNShareAppGroupInbox();
+    if (_notes && inbox && !SNSelfTestRoot) [SNTransfer importSharesIntoNotes:_notes fromInbox:inbox];
+}
+
+/* Opened, or back: what was shared meanwhile made notes, the server's
+   changes met, what waits sent. */
 - (void)applicationDidBecomeActive:(UIApplication *)application {
+    [self importShares];
     if (_notes.serviceRoot && !_notes.syncing) [_notes sync];
 }
 

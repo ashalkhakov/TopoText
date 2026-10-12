@@ -1,5 +1,10 @@
 #import "SNiOSSelfTest.h"
 #import "SNiOSControllers.h"
+#import "SNGalleryViewController.h"
+#import "SNVersionsViewController.h"
+#import "SNShares.h"
+#import "SNShareInbox.h"
+#import "SNTransfer.h"
 #import "SNPeersViewController.h"
 #import "SNRichText.h"
 #import "SNTableGrid.h"
@@ -74,6 +79,18 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         tv.selectedRange = NSMakeRange(0, 9);
         [editor bold:nil];
         SNSay([[tv.textStorage attribute:@"SNBold" atIndex:0 effectiveRange:NULL] boolValue], @"Bold from the format bar");
+        /* Find in Note: the system's find navigator, and a replace as it
+           makes one (UITextSearching), into the note's text. */
+        if (@available(iOS 16.0, *)) {
+            [editor findInNote:nil];
+            SNWait(2, ^BOOL { return tv.findInteraction.isFindNavigatorVisible; });
+            SNSay(tv.findInteraction.isFindNavigatorVisible, @"Find in Note shows the find navigator");
+            [tv.findInteraction dismissFindNavigator];
+            NSRange eggs = [tv.text rangeOfString:@"eggs"];
+            UITextPosition *from = [tv positionFromPosition:tv.beginningOfDocument offset:(NSInteger)eggs.location];
+            UITextRange *found = [tv textRangeFromPosition:from toPosition:[tv positionFromPosition:from offset:(NSInteger)eggs.length]];
+            [tv replaceFoundTextInRange:found inDocument:nil withText:@"free-range eggs"];
+        }
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
         [notes sync];
@@ -88,6 +105,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNSay([other syncAndWait:&error], [NSString stringWithFormat:@"a second device syncs%@", error ? [@": " stringByAppendingString:error.localizedDescription] : @""]);
         SNNote *there = [other notesInFolder:nil matching:@"Groceries"].firstObject;
         SNSay([there.body hasSuffix:@"coffee beans and tea"], [NSString stringWithFormat:@"the second device has the typing (%@)", there.body]);
+        if (@available(iOS 16.0, *)) SNSay([there.body containsString:@"milk, free-range eggs, bread"], @"and what was replaced");
         SNSay([[there.text attributesAtIndex:0 effectiveRange:NULL][@"bold"] boolValue], @"and the bold");
 
         /* A checklist: two lines made one from the format bar, the first
@@ -201,10 +219,60 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             UIMenu *styles = (UIMenu *)we.styleItem.menu.children.firstObject;
             UIAction *title = (UIAction *)styles.children.firstObject, *body = (UIAction *)styles.children[3];
             wtv.selectedRange = NSMakeRange(0, 0);
+            /* Export as PDF: the note on paper. SN_SELF_TEST_PDF: written
+               there too, to be looked at. */
+            NSData *pdf = [we pdfOfNote];
+            const char *pdfPath = getenv("SN_SELF_TEST_PDF");
+            if (pdfPath) [pdf writeToFile:@(pdfPath) atomically:YES];
+            SNSay(pdf.length > 1000 && [[[NSString alloc] initWithData:[pdf subdataWithRange:NSMakeRange(0, 5)] encoding:NSASCIIStringEncoding] isEqual:@"%PDF-"],
+                  [NSString stringWithFormat:@"Export as PDF (%lu bytes)", (unsigned long)pdf.length]);
             [title performWithSender:we.styleItem target:nil];
             NSString *style = [wtv.textStorage attribute:@"SNStyle" atIndex:0 effectiveRange:NULL];
             SNSay([style isEqual:SNStyleTitle], [NSString stringWithFormat:@"Title from the bar over the keyboard (%@)", style]);
             [body performWithSender:we.styleItem target:nil];
+            /* Highlight > Mint, then None, from the same menu. */
+            UIMenu *colors = (UIMenu *)we.styleItem.menu.children[2];
+            UIMenu *highlight = (UIMenu *)colors.children.firstObject;
+            wtv.selectedRange = NSMakeRange(0, 4);
+            [(UIAction *)highlight.children[4] performWithSender:we.styleItem target:nil];
+            NSString *mint = [wtv.textStorage attribute:SNHighlightAttributeName atIndex:1 effectiveRange:NULL];
+            [(UIAction *)highlight.children.firstObject performWithSender:we.styleItem target:nil];
+            SNSay([mint isEqual:@"mint"] && ![wtv.textStorage attribute:SNHighlightAttributeName atIndex:1 effectiveRange:NULL],
+                  [NSString stringWithFormat:@"Highlight from the Aa menu, and None (%@)", mint]);
+            wtv.selectedRange = NSMakeRange(0, 0);
+            /* Collapsed sections: a heading's chevron in the margin; Collapse
+               All Sections hides what is under it, the text as it was. */
+            /* Typed as the keyboard types: Return asked of the delegate. */
+            void (^type)(NSString *) = ^(NSString *text) {
+                wtv.selectedRange = NSMakeRange(wtv.text.length, 0);
+                if ([text isEqual:@"\n"] && ![we textView:wtv shouldChangeTextInRange:wtv.selectedRange replacementText:text]) return;
+                [wtv insertText:text];
+            };
+            type(@"\n");
+            type(@"Packing");
+            NSUInteger packing = wtv.text.length - 7;
+            [we heading:nil];
+            type(@"\n");
+            type(@"socks");
+            type(@"\n");
+            type(@"boots");
+            NSUInteger socks = packing + 8;
+            NSString *before = wtv.text;
+            SNListLayoutManager *slm = (SNListLayoutManager *)wtv.layoutManager;
+            CGRect headingLine = [slm lineFragmentRectForGlyphAtIndex:[slm glyphRangeForCharacterRange:NSMakeRange(packing, 1) actualCharacterRange:NULL].location
+                                                         effectiveRange:NULL];
+            NSUInteger chevron = [slm sectionToggleAtPoint:CGPointMake(-7, CGRectGetMidY(headingLine))];
+            SNSay(chevron == packing, [NSString stringWithFormat:@"a chevron beside the heading (%lu)", (unsigned long)chevron]);
+            [we collapseAllSections:nil];
+            SNSay([wtv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] != nil && [wtv.text isEqual:before],
+                  @"Collapse All Sections hides what is under it, the text as it was");
+            if (getenv("SN_SELF_TEST_HOLD")) {
+                [wtv scrollRangeToVisible:NSMakeRange(packing, 1)];
+                fprintf(stderr, "self-test: the section is collapsed\n");
+                SNWait(4, ^BOOL { return NO; });
+            }
+            [we expandAllSections:nil];
+            SNSay([wtv.textStorage attribute:SNHiddenAttributeName atIndex:socks effectiveRange:NULL] == nil, @"Expand All Sections shows it again");
         }
         const char *snapshot = getenv("SN_SELF_TEST_SNAPSHOT");
         if (snapshot) {
@@ -228,7 +296,7 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
             NSDictionary *p = [wt paragraphAttributesAtIndex:v.rangeValue.location keys:SNParagraphKeys()];
             [seen addObject:[NSString stringWithFormat:@"%@%@", p[SNListKey] ?: @"-", [p[SNCheckedKey] boolValue] ? @"+" : @""]];
         }
-        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-" ]],
+        SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-", @"-", @"-", @"-" ]],
               [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
         NSString *photoID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
         SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
@@ -292,6 +360,72 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         [stv resignFirstResponder];
         [navigation popViewControllerAnimated:NO];
         SNWait(0.5, ^BOOL { return NO; });
+
+        /* The gallery: the notes as cards, Weekend's with its photo. */
+        SNGalleryViewController *gallery = [[SNGalleryViewController alloc] initWithNotes:notes folder:nil];
+        [navigation pushViewController:gallery animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        NSUInteger weekendCard = [[gallery shownRows] indexOfObject:@"Weekend"];
+        SNSay(weekendCard != NSNotFound && [[gallery shownRows] containsObject:@"Groceries"],
+              [NSString stringWithFormat:@"the gallery has the notes (%@)", [[gallery shownRows] componentsJoinedByString:@", "]]);
+        UIImage * (^weekendPicture)(void) = ^UIImage *{
+            for (UICollectionViewCell *cell in gallery.collectionView.visibleCells) {
+                UIImageView *picture = [cell valueForKey:@"picture"];
+                if ([[[cell valueForKey:@"titleLabel"] text] isEqual:@"Weekend"] && picture.image) return picture.image;
+            }
+            return nil;
+        };
+        SNWait(5, ^BOOL { return weekendPicture() != nil; });
+        SNSay(weekendPicture() != nil, @"and Weekend's card its photo");
+        /* SN_SELF_TEST_HOLD: held up a while, for the simulator's own
+           screenshot (xcrun simctl io screenshot). */
+        if (getenv("SN_SELF_TEST_HOLD")) {
+            fprintf(stderr, "self-test: the gallery is up\n");
+            SNWait(4, ^BOOL { return NO; });
+        }
+        [navigation popViewControllerAnimated:NO];
+        /* View Attachments: the photo, and the file, each its note's. */
+        SNAttachmentsViewController *browser = [[SNAttachmentsViewController alloc] initWithNotes:notes];
+        [navigation pushViewController:browser animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNNote *weekendNote = [notes notesInFolder:nil matching:@"Weekend"].firstObject;
+        NSArray *photos = browser.shownItems;
+        SNSay(photos.count == 1 && [[photos.firstObject noteID] isEqual:weekendNote.objectID],
+              [NSString stringWithFormat:@"View Attachments has the photo (%lu)", (unsigned long)photos.count]);
+        if (getenv("SN_SELF_TEST_HOLD")) {
+            fprintf(stderr, "self-test: the attachments are up\n");
+            SNWait(4, ^BOOL { return NO; });
+        }
+        browser.showsFiles = YES;
+        SNSay(browser.shownItems.count == 1 && [[browser.shownItems.firstObject name] isEqual:@"Lease.pdf"],
+              [NSString stringWithFormat:@"and, under Files, the file (%lu)", (unsigned long)browser.shownItems.count]);
+        [navigation popViewControllerAnimated:NO];
+        SNWait(0.3, ^BOOL { return NO; });
+
+        /* Version History: the server's version of Groceries (its text as
+           seeded, kept as the first typing came); restored, the note as it
+           was then. */
+        [notes sync];
+        SNWait(30, ^BOOL { return !notes.syncing; });
+        SNNote *groceriesNote = [notes notesInFolder:nil matching:@"Groceries"].firstObject;
+        SNVersionsViewController *history = [[SNVersionsViewController alloc] initWithNotes:notes note:groceriesNote];
+        [navigation pushViewController:history animated:NO];
+        SNWait(0.5, ^BOOL { return NO; });
+        SNSay(history.versions.count >= 1, [NSString stringWithFormat:@"Version History: the server's versions (%lu)", (unsigned long)history.versions.count]);
+        if (history.versions.count) {
+            NSManagedObject *oldest = history.versions.lastObject;
+            NSString *then = [notes textOfVersion:oldest].string;
+            SNVersionViewController *version = [[SNVersionViewController alloc] initWithNotes:notes note:groceriesNote version:oldest];
+            [navigation pushViewController:version animated:NO];
+            SNWait(0.5, ^BOOL { return NO; });
+            SNSay([then hasPrefix:@"Groceries"] && version.navigationItem.rightBarButtonItem.enabled && version.previewView.text.length,
+                  [NSString stringWithFormat:@"the oldest beside the note (%@)", [then stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+            [version restore:nil];
+            SNSay([groceriesNote.text.string isEqual:then], [NSString stringWithFormat:@"Restore: the note as it was (%@)",
+                                                             [groceriesNote.text.string stringByReplacingOccurrencesOfString:@"\n" withString:@" | "]]);
+        }
+        [navigation popToRootViewControllerAnimated:NO];
+        SNWait(0.3, ^BOOL { return NO; });
 
         /* Folders in folders and tags, in the folder list. */
         [navigation popToRootViewControllerAnimated:NO];
@@ -400,13 +534,25 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         SNEditorViewController *deleted = [[SNEditorViewController alloc] initWithNotes:notes note:groceries];
         [navigation pushViewController:deleted animated:NO];
         SNWait(0.5, ^BOOL { return NO; });
-        SNSay(!deleted.textView.editable && deleted.navigationItem.rightBarButtonItem != nil, @"read only, with Recover");
+        SNSay(!deleted.textView.editable && [deleted.navigationItem.rightBarButtonItems.lastObject.title isEqual:@"Recover"], @"read only, with Recover");
         [deleted recover:nil];
         [navigation popToRootViewControllerAnimated:NO];
         [notes sync];
         SNWait(30, ^BOOL { return !notes.syncing; });
         [other syncAndWait:NULL];
         SNSay([other notesInFolder:nil matching:@"Groceries"].count == 1, @"recovered here, back there");
+
+        /* The Share extension's inbox, in the App Group the app shares with
+           it: a page shared there, a note at the top. */
+        NSURL *inbox = SNShareAppGroupInbox();
+        SNSay(inbox != nil, [NSString stringWithFormat:@"the App Group's inbox (%@)", inbox.lastPathComponent]);
+        if (inbox) {
+            SNWriteShare(inbox, nil, @"A shared page", [NSURL URLWithString:@"https://example.org/shared"], @[], NULL);
+            NSArray *made = [SNTransfer importSharesIntoNotes:notes fromInbox:inbox];
+            SNNote *shared = made.count ? [notes noteForObjectID:made.firstObject] : nil;
+            SNSay([shared.title isEqual:@"A shared page"] && [shared.body containsString:@"https://example.org/shared"] && !SNSharesIn(inbox).count,
+                  [NSString stringWithFormat:@"what is shared there becomes a note (%@)", shared.title]);
+        }
         fprintf(stderr, "self-test: %s\n", SNFailed ? "FAILED" : "passed");
         exit(SNFailed);
     };

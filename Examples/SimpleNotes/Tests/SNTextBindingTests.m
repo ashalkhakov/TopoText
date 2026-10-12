@@ -299,6 +299,139 @@
     XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:5 effectiveRange:NULL], plain);
 }
 
+#pragma mark colours and quotes
+
+- (void)testAColourAndAHighlightGoIntoTheText {
+    [self start:@"Hello world"];
+    id plain = [_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL];
+    [_binding setCharacterValue:@"pink" forKey:SNColorKey inRange:NSMakeRange(0, 5)];
+    [_binding setCharacterValue:@"mint" forKey:SNHighlightKey inRange:NSMakeRange(6, 5)];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL], @{ SNColorKey: @"pink" });
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:6 effectiveRange:NULL], @{ SNHighlightKey: @"mint" });
+    XCTAssertEqualObjects([_binding characterValueForKey:SNColorKey inRange:NSMakeRange(0, 5)], @"pink");
+    XCTAssertNotEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain, @"shown in its colour");
+    XCTAssertNotNil([_storage attribute:NSBackgroundColorAttributeName atIndex:6 effectiveRange:NULL], @"highlighted");
+    XCTAssertNil([_storage attribute:NSBackgroundColorAttributeName atIndex:0 effectiveRange:NULL]);
+    /* Typing on in coloured text is coloured; the paragraph's tags shown
+       again keep it so. */
+    _selection = NSMakeRange(5, 0);
+    [_binding selectionDidChange];
+    [self key:@"!"];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:5 effectiveRange:NULL][SNColorKey], @"pink");
+    XCTAssertNotEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain);
+    /* Taken off. */
+    [_binding setCharacterValue:nil forKey:SNColorKey inRange:NSMakeRange(0, 6)];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL], @{});
+    XCTAssertEqualObjects([_storage attribute:NSForegroundColorAttributeName atIndex:0 effectiveRange:NULL], plain);
+}
+
+- (void)testAColourNotKnownHereIsShownAsNone {
+    NSDictionary *t = SNTextAttributes(SNViewAttributes(@{ SNColorKey: @"teal" }));
+    XCTAssertEqualObjects(t, @{}, @"a newer device's colour, none here");
+}
+
+- (void)testABlockQuoteIsOnWholeParagraphs {
+    [self start:@"One\nTwo"];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(1, 0)];
+    XCTAssertEqualObjects([self paragraphAt:0], @{ SNQuoteKey: @YES });
+    XCTAssertEqualObjects([self paragraphAt:4], @{});
+    XCTAssertGreaterThan([[_storage attribute:NSParagraphStyleAttributeName atIndex:0 effectiveRange:NULL] headIndent], 0);
+    /* Both: quoted; both quoted already: neither. */
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 7)];
+    XCTAssertEqualObjects([self paragraphAt:4], @{ SNQuoteKey: @YES });
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 7)];
+    XCTAssertEqualObjects([self paragraphAt:0], @{});
+    XCTAssertEqualObjects([self paragraphAt:4], @{});
+    /* With a list, a style: kept. */
+    [_binding toggleList:SNListBullet forParagraphsInRange:NSMakeRange(0, 0)];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 0)];
+    XCTAssertEqualObjects([self paragraphAt:0], (@{ SNListKey: SNListBullet, SNQuoteKey: @YES }));
+}
+
+- (void)testReturnOnAnEmptyQuotedLineEndsTheQuote {
+    [self start:@"Said"];
+    [_binding toggleQuoteForParagraphsInRange:NSMakeRange(0, 0)];
+    _selection = NSMakeRange(4, 0);
+    [_binding selectionDidChange];
+    [self key:@"\n"];
+    [self key:@"x"];
+    XCTAssertEqualObjects([self paragraphAt:5], @{ SNQuoteKey: @YES }, @"the quote goes on");
+    [self key:@""];
+    [self key:@"\n"]; /* on the empty quoted line */
+    XCTAssertEqualObjects(_editor.text.string, @"Said\n", @"no new line, the quote ended");
+    [self key:@"y"];
+    XCTAssertEqualObjects([self paragraphAt:5], @{});
+    XCTAssertEqualObjects([self paragraphAt:0], @{ SNQuoteKey: @YES });
+}
+
+#pragma mark collapsed sections
+
+/* "Trip" a title; "Day one" and "Day two" headings, each a line under it. */
+- (void)startTrip {
+    [self start:@"Trip\nDay one\nswim\nDay two\nhike"];
+    [_binding setStyle:SNStyleTitle forParagraphsInRange:NSMakeRange(0, 0)];
+    [_binding setStyle:SNStyleHeading forParagraphsInRange:NSMakeRange(5, 0)];
+    [_binding setStyle:SNStyleHeading forParagraphsInRange:NSMakeRange(18, 0)];
+}
+
+- (void)testACollapsedHeadingHidesItsSection {
+    [self startTrip];
+    XCTAssertTrue([_binding hasSectionAt:5]);
+    XCTAssertFalse([_binding hasSectionAt:13], @"body has none");
+    [_binding toggleCollapsedAt:5];
+    XCTAssertEqualObjects([self paragraphAt:5], (@{ SNStyleKey: SNStyleHeading, SNCollapsedKey: @YES }), @"the text's, synced");
+    XCTAssertTrue([_binding isHiddenAt:13], @"its line hidden");
+    XCTAssertFalse([_binding isHiddenAt:5], @"not the heading");
+    XCTAssertFalse([_binding isHiddenAt:18], @"nor the next heading");
+    XCTAssertFalse([_binding isHiddenAt:26], @"nor what is under it");
+    XCTAssertLessThan([[_storage attribute:NSParagraphStyleAttributeName atIndex:13 effectiveRange:NULL] maximumLineHeight], 1);
+    XCTAssertEqualObjects(_editor.text.string, @"Trip\nDay one\nswim\nDay two\nhike", @"the text as it was");
+    /* Expanded: shown as the text has it. */
+    [_binding toggleCollapsedAt:5];
+    XCTAssertFalse([_binding isHiddenAt:13]);
+    XCTAssertGreaterThan([(SNFont *)[_storage attribute:NSFontAttributeName atIndex:13 effectiveRange:NULL] pointSize], 5);
+    XCTAssertEqualObjects([self paragraphAt:5], @{ SNStyleKey: SNStyleHeading });
+}
+
+- (void)testATitleHidesTheHeadingsUnderIt {
+    [self startTrip];
+    [_binding toggleCollapsedAt:0];
+    for (NSUInteger i = 5; i < _storage.length; i++) XCTAssertTrue([_binding isHiddenAt:i], @"%lu hidden", (unsigned long)i);
+    /* All: each heading with a section; none, expanded. */
+    [_binding toggleCollapsedAt:0];
+    [_binding setAllSectionsCollapsed:YES];
+    XCTAssertTrue([[self paragraphAt:0][SNCollapsedKey] boolValue] && [[self paragraphAt:5][SNCollapsedKey] boolValue] &&
+                  [[self paragraphAt:18][SNCollapsedKey] boolValue]);
+    [_binding setAllSectionsCollapsed:NO];
+    XCTAssertFalse([_binding isHiddenAt:13] || [_binding isHiddenAt:26]);
+}
+
+- (void)testTheInsertionPointGoesPastAHiddenSection {
+    [self startTrip];
+    [_binding toggleCollapsedAt:5];
+    _selection = NSMakeRange(10, 0);   /* in "Day one" */
+    [_binding selectionDidChange];
+    _selection = NSMakeRange(14, 0);   /* into "swim", going on */
+    [_binding selectionDidChange];
+    XCTAssertEqual(_selection.location, 18u, @"past it, at the next heading");
+    _selection = NSMakeRange(15, 0);   /* into it, coming back */
+    [_binding selectionDidChange];
+    XCTAssertEqual(_selection.location, 12u, @"back to the end of its heading");
+}
+
+- (void)testReturnAfterACollapsedHeadingExpandsIt {
+    [self startTrip];
+    [_binding toggleCollapsedAt:5];
+    _selection = NSMakeRange(12, 0);
+    [_binding selectionDidChange];
+    [self key:@"\n"];
+    [self key:@"x"];
+    XCTAssertFalse([_binding isHiddenAt:13], @"what is typed shows");
+    XCTAssertFalse([_binding isHiddenAt:15]);
+    XCTAssertNil([self paragraphAt:5][SNCollapsedKey]);
+    XCTAssertEqualObjects(_editor.text.string, @"Trip\nDay one\nx\nswim\nDay two\nhike");
+}
+
 #pragma mark links
 
 - (void)testALinkGivenIsTheTextsAndOneTypedIsTheViews {

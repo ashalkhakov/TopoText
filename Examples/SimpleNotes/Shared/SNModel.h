@@ -9,13 +9,18 @@
 //   Attachment  id (key), kind ("image", "table", "file"), type (MIME),
 //            name (a file's), data, width,
 //            height, created, note (to-one), modified, versions
+//   NoteVersion  id (key), noteID (its note's id), title, text (a
+//            TopoText's state, as the note's was then), created, modified,
+//            versions: ODataSync down, the server's alone
 //
 // Versions: 1, the first; 2 adds Note.deletedAt (Recently Deleted); 3 adds
 // Folder.parent (folders in folders), and renames Note.updated edited:
 // on Apple's Core Data, "updated" is NSManagedObject's own (-isUpdated), and
 // what key-value coding reads and writes for it (ODataKit, a sync) is that.
 // 4 adds Attachment (images in notes). 5 adds Folder.sortOrder,
-// Folder.filter (smart folders) and Attachment.name (files).
+// Folder.filter (smart folders) and Attachment.name (files). 6 adds owner
+// (a notebook per user). 7 adds NoteVersion (a note's history, made at the
+// server: Server/SNVersions.h).
 //
 // Both are ODataSync both entities: either side changes them. A note's body
 // is a TopoText (bodyText), merged when two devices edited it apart; body
@@ -32,6 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString * const SNFolderEntity;  // @"Folder"
 FOUNDATION_EXPORT NSString * const SNNoteEntity;    // @"Note"
 FOUNDATION_EXPORT NSString * const SNAttachmentEntity;  // @"Attachment"
+FOUNDATION_EXPORT NSString * const SNNoteVersionEntity; // @"NoteVersion"
 
 // The compiled model in a bundle's resources (SimpleNotes.momd).
 FOUNDATION_EXPORT NSURL *_Nullable SNModelURLInBundle(NSBundle *bundle);

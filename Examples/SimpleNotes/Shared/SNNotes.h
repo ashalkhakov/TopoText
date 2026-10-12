@@ -18,7 +18,7 @@
 #import "SNTextSource.h"
 #import "SNSmartFilter.h"
 
-@class SNNoteEditor, SNNoteGroup;
+@class SNNoteEditor, SNNoteGroup, SNAttachmentItem;
 
 // How lists of notes are sorted: pinned notes first, then by this.
 typedef NS_ENUM(NSInteger, SNSortOrder) {
@@ -134,6 +134,31 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 - (nullable SNAttachment *)attachmentWithID:(NSString *)attachmentID;
 // The note of that id (SNLinkToNote's), deleted or not; nil: none here.
 - (nullable SNNote *)noteWithID:(NSString *)noteID;
+// A note's versions (model version 7: NoteVersion, made at the server and
+// downloaded), the newest first: each its created (date), title and text.
+// None from a server without them, nor while offline: what was typed
+// since the last is the note as it is.
+- (NSArray<NSManagedObject *> *)versionsOfNote:(SNNote *)note;
+// A version's text (nil: not one).
+- (nullable TopoText *)textOfVersion:(NSManagedObject *)version;
+// The note made as it was then: its text and formatting, by the fewest
+// edits it takes (TopoText's -setAttributedString:), which sync and merge
+// as typing does (another device's typing elsewhere in it stays); open
+// editors shown it. NO: not restored.
+- (BOOL)restoreNote:(SNNote *)note toVersion:(NSManagedObject *)version;
+// The note of that object id (an SNAttachmentItem's noteID); nil: gone.
+- (nullable SNNote *)noteForObjectID:(NSManagedObjectID *)objectID;
+// The images (SNAttachmentKindImage) or files (SNAttachmentKindFile) of
+// the notes not deleted, the newest first, as the attachments browser lists
+// them: those in their note's text (one taken out of it is kept, for an
+// undo or another device, and not listed). Read without their data.
+- (NSArray<SNAttachmentItem *> *)attachmentsOfKind:(NSString *)kind;
+// The first image in a note's text (its id; nil: none), for its card in
+// the gallery.
+- (nullable NSString *)firstImageIDOfNote:(SNNote *)note;
+// An attachment read for a moment (a thumbnail made of it) let go of
+// again: its data not kept in memory.
+- (void)letGoOfAttachment:(SNAttachment *)attachment;
 // Recently Deleted: the notes deleted, and not yet for good, the latest
 // deleted first.
 - (NSArray<SNNote *> *)deletedNotesMatching:(nullable NSString *)text;
@@ -289,6 +314,15 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 @end
 
 // Notes under a heading in a list (nil: none).
+// An image or a file, as the attachments browser lists it: what it is and
+// whose, its data not read.
+@interface SNAttachmentItem : NSObject
+@property (nonatomic, readonly, copy) NSString *attachmentID;
+@property (nonatomic, readonly, copy, nullable) NSString *name;   // a file's
+@property (nonatomic, readonly, nullable) NSDate *created;
+@property (nonatomic, readonly) NSManagedObjectID *noteID;
+@end
+
 @interface SNNoteGroup : NSObject
 - (instancetype)initWithTitle:(nullable NSString *)title notes:(NSArray<SNNote *> *)notes;
 @property (nonatomic, readonly, copy, nullable) NSString *title;
