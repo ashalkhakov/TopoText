@@ -171,7 +171,9 @@ jobs:
       # (the rest of #821, #839); fb112b4 (#8): NSCollectionView makes its
       # items and lays them out in lines; 57b6e67 (#10, its branch until
       # merged): a character a font lacks is given a font by name (menus'
-      # ⌘ ⇧ ⌥ drawn, and opening fast with many fonts installed).
+      # ⌘ ⇧ ⌥ drawn, and opening fast with many fonts installed); ac63e2c:
+      # a double click on an attachment reaches the text view's delegate
+      # (a file attachment opens).
       # FreeCoreData 591dfa6 (#69): a model's copy keeps exactly its indexes;
       # fd6ae53 (#70): -migratePersistentStore:, which moves a server's
       # notes to another store (MoveFrom); 338bc7b (#71): an object and its
@@ -179,7 +181,7 @@ jobs:
       # (#72): a context that related objects is let go of; 5247095 (#73):
       # objects tell their context of their changes (no KVO), and a fetch
       # reads its rows at once rather than a fault at a time.
-      GNUSTEP_PATCHES_REF: 57b6e67215958ede8434ca0d36a36aaf76f23685
+      GNUSTEP_PATCHES_REF: ac63e2caeb9aae38b782d5338ca62b89e3cc6574
       FREECOREDATA_REF: 5bfd5a87179cff43e0a8a55622fc00f01951c88a
     defaults:
       run:
