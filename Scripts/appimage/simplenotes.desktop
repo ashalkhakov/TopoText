@@ -6,4 +6,4 @@ Comment=Notes that sync, and merge what was written apart
 Exec=AppRun %F
 Icon=simplenotes
 Terminal=false
-Categories=Office;Utility;
+Categories=Office;
