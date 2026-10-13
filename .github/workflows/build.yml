@@ -1,0 +1,65 @@
+name: Build
+
+# TopoText and SimpleNotes, built, tested and installed the familiar way
+# (make, make check, make install; Makefile.apple on Apple's platforms) by
+# gnustep-release-actions' workflows, the same as every repository's. Every
+# push builds and tests them and uploads what is installed: SimpleNotes for
+# macOS, for iOS (unsigned) and for Linux (an AppImage, with its server),
+# and the server's image. A v* tag (or a run started by hand with one) also
+# releases them: the Mac app signed and notarized with its Sparkle appcast,
+# the iOS app unsigned, the AppImage with its update information, attached
+# to the tag's release (a pre-release when the tag has a '-'), and the
+# server's image pushed to the GitHub Container Registry. What it builds on
+# is in .github/pins.env.
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A v* tag to build and release (empty: this branch, as artifacts)'
+        required: false
+        default: ''
+
+# Pushes only: a push to a branch already shows its checks on the branch's
+# pull request. A newer push supersedes the run before it; a release is
+# never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/linux.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
+      databases: postgres mariadb
+
+  macos:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes=SimpleNotes
+    secrets: inherit
+
+  ios:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes-iOS=SimpleNotes
+
+  docker:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/docker.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      dockerfile: Docker/server.Dockerfile
+      images: =simplenotes-server
+      description: "SimpleNotes' server: notes that sync, and merge what was written apart"
+    permissions:
+      contents: read
+      packages: write

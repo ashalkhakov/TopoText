@@ -19,6 +19,20 @@
 			isa = PBXBuildFile;
 			fileRef = 521FCBE2C6AF52A4270C2374;
 		};
+		0825F06F9303D1B7801DBFAC /* ODataService.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 5EF329EE0AC5C26861D860F0;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		08DD37C9B637537734069556 /* ODataIncrementalStore.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 299860CE18AEE3EA07AA3BEF;
+		};
 		08F47A52C6068AE0E8AC7B10 /* SNPeers.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = EC831ABEA7538032BF787133;
@@ -30,14 +44,6 @@
 		099EC221977E4E9C431EA752 /* SNResolver.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = C5BF2DACC29D3CD90AB653ED;
-		};
-		0BBE152BCED95866E67727DB /* ODataService.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 241B510EC28BDE743EED0D31;
-		};
-		0D4213282FD31E596CE7FFE0 /* Sparkle in Frameworks */ = {
-			isa = PBXBuildFile;
-			productRef = F6D89E1BC574A283AA026CF0;
 		};
 		0FCC9C9E0E329BC98E59E527 /* SyncPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
@@ -55,6 +61,10 @@
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
 		};
+		14C97BB4D31E28595066D423 /* ODataSync.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C402DB6787E73681FBB1897B;
+		};
 		15644450FFAE28D91904A264 /* TopoText.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
@@ -65,9 +75,9 @@
 				);
 			};
 		};
-		1A5DBCF3A5F0B94D4B9873E1 /* ODataIncrementalStore.framework in Frameworks */ = {
+		195D638B78FA89D161F97901 /* OTelKit.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 7EE0BBC99032BF20C4EA757C;
+			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
 		};
 		1A945E05E70FCA2A80B9CF90 /* SNMarkdown.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -85,6 +95,10 @@
 			isa = PBXBuildFile;
 			fileRef = 0E28CF600D1F26B783917DFC;
 		};
+		1F81AFB0DC99B388652487A0 /* HTTPServerKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C18F5FB510B754FFB91AA1D0;
+		};
 		20327598F541A2BE0FF21B15 /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
@@ -97,9 +111,9 @@
 			isa = PBXBuildFile;
 			fileRef = E432D0D1BDAEABC5F8DE44B6;
 		};
-		2604E5E45D970E74E74A46A4 /* ODataKit.framework in Frameworks */ = {
+		27AA643C2DCD4C4A14934583 /* HTTPServerKit.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = B74881DD4B1A684D8FBFF1A2;
+			fileRef = C18F5FB510B754FFB91AA1D0;
 		};
 		27E2D505D64F817DCADDACE8 /* TopoTextSync.framework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -109,23 +123,33 @@
 			isa = PBXBuildFile;
 			fileRef = CA7528909F30CDA2E84D7397;
 		};
-		2BDD7FDAE2E967C6F7529952 /* Assets.xcassets in Resources */ = {
+		2B79549AC4A8529E6616DEAA /* ODataKit.xcframework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 27FDFB70C50488AC14F320AC;
-		};
-		2F839D3D9FD9C7DD47C21932 /* SNThumbnails.m in Sources */ = {
-			isa = PBXBuildFile;
-			fileRef = 64102D6B6D468822A0B577B2;
-		};
-		2FCE28DC091B3E0F5E4D2B2F /* ODataIncrementalStore.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 7EE0BBC99032BF20C4EA757C;
+			fileRef = 6FDC3D4C77DBF3C5A9AD6379;
 			settings = {
 				ATTRIBUTES = (
 					CodeSignOnCopy,
 					RemoveHeadersOnCopy,
 				);
 			};
+		};
+		2BDD7FDAE2E967C6F7529952 /* Assets.xcassets in Resources */ = {
+			isa = PBXBuildFile;
+			fileRef = 27FDFB70C50488AC14F320AC;
+		};
+		2D6B0CE7748874A3C8043027 /* ODataSync.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C402DB6787E73681FBB1897B;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		2F839D3D9FD9C7DD47C21932 /* SNThumbnails.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 64102D6B6D468822A0B577B2;
 		};
 		31315B895C7B07BAF6DA0F94 /* SNTableGrid.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -147,16 +171,6 @@
 			isa = PBXBuildFile;
 			fileRef = E9880EC90FE418E43DB29348;
 		};
-		34D439D972927301D70C87E5 /* ODataSync.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = D66318865ACBC88ED27304E8;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
 		34F4CD95AC29D3E0EA84037E /* SNTextView.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 94DE5DF5B274EF78A7375493;
@@ -173,6 +187,10 @@
 			isa = PBXBuildFile;
 			fileRef = 571D7F2A670DB7D88A910D92;
 		};
+		396B00AD9421349CD7F29F4D /* ODataSync.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C402DB6787E73681FBB1897B;
+		};
 		3B72C38E82942C960038A006 /* SNAppController.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = AC94564EB5B357E5DA849A01;
@@ -181,19 +199,19 @@
 			isa = PBXBuildFile;
 			fileRef = 278E9CBDE74E90B175B6FD66;
 		};
-		3CDDEAFB9AD8FB0C59452A77 /* SNGallery.m in Sources */ = {
+		3BBDAD915B25BA3A5B7A72EC /* ODataIncrementalStore.xcframework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 1B34BF773E569667536E762E;
-		};
-		3EA0BA3B6EE82342B482DD2F /* HTTPServerKit.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = C8761B02854FD9DE60555345;
+			fileRef = 299860CE18AEE3EA07AA3BEF;
 			settings = {
 				ATTRIBUTES = (
 					CodeSignOnCopy,
 					RemoveHeadersOnCopy,
 				);
 			};
+		};
+		3CDDEAFB9AD8FB0C59452A77 /* SNGallery.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 1B34BF773E569667536E762E;
 		};
 		40497D75F7964A5FC7470710 /* SNWatchdog-Apple.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -203,6 +221,10 @@
 			isa = PBXBuildFile;
 			fileRef = AB5FEFCF748915C2804B10BC;
 		};
+		421CEBE89A51922B490D058C /* ODataIncrementalStore.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 299860CE18AEE3EA07AA3BEF;
+		};
 		42A80778769E29C7DC69B57E /* SNSmartFolderPanel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 41670A389C12C54CF89C242D;
@@ -211,27 +233,17 @@
 			isa = PBXBuildFile;
 			fileRef = 97D0F5F29F835BA15429813C;
 		};
-		46A498C888CEA38E5FDEC855 /* OTelKit.framework in Embed Frameworks */ = {
+		48B2A367E9372DB4FB09A26E /* OTelKit.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = F6D896F11584BB5C77EEEA7A;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
-		47EDF0F457EC51A971D00ECA /* HTTPServerKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = C8761B02854FD9DE60555345;
+			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
 		};
 		494BC6A319B8513D81C08CE1 /* VersionsPanel.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 5AFBCF2EB61C3D05D1B5D2B3;
 		};
-		4D005DD96A8C3606DA4AEBE0 /* ODataSync.framework in Frameworks */ = {
+		4B31525A5E2D71FBB22E979F /* Sparkle.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = D66318865ACBC88ED27304E8;
+			fileRef = E5625502775571549AF58D68;
 		};
 		4F515619848A8383B89CB03C /* SNZip.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -245,10 +257,6 @@
 			isa = PBXBuildFile;
 			fileRef = 8CA44378B789F5979E110A09;
 		};
-		556FA39ACD65B0E3991FDA0D /* OTelKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = F6D896F11584BB5C77EEEA7A;
-		};
 		57C340E00E089F2758BECFEA /* SNSmartFolderViewController.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 054A76FC40094ADDD3CBC934;
@@ -260,16 +268,6 @@
 		5C0532B74F67EA76B21EA1B7 /* SimpleNotes.xcdatamodeld in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 571D7F2A670DB7D88A910D92;
-		};
-		5CEDA6CB41F6DE6588F05EDD /* ODataSync.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = D66318865ACBC88ED27304E8;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
 		};
 		5D1543EFBFF007BFB6CAA6A7 /* SNiOSControllers.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -295,17 +293,39 @@
 			isa = PBXBuildFile;
 			fileRef = E9A574C8362A3139FB2D712B;
 		};
+		65947DE6C20A3BEA62D02889 /* HTTPServerKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C18F5FB510B754FFB91AA1D0;
+		};
 		662F0441672FA84ECEA8F2FA /* main.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 0F63D94BCE525DAD30B53B51;
+		};
+		6938DD899E8E0CA212F8EE73 /* HTTPServerKit.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C18F5FB510B754FFB91AA1D0;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
 		};
 		69D78786762AB87900DE533B /* TopoText.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
 		};
+		70C8FF607AEAFE744F415DD7 /* ODataService.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 5EF329EE0AC5C26861D860F0;
+		};
 		70E9D874D7BD28F143A35A76 /* SNNote.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = E92F4F34642FF032BAA53F88;
+		};
+		7299F174FAD2EE43020C8857 /* ODataKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 6FDC3D4C77DBF3C5A9AD6379;
 		};
 		72A18D153A49CB051B239C79 /* SNTableGrid+System.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -315,21 +335,23 @@
 			isa = PBXBuildFile;
 			fileRef = 8CA44378B789F5979E110A09;
 		};
-		76292A09FD10E76A4A52224B /* ODataKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = B74881DD4B1A684D8FBFF1A2;
-		};
 		78691EDAA70C27B6E68BBF1A /* SNSyncPanel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = D70D32CA3559A9A3C8792783;
 		};
+		793412666161C4D8364F3C26 /* HTTPServerKit.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C18F5FB510B754FFB91AA1D0;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
 		7A872943A4DF7167C961B66A /* SNTextSystem.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 9830E7D38501D4B632E0C8F2;
-		};
-		7D57F0905FE829A58A1E304E /* ODataIncrementalStore.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 7EE0BBC99032BF20C4EA757C;
 		};
 		7E28E0CE996D7FC9B8BE562B /* SNSecretStore.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -371,6 +393,14 @@
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
 		};
+		983A9B16C283238622613EF9 /* ODataService.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 5EF329EE0AC5C26861D860F0;
+		};
+		98E2D0DFD50438CC1D43EBD4 /* ODataSync.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C402DB6787E73681FBB1897B;
+		};
 		9A6307E125239E8CDF7C06EF /* SNMarkdownEscape.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 4FD3C9D01076A426071B18B0;
@@ -393,10 +423,6 @@
 			isa = PBXBuildFile;
 			fileRef = CCF418C8E3E8B505943CEE74;
 		};
-		9EC0C7044DBEB9F5175060FD /* HTTPServerKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = C8761B02854FD9DE60555345;
-		};
 		A0C791EE6C1425407ED789EE /* TopoTextSync.framework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = CA7528909F30CDA2E84D7397;
@@ -416,17 +442,23 @@
 				);
 			};
 		};
+		A22CFC5ACC9E2A3C9AC2E7B3 /* OTelKit.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		A6441CA61901F5571C6D0842 /* ODataKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 6FDC3D4C77DBF3C5A9AD6379;
+		};
 		A750D10E73248D897F89EF77 /* SNAttachment.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 4A9856BDDEBD09A136FC953C;
-		};
-		A765D5919F6D1153C97CABC4 /* ODataSync.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = D66318865ACBC88ED27304E8;
-		};
-		A7AD27339233D295C79FC20B /* ODataService.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 241B510EC28BDE743EED0D31;
 		};
 		ABEE2552CD48F68508F0C985 /* SNUpdater-Apple.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -448,6 +480,20 @@
 			isa = PBXBuildFile;
 			fileRef = C2AE187FD9AE2A0463A85E45;
 		};
+		B29905907C21DA7E28D04754 /* ODataSync.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = C402DB6787E73681FBB1897B;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
+		B72987F932B440543EDE00A8 /* ODataKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 6FDC3D4C77DBF3C5A9AD6379;
+		};
 		B78CA39A9E8041CE0CAC7200 /* SNSecretStore.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = D9DEA82153A953D9E395018F;
@@ -460,57 +506,9 @@
 			isa = PBXBuildFile;
 			fileRef = AB5FEFCF748915C2804B10BC;
 		};
-		BBB25EACB49C6339C40C46E8 /* ODataService.framework in Embed Frameworks */ = {
+		C1F57C7F874F3FB0B3B4D8A0 /* ODataIncrementalStore.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 241B510EC28BDE743EED0D31;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
-		BD336D7658BFF380C8D6A66A /* ODataKit.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = B74881DD4B1A684D8FBFF1A2;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
-		BD80FAE522D9A81FD3498102 /* ODataIncrementalStore.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 7EE0BBC99032BF20C4EA757C;
-		};
-		C129E80DC6589597140BD549 /* ODataKit.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = B74881DD4B1A684D8FBFF1A2;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
-		C1CFFB8843A770D3E02E4C6F /* OTelKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = F6D896F11584BB5C77EEEA7A;
-		};
-		C2D38354D9E9C325EAEB11F1 /* HTTPServerKit.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = C8761B02854FD9DE60555345;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
-		C5597C5B10AF94AFC8915D74 /* ODataService.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 241B510EC28BDE743EED0D31;
+			fileRef = 299860CE18AEE3EA07AA3BEF;
 		};
 		C648B038EBD0941CAE796894 /* SNShareViewController.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -524,6 +522,16 @@
 			isa = PBXBuildFile;
 			fileRef = F311510A21AD054DB71F2A08;
 		};
+		CA89212EB0B4E1FE4A19961F /* ODataIncrementalStore.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 299860CE18AEE3EA07AA3BEF;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
+		};
 		CAE1031790E8BE98EA099DDB /* SNShareInbox.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3C3250BED524529DBA42C2B7;
@@ -531,6 +539,16 @@
 		CC4B057F37426811B1569081 /* SNPeers.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = EC831ABEA7538032BF787133;
+		};
+		CEAC4D57BF6AB174C3D7E750 /* OTelKit.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
 		};
 		CEC41A05EBF780F532ACBE1E /* SNServer.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -543,10 +561,6 @@
 		D2A1E2BABE67FC85240D71EB /* SNFolder.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 278E9CBDE74E90B175B6FD66;
-		};
-		D4E8EF4A99F399120A104B1D /* OTelKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = F6D896F11584BB5C77EEEA7A;
 		};
 		D5C2667A85764D80A464DAFB /* SNiOSSelfTest.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -570,19 +584,15 @@
 			isa = PBXBuildFile;
 			fileRef = 5E12708819DD87E9D16589AF;
 		};
-		DA4BE8F58CFE299DB944A8A1 /* ODataService.framework in Embed Frameworks */ = {
+		DE1A7B9ADD29C28164B125B0 /* ODataService.xcframework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 241B510EC28BDE743EED0D31;
+			fileRef = 5EF329EE0AC5C26861D860F0;
 			settings = {
 				ATTRIBUTES = (
 					CodeSignOnCopy,
 					RemoveHeadersOnCopy,
 				);
 			};
-		};
-		E05ABAA287682CBC6906D83E /* ODataSync.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = D66318865ACBC88ED27304E8;
 		};
 		E1C9E59B512340C214F1B7DB /* UpdatePanel.xib in Resources */ = {
 			isa = PBXBuildFile;
@@ -592,13 +602,9 @@
 			isa = PBXBuildFile;
 			fileRef = CDAACC1B7695C7D881D1F53C;
 		};
-		E717F2ED317246A1601D506D /* SNSmartFilter.m in Sources */ = {
+		E6E3F033AAFDBF92018A64FF /* Sparkle.xcframework in Embed Frameworks */ = {
 			isa = PBXBuildFile;
-			fileRef = 97D0F5F29F835BA15429813C;
-		};
-		E99FA8F062284DC3A9F31691 /* ODataIncrementalStore.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 7EE0BBC99032BF20C4EA757C;
+			fileRef = E5625502775571549AF58D68;
 			settings = {
 				ATTRIBUTES = (
 					CodeSignOnCopy,
@@ -606,9 +612,13 @@
 				);
 			};
 		};
-		EC4B4E29B1ACE1EFA07D7611 /* ODataKit.framework in Frameworks */ = {
+		E717F2ED317246A1601D506D /* SNSmartFilter.m in Sources */ = {
 			isa = PBXBuildFile;
-			fileRef = B74881DD4B1A684D8FBFF1A2;
+			fileRef = 97D0F5F29F835BA15429813C;
+		};
+		EA1671F84C8F77C05EBEB838 /* ODataService.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 5EF329EE0AC5C26861D860F0;
 		};
 		ED73A187727B64A1E926DC28 /* SimpleNotes.xcdatamodeld in Sources */ = {
 			isa = PBXBuildFile;
@@ -622,6 +632,10 @@
 			isa = PBXBuildFile;
 			fileRef = 088AFD2695E6A139D1C77D40;
 		};
+		EFE35D39429C00D7DFA2C872 /* OTelKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
+		};
 		F48063A33E82F7318AC1D2FF /* SNModel.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
@@ -634,16 +648,6 @@
 			isa = PBXBuildFile;
 			fileRef = A498AC792A7B7675377DED03;
 		};
-		F8B436EFF3F013351B5AC588 /* OTelKit.framework in Embed Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = F6D896F11584BB5C77EEEA7A;
-			settings = {
-				ATTRIBUTES = (
-					CodeSignOnCopy,
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
 		F9C5540A3B0482B8474FBF95 /* NotesWindow.xib in Resources */ = {
 			isa = PBXBuildFile;
 			fileRef = 824A3193518B99D32009123E;
@@ -652,13 +656,19 @@
 			isa = PBXBuildFile;
 			fileRef = 01882B6E7BB2204C11C41528;
 		};
-		FD65BE028659EA90A14F2E10 /* HTTPServerKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = C8761B02854FD9DE60555345;
-		};
 		FD8857A760C31A14282BD27A /* SNTableGrid+System.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 7B4D0C1B7C0CC0E7BCA52B3B;
+		};
+		FECA0AFD7C830A0AAC94EAC2 /* ODataKit.xcframework in Embed Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 6FDC3D4C77DBF3C5A9AD6379;
+			settings = {
+				ATTRIBUTES = (
+					CodeSignOnCopy,
+					RemoveHeadersOnCopy,
+				);
+			};
 		};
 /* End PBXBuildFile section */
 
@@ -670,47 +680,12 @@
 			remoteGlobalIDString = 515993F8858B85D4E55083DF;
 			remoteInfo = TopoText;
 		};
-		0D114050676A7525ED524027 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = 5C30F5597E6C2517354354B7;
-			remoteInfo = ODataSync;
-		};
 		10E3C7BEBFA0D177A54915E8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 629BB2F3571A2907E169A46B;
 			proxyType = 2;
 			remoteGlobalIDString = A265821E2EAD27509A38D869;
 			remoteInfo = TopoTextSync;
-		};
-		1B3E56EAD31118280D80F595 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = AA0000000000000000000003;
-			remoteInfo = ODataIncrementalStore;
-		};
-		22E870709529A200DBDDE6A0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = D7BA1954D987FDFF19FEE609;
-			remoteInfo = OTelKit;
-		};
-		2A4CA7BB66C1FFDE0EDC3425 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 4CBB61F9CEEAF8A9C5A1F7CF;
-			remoteInfo = OTelKit;
-		};
-		38ED2EC3A90D8317E66323AF /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = AA0000000000000000000007;
-			remoteInfo = ODataKit;
 		};
 		4169A0663204740D94F71BFD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -719,54 +694,12 @@
 			remoteGlobalIDString = 48E5481FBF59DE9D1AB7998F;
 			remoteInfo = TopoTextSync;
 		};
-		4F020F64E7176A7EDF229D74 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 9828CC078A88AE7706B232C7;
-			remoteInfo = HTTPServerKit;
-		};
 		538863D02917102D5EB4E153 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 611ED91EE83D5211DCC24EAE;
 			proxyType = 1;
 			remoteGlobalIDString = 956C2A5864B53EB575F1DBF7;
 			remoteInfo = "SimpleNotes-Share";
-		};
-		5A684DB04D60C58FBB286299 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 4CBB61F9CEEAF8A9C5A1F7CF;
-			remoteInfo = OTelKit;
-		};
-		61D3456FF1CD485E985F1A44 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000002;
-			remoteInfo = ODataIncrementalStore;
-		};
-		76F57AE6239DC8EDAFD5D900 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = AA000000000000000000000B;
-			remoteInfo = ODataService;
-		};
-		7B45FFD2805783A73E5A1EB4 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000006;
-			remoteInfo = ODataKit;
-		};
-		7D88EE98F144F69ED9C614D0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 7F1CE30E03D845ACEF6B15CD;
-			remoteInfo = ODataSync;
 		};
 		7E6D8D724031AAB7437F89B6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -775,47 +708,12 @@
 			remoteGlobalIDString = C839008E10C63F4A3A7690DB;
 			remoteInfo = TopoText;
 		};
-		7F36A11175D1677EC363668A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA000000000000000000000A;
-			remoteInfo = ODataService;
-		};
-		85466791B00BE06D3AD206DC /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000006;
-			remoteInfo = ODataKit;
-		};
-		869D1E958D33921AE2B6AF3C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 4CBB61F9CEEAF8A9C5A1F7CF;
-			remoteInfo = OTelKit;
-		};
-		8E2D834C09B19C63F587F31E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000006;
-			remoteInfo = ODataKit;
-		};
 		90BC1BDCC2DE397C76675977 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 629BB2F3571A2907E169A46B;
 			proxyType = 1;
 			remoteGlobalIDString = C839008E10C63F4A3A7690DB;
 			remoteInfo = TopoText;
-		};
-		9170AD3EE81BCD396CFCEAD8 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000002;
-			remoteInfo = ODataIncrementalStore;
 		};
 		9256369D3E7A38DDABF873EF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -824,13 +722,6 @@
 			remoteGlobalIDString = 48E5481FBF59DE9D1AB7998F;
 			remoteInfo = TopoTextSync;
 		};
-		973AA2AE52F3C2E8466BD168 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000002;
-			remoteInfo = ODataIncrementalStore;
-		};
 		9BE2F798C898D17FABF5F7C1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 629BB2F3571A2907E169A46B;
@@ -838,61 +729,12 @@
 			remoteGlobalIDString = 48E5481FBF59DE9D1AB7998F;
 			remoteInfo = TopoTextSync;
 		};
-		C0A1C3298291150D396607F6 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA000000000000000000000A;
-			remoteInfo = ODataService;
-		};
-		C754EA3F959E1741D4709F16 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 9828CC078A88AE7706B232C7;
-			remoteInfo = HTTPServerKit;
-		};
-		CDDBE2F0D71976885DA055CF /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 7F1CE30E03D845ACEF6B15CD;
-			remoteInfo = ODataSync;
-		};
-		D84D25F47F69A816DA6107BC /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = AA000000000000000000000A;
-			remoteInfo = ODataService;
-		};
-		DB093D143F664C256156FDC0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 2;
-			remoteGlobalIDString = A21CEFC6F685318B7798AD60;
-			remoteInfo = HTTPServerKit;
-		};
 		E664581922005B86C765B3C4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 629BB2F3571A2907E169A46B;
 			proxyType = 1;
 			remoteGlobalIDString = C839008E10C63F4A3A7690DB;
 			remoteInfo = TopoText;
-		};
-		E778D3EB7789CE422DCFE5D5 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 7F1CE30E03D845ACEF6B15CD;
-			remoteInfo = ODataSync;
-		};
-		F5E4FDD5850D95531B238A1E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = D3C1318F32564720F1410E27;
-			proxyType = 1;
-			remoteGlobalIDString = 9828CC078A88AE7706B232C7;
-			remoteInfo = HTTPServerKit;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -903,12 +745,12 @@
 			files = (
 				15644450FFAE28D91904A264,
 				D5CE04A5456960862B163C5B,
-				C129E80DC6589597140BD549,
-				F8B436EFF3F013351B5AC588,
-				2FCE28DC091B3E0F5E4D2B2F,
-				C2D38354D9E9C325EAEB11F1,
-				DA4BE8F58CFE299DB944A8A1,
-				5CEDA6CB41F6DE6588F05EDD,
+				2B79549AC4A8529E6616DEAA,
+				A22CFC5ACC9E2A3C9AC2E7B3,
+				CA89212EB0B4E1FE4A19961F,
+				793412666161C4D8364F3C26,
+				DE1A7B9ADD29C28164B125B0,
+				B29905907C21DA7E28D04754,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			dstPath = "";
@@ -932,12 +774,13 @@
 			files = (
 				9BD82C099498A265EC268D52,
 				A0C791EE6C1425407ED789EE,
-				BD336D7658BFF380C8D6A66A,
-				46A498C888CEA38E5FDEC855,
-				E99FA8F062284DC3A9F31691,
-				3EA0BA3B6EE82342B482DD2F,
-				BBB25EACB49C6339C40C46E8,
-				34D439D972927301D70C87E5,
+				FECA0AFD7C830A0AAC94EAC2,
+				CEAC4D57BF6AB174C3D7E750,
+				3BBDAD915B25BA3A5B7A72EC,
+				6938DD899E8E0CA212F8EE73,
+				0825F06F9303D1B7801DBFAC,
+				2D6B0CE7748874A3C8043027,
+				E6E3F033AAFDBF92018A64FF,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			dstPath = "";
@@ -1135,6 +978,20 @@
 			path = iOS/Assets.xcassets;
 			sourceTree = "<group>";
 			name = Assets.xcassets;
+		};
+		299860CE18AEE3EA07AA3BEF /* ODataIncrementalStore.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataIncrementalStore.xcframework;
+			path = ../../.deps/ODataIncrementalStore.xcframework;
+			sourceTree = "<group>";
+		};
+		2BA4898D4DC3BDA0E3CAE83B /* OTelKit.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = OTelKit.xcframework;
+			path = ../../.deps/OTelKit.xcframework;
+			sourceTree = "<group>";
 		};
 		2E5390B357C934B4215EEB53 /* SimpleNotes.entitlements */ = {
 			isa = PBXFileReference;
@@ -1350,6 +1207,13 @@
 			sourceTree = "<group>";
 			name = Debug.xcconfig;
 		};
+		5EF329EE0AC5C26861D860F0 /* ODataService.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataService.xcframework;
+			path = ../../.deps/ODataService.xcframework;
+			sourceTree = "<group>";
+		};
 		5F63153E1910A7B6931749CF /* SNUpdater.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1412,6 +1276,13 @@
 			path = "iOS/SNTableGrid+System.m";
 			sourceTree = "<group>";
 			name = "SNTableGrid+System.m";
+		};
+		6FDC3D4C77DBF3C5A9AD6379 /* ODataKit.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataKit.xcframework;
+			path = ../../.deps/ODataKit.xcframework;
+			sourceTree = "<group>";
 		};
 		719BCFED3ECD01936BB14F74 /* SNCheck.h */ = {
 			isa = PBXFileReference;
@@ -1727,6 +1598,20 @@
 			sourceTree = "<group>";
 			name = SNShareViewController.m;
 		};
+		C18F5FB510B754FFB91AA1D0 /* HTTPServerKit.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = HTTPServerKit.xcframework;
+			path = ../../.deps/HTTPServerKit.xcframework;
+			sourceTree = "<group>";
+		};
+		C402DB6787E73681FBB1897B /* ODataSync.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataSync.xcframework;
+			path = ../../.deps/ODataSync.xcframework;
+			sourceTree = "<group>";
+		};
 		C44F8D8D21AA72A450BB869A /* Release.xcconfig */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text.xcconfig;
@@ -1754,13 +1639,6 @@
 			path = AppKit/SNPeersWindow.m;
 			sourceTree = "<group>";
 			name = SNPeersWindow.m;
-		};
-		D3C1318F32564720F1410E27 /* ODataKit.xcodeproj */ = {
-			isa = PBXFileReference;
-			lastKnownFileType = "wrapper.pb-project";
-			name = ODataKit.xcodeproj;
-			path = ../../../ODataKit/ODataKit.xcodeproj;
-			sourceTree = "<group>";
 		};
 		D70D32CA3559A9A3C8792783 /* SNSyncPanel.m */ = {
 			isa = PBXFileReference;
@@ -1831,6 +1709,13 @@
 			path = Shared/SNSignIn.m;
 			sourceTree = "<group>";
 			name = SNSignIn.m;
+		};
+		E5625502775571549AF58D68 /* Sparkle.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = Sparkle.xcframework;
+			path = ../../.deps/Sparkle.xcframework;
+			sourceTree = "<group>";
 		};
 		E7A8EDB5A94723692AC7105C /* SNWatchdog.h */ = {
 			isa = PBXFileReference;
@@ -1943,12 +1828,12 @@
 			files = (
 				96CBB5008C014E9938A9678B,
 				8152A672A522F7404E26785B,
-				76292A09FD10E76A4A52224B,
-				556FA39ACD65B0E3991FDA0D,
-				1A5DBCF3A5F0B94D4B9873E1,
-				9EC0C7044DBEB9F5175060FD,
-				0BBE152BCED95866E67727DB,
-				A765D5919F6D1153C97CABC4,
+				A6441CA61901F5571C6D0842,
+				195D638B78FA89D161F97901,
+				421CEBE89A51922B490D058C,
+				27AA643C2DCD4C4A14934583,
+				70C8FF607AEAFE744F415DD7,
+				14C97BB4D31E28595066D423,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1958,13 +1843,13 @@
 			files = (
 				69D78786762AB87900DE533B,
 				2A21042BED8F5185FAAFA603,
-				2604E5E45D970E74E74A46A4,
-				C1CFFB8843A770D3E02E4C6F,
-				BD80FAE522D9A81FD3498102,
-				FD65BE028659EA90A14F2E10,
-				A7AD27339233D295C79FC20B,
-				E05ABAA287682CBC6906D83E,
-				0D4213282FD31E596CE7FFE0,
+				7299F174FAD2EE43020C8857,
+				48B2A367E9372DB4FB09A26E,
+				08DD37C9B637537734069556,
+				1F81AFB0DC99B388652487A0,
+				EA1671F84C8F77C05EBEB838,
+				396B00AD9421349CD7F29F4D,
+				4B31525A5E2D71FBB22E979F,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1974,12 +1859,12 @@
 			files = (
 				AFA70D614CF3E8DDF203D508,
 				27E2D505D64F817DCADDACE8,
-				EC4B4E29B1ACE1EFA07D7611,
-				D4E8EF4A99F399120A104B1D,
-				7D57F0905FE829A58A1E304E,
-				47EDF0F457EC51A971D00ECA,
-				C5597C5B10AF94AFC8915D74,
-				4D005DD96A8C3606DA4AEBE0,
+				B72987F932B440543EDE00A8,
+				EFE35D39429C00D7DFA2C872,
+				C1F57C7F874F3FB0B3B4D8A0,
+				65947DE6C20A3BEA62D02889,
+				983A9B16C283238622613EF9,
+				98E2D0DFD50438CC1D43EBD4,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2037,19 +1922,6 @@
 			);
 			sourceTree = "<group>";
 			name = AppKit;
-		};
-		1670FE67EBF7BB34AE13B64C /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				B74881DD4B1A684D8FBFF1A2,
-				7EE0BBC99032BF20C4EA757C,
-				241B510EC28BDE743EED0D31,
-				F6D896F11584BB5C77EEEA7A,
-				C8761B02854FD9DE60555345,
-				D66318865ACBC88ED27304E8,
-			);
-			name = Products;
-			sourceTree = "<group>";
 		};
 		270F94CE351A9162454E6387 /* Products */ = {
 			isa = PBXGroup;
@@ -2129,10 +2001,25 @@
 				B98D5BB73B229DE9BAE90643,
 				EBA105A978104A9036CBD971,
 				B07A63D0E46268386470A5F6,
+				9A82BA0B3CE79A41E1704E74,
 				270F94CE351A9162454E6387,
 			);
 			sourceTree = "<group>";
 			name = SimpleNotes;
+		};
+		9A82BA0B3CE79A41E1704E74 /* Dependencies */ = {
+			isa = PBXGroup;
+			children = (
+				6FDC3D4C77DBF3C5A9AD6379,
+				2BA4898D4DC3BDA0E3CAE83B,
+				299860CE18AEE3EA07AA3BEF,
+				C18F5FB510B754FFB91AA1D0,
+				5EF329EE0AC5C26861D860F0,
+				C402DB6787E73681FBB1897B,
+				E5625502775571549AF58D68,
+			);
+			sourceTree = "<group>";
+			name = Dependencies;
 		};
 		A641F38FB74A5B9576F70569 /* iOS */ = {
 			isa = PBXGroup;
@@ -2173,7 +2060,6 @@
 			isa = PBXGroup;
 			children = (
 				629BB2F3571A2907E169A46B,
-				D3C1318F32564720F1410E27,
 			);
 			sourceTree = "<group>";
 			name = Libraries;
@@ -2239,20 +2125,11 @@
 			dependencies = (
 				D51D79449364815C4513F1A3,
 				61C6BA84E6BD608FD35EDC5A,
-				24A93B5C6FFE93497D8D5ADE,
-				4D53C57E14BBFE358A31C729,
-				75A10AB27030A74E8D54D077,
-				16A830FA541DC2268E3FE67A,
-				0B9FE3479B4E2D08E91ACA2D,
-				FD4F874285610AC8DF4ED559,
 			);
 			name = SimpleNotes;
 			productName = SimpleNotes;
 			productReference = 11727BCA5E3F352ACF03F26A;
 			productType = "com.apple.product-type.application";
-			packageProductDependencies = (
-				F6D89E1BC574A283AA026CF0,
-			);
 		};
 		7FF68BA089EE6976DC607A79 /* SimpleNotes-iOS */ = {
 			isa = PBXNativeTarget;
@@ -2269,12 +2146,6 @@
 			dependencies = (
 				E48BF2604830FDCB03EF1EAC,
 				8BB549A1DA7C4A59C50F8F72,
-				D0B6BABA9042575F2020794E,
-				8C00DA356E7762D4E901F999,
-				41A8D79DE93B296AB4435FB5,
-				2A6B070CFDC89260329D4135,
-				9E6187B7DA4E4B840CA1270D,
-				D7E7257CD3EC2B97D60BC961,
 				A3DB85430AE55A219ADEE016,
 			);
 			name = "SimpleNotes-iOS";
@@ -2309,12 +2180,6 @@
 			dependencies = (
 				1892045DF2B1985B9CCA3852,
 				111E81F48953B2A28EE544F7,
-				0492D9C8BF825489648E4681,
-				4B1DFC971D4129A0A7D735BE,
-				FD36D5D13F5B74A1F95D9EA1,
-				1DF22C921E9CE8D87E0A7BB5,
-				E40C262CAF04B588C2F7F8BE,
-				D523D589B78CB5C3496ABD1A,
 			);
 			name = "simplenotes-server";
 			productName = "simplenotes-server";
@@ -2346,10 +2211,6 @@
 					ProductGroup = 33F79B14ADDD159A6F20B452;
 					ProjectRef = 629BB2F3571A2907E169A46B;
 				},
-				{
-					ProductGroup = 1670FE67EBF7BB34AE13B64C;
-					ProjectRef = D3C1318F32564720F1410E27;
-				},
 			);
 			projectRoot = "";
 			targets = (
@@ -2358,34 +2219,10 @@
 				956C2A5864B53EB575F1DBF7,
 				AC50AF5AA7D21F87D918ECF4,
 			);
-			packageReferences = (
-				40211B9E4A779CA8B62E2990,
-			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		241B510EC28BDE743EED0D31 /* ODataService.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataService.framework;
-			remoteRef = 76F57AE6239DC8EDAFD5D900;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		7EE0BBC99032BF20C4EA757C /* ODataIncrementalStore.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataIncrementalStore.framework;
-			remoteRef = 1B3E56EAD31118280D80F595;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		B74881DD4B1A684D8FBFF1A2 /* ODataKit.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataKit.framework;
-			remoteRef = 38ED2EC3A90D8317E66323AF;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
 		C2AE187FD9AE2A0463A85E45 /* TopoText.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
@@ -2393,32 +2230,11 @@
 			remoteRef = 04AD4626143C8E0C2ECDD08C;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		C8761B02854FD9DE60555345 /* HTTPServerKit.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = HTTPServerKit.framework;
-			remoteRef = DB093D143F664C256156FDC0;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
 		CA7528909F30CDA2E84D7397 /* TopoTextSync.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
 			path = TopoTextSync.framework;
 			remoteRef = 10E3C7BEBFA0D177A54915E8;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		D66318865ACBC88ED27304E8 /* ODataSync.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataSync.framework;
-			remoteRef = 0D114050676A7525ED524027;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		F6D896F11584BB5C77EEEA7A /* OTelKit.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = OTelKit.framework;
-			remoteRef = 22E870709529A200DBDDE6A0;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -2568,130 +2384,40 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		0492D9C8BF825489648E4681 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataKit;
-			targetProxy = 7B45FFD2805783A73E5A1EB4;
-		};
-		0B9FE3479B4E2D08E91ACA2D /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataService;
-			targetProxy = D84D25F47F69A816DA6107BC;
-		};
 		111E81F48953B2A28EE544F7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoTextSync;
 			targetProxy = 4169A0663204740D94F71BFD;
-		};
-		16A830FA541DC2268E3FE67A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = HTTPServerKit;
-			targetProxy = 4F020F64E7176A7EDF229D74;
 		};
 		1892045DF2B1985B9CCA3852 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoText;
 			targetProxy = E664581922005B86C765B3C4;
 		};
-		1DF22C921E9CE8D87E0A7BB5 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = HTTPServerKit;
-			targetProxy = F5E4FDD5850D95531B238A1E;
-		};
-		24A93B5C6FFE93497D8D5ADE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataKit;
-			targetProxy = 85466791B00BE06D3AD206DC;
-		};
-		2A6B070CFDC89260329D4135 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = HTTPServerKit;
-			targetProxy = C754EA3F959E1741D4709F16;
-		};
-		41A8D79DE93B296AB4435FB5 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataIncrementalStore;
-			targetProxy = 9170AD3EE81BCD396CFCEAD8;
-		};
-		4B1DFC971D4129A0A7D735BE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = OTelKit;
-			targetProxy = 2A4CA7BB66C1FFDE0EDC3425;
-		};
-		4D53C57E14BBFE358A31C729 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = OTelKit;
-			targetProxy = 5A684DB04D60C58FBB286299;
-		};
 		61C6BA84E6BD608FD35EDC5A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoTextSync;
 			targetProxy = 9BE2F798C898D17FABF5F7C1;
-		};
-		75A10AB27030A74E8D54D077 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataIncrementalStore;
-			targetProxy = 61D3456FF1CD485E985F1A44;
 		};
 		8BB549A1DA7C4A59C50F8F72 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoTextSync;
 			targetProxy = 9256369D3E7A38DDABF873EF;
 		};
-		8C00DA356E7762D4E901F999 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = OTelKit;
-			targetProxy = 869D1E958D33921AE2B6AF3C;
-		};
-		9E6187B7DA4E4B840CA1270D /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataService;
-			targetProxy = C0A1C3298291150D396607F6;
-		};
 		A3DB85430AE55A219ADEE016 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 956C2A5864B53EB575F1DBF7;
 			targetProxy = 538863D02917102D5EB4E153;
-		};
-		D0B6BABA9042575F2020794E /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataKit;
-			targetProxy = 8E2D834C09B19C63F587F31E;
 		};
 		D51D79449364815C4513F1A3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoText;
 			targetProxy = 90BC1BDCC2DE397C76675977;
 		};
-		D523D589B78CB5C3496ABD1A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataSync;
-			targetProxy = CDDBE2F0D71976885DA055CF;
-		};
-		D7E7257CD3EC2B97D60BC961 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataSync;
-			targetProxy = E778D3EB7789CE422DCFE5D5;
-		};
-		E40C262CAF04B588C2F7F8BE /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataService;
-			targetProxy = 7F36A11175D1677EC363668A;
-		};
 		E48BF2604830FDCB03EF1EAC /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TopoText;
 			targetProxy = 7E6D8D724031AAB7437F89B6;
-		};
-		FD36D5D13F5B74A1F95D9EA1 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataIncrementalStore;
-			targetProxy = 973AA2AE52F3C2E8466BD168;
-		};
-		FD4F874285610AC8DF4ED559 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataSync;
-			targetProxy = 7D88EE98F144F69ED9C614D0;
 		};
 /* End PBXTargetDependency section */
 
@@ -2837,25 +2563,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		40211B9E4A779CA8B62E2990 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = exactVersion;
-				version = 2.10.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		F6D89E1BC574A283AA026CF0 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 40211B9E4A779CA8B62E2990;
-			productName = Sparkle;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCVersionGroup section */
 		571D7F2A670DB7D88A910D92 /* SimpleNotes.xcdatamodeld */ = {

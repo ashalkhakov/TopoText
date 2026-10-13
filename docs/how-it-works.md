@@ -122,5 +122,5 @@ still reads format 1, so a text stored before is read and written anew.
 | `Tests/` | Unit tests, the convergence fuzz, ODataSync end to end |
 | `Examples/SimpleNotes/` | The notes app and its server |
 | `Scripts/xcodeproj.py` | The Xcode projects and workspace, written |
-| `Scripts/prepare-appdir.sh`, `package-appimage.sh`, `appimage/` | SimpleNotes' AppImage |
+| `.github/release/appimage.conf`, `Scripts/appimage/` | SimpleNotes' AppImage: what it carries (gnustep-release-actions' `appimage` makes it), its desktop entry and AppStream file |
 | `Docker/server.Dockerfile`, `collect-server.sh` | The server's image, FROM scratch |

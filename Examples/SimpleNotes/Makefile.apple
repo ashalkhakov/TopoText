@@ -1,21 +1,25 @@
 # SimpleNotes on macOS without Xcode's project: the server and the tests,
-# with clang, Xcode's momc and xctest, over TopoText's libraries (make at
-# the root) and ODataKit's frameworks (make odatakit there). The apps are
-# the Xcode project's (TopoText.xcworkspace).
+# with clang, Xcode's momc and xctest, over TopoText's libraries (built at
+# the root) and ODataKit's frameworks (its XCFrameworks in ../../.deps).
+# The apps are the Xcode project's (TopoText.xcworkspace; the root's
+# Makefile.apple builds them).
 #
-#   make            build/simplenotes-server (and SimpleNotes.momd beside it)
-#   make test       the tests
-#   make check      the tests, and two devices against the server over HTTP
+#   make -f Makefile.apple          build/simplenotes-server (and SimpleNotes.momd beside it)
+#   make -f Makefile.apple test     the tests
+#   make -f Makefile.apple check    the tests, and two devices against the server over HTTP
 
 ROOT = ../..
+comma = ,
 BUILD ?= build
-ODATAKIT_FRAMEWORKS ?= $(firstword $(wildcard $(ROOT)/build/ODataKit/Build/Products/Debug))
+# ODataKit's frameworks, each from its XCFramework's macOS slice.
+ODATAKIT = ODataKit OTelKit ODataIncrementalStore HTTPServerKit ODataService ODataSync
+ODATAKIT_DIRS = $(foreach f,$(ODATAKIT),$(abspath $(ROOT)/.deps/$(f).xcframework/macos-arm64_x86_64))
 TOPOTEXT_BUILD = $(abspath $(ROOT)/build)
 CC = clang
 FLAGS = -fobjc-arc -fblocks -g -Wall -Wextra -Wno-unused-parameter -mmacosx-version-min=14.0
-INC = -IShared -IServer -I$(GENERATED) -I$(ROOT)/Sources/TopoText/include -I$(ROOT)/Sources/TopoTextSync/include -F$(ODATAKIT_FRAMEWORKS)
+INC = -IShared -IServer -I$(GENERATED) -I$(ROOT)/Sources/TopoText/include -I$(ROOT)/Sources/TopoTextSync/include $(addprefix -F,$(ODATAKIT_DIRS))
 LIBS = -L$(TOPOTEXT_BUILD) -lTopoTextSync -lTopoText -Wl,-rpath,$(TOPOTEXT_BUILD) \
-	-F$(ODATAKIT_FRAMEWORKS) -Wl,-rpath,$(abspath $(ODATAKIT_FRAMEWORKS)) \
+	$(addprefix -F,$(ODATAKIT_DIRS)) $(addprefix -Wl$(comma)-rpath$(comma),$(ODATAKIT_DIRS)) \
 	-framework ODataSync -framework ODataService -framework HTTPServerKit -framework ODataIncrementalStore \
 	-framework OTelKit -framework ODataKit -framework CoreData -framework Foundation -lz
 # The model's classes' properties, generated as Xcode generates them.
@@ -35,8 +39,7 @@ XCTEST_LIBS = $(DEVELOPER)/Platforms/MacOSX.platform/Developer/usr/lib
 all: $(BUILD)/simplenotes-server $(BUILD)/SimpleNotes.momd
 
 libraries:
-	@test -n "$(ODATAKIT_FRAMEWORKS)" || { echo "no ODataKit frameworks: make odatakit at the root"; exit 1; }
-	$(MAKE) -C $(ROOT) -f Makefile.apple
+	$(MAKE) -C $(ROOT) -f Makefile.apple libraries
 
 $(BUILD)/SimpleNotes.momd: $(MODEL_FILES)
 	@mkdir -p $(BUILD)

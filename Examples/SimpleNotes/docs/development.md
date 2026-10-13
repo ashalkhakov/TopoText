@@ -5,8 +5,9 @@ Running the apps from source, the checks, and how releases are made.
 ## The apps, from source
 
 
-- **macOS**: open `TopoText.xcworkspace` (ODataKit checked out beside this
-  repository, at `../ODataKit`) and run the **SimpleNotes** scheme. Then
+- **macOS**: open `TopoText.xcworkspace` (with ODataKit's XCFrameworks and
+  Sparkle's in `.deps/`: [building](../../../docs/building.md)) and run the
+  **SimpleNotes** scheme. Then
   choose **SimpleNotes > Server…** and give `http://127.0.0.1:8080/odata/`.
 - **iPhone or iPad**: the **SimpleNotes-iOS** scheme. Set the address with
   the server button at the top left. The simulator reaches the Mac at
@@ -27,10 +28,10 @@ store of its own: `SimpleNotes -SNStore /tmp/second.sqlite`.
 
 ## Releases
 
-Tag a version (`git tag v0.1.0 && git push --tags`), and the workflows build
-and attach:
+Tag a version (`git tag v0.1.0 && git push --tags`), and `build.yml` builds
+and attaches:
 
-- **macOS** (`release.yml`): `SimpleNotes-macOS-<version>.zip`, universal.
+- **macOS**: `SimpleNotes-macOS-<version>.zip`, universal.
   It is signed with a Developer ID and notarized when the `production`
   environment has the secrets `MACOS_CERTIFICATE` (a base64 .p12),
   `MACOS_CERTIFICATE_PASSWORD`, `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID` and
@@ -41,7 +42,7 @@ and attach:
   signed with the EdDSA key in the `SPARKLE_PRIVATE_KEY` secret, whose
   public half is `SUPublicEDKey` in `AppKit/Info.plist`. Without the
   secret there is no appcast, and the Mac app isn't offered the release.
-- **Linux** (`release.yml`): `SimpleNotes-<version>-x86_64.AppImage`,
+- **Linux**: `SimpleNotes-<version>-x86_64.AppImage`,
   built on Ubuntu 22.04 so it runs there and on anything newer. It is
   checked on a clean Ubuntu: its own server is started and seeded, and the
   app's self-test runs against it.
@@ -50,16 +51,16 @@ and attach:
   AppImageUpdate, Gear Lever and the like update it by the blocks that
   changed. A pre-release's carries none: "latest" would offer it the
   release before it.
-- **iOS** (`release.yml`): `SimpleNotes-iOS-<version>-unsigned.ipa`, to be
+- **iOS**: `SimpleNotes-iOS-<version>-unsigned.ipa`, to be
   signed for TestFlight and the App Store once there is an account, and a
   simulator build. The simulator build must pass its self-test.
-- **The server's image** (`docker.yml`): pushed to
+- **The server's image**: pushed to
   `ghcr.io/ashalkhakov/simplenotes-server:<version>` and `:latest`, for
   amd64 and arm64. Every push builds it and checks it on SQLite and
   PostgreSQL.
 
-Run `release.yml` by hand to build any branch's packages as artifacts,
-without releasing.
+Every push builds the same packages as artifacts (unsigned, kept two
+weeks) without releasing; `build.yml` run by hand with a tag releases that tag.
 
 ## Checked
 

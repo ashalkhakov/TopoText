@@ -18,7 +18,10 @@ SimpleNotesTests_NEEDS_GUI = yes
 SimpleNotesTests_OBJC_FILES = SNNotesTests.m SNTextBindingTests.m SNMigrationTests.m SNSignInTests.m SNTransferTests.m ../Server/SNNotebooks.m ../Server/SNVersions.m ../Shared/SNSignIn.m ../Shared/SNPeers.m ../AppKit/SNSecretStore.m \
 	../Shared/SNModel.m ../Shared/SNNote.m ../Shared/SNFolder.m ../Shared/SNAttachment.m ../Shared/SNNotes.m ../Shared/SNSmartFilter.m ../Shared/SNResolver.m ../Shared/SNRichText.m ../Shared/SNMigration.m \
 	../Shared/SNTableGrid.m ../Shared/SNMarkdown.m ../Shared/SNMarkdownEscape.m ../Shared/SNShares.m ../Shared/SNZip.m ../Shared/SNTransfer.m ../AppKit/SNTextSystem.m ../AppKit/SNTableGrid+System.m
-SimpleNotesTests_INCLUDE_DIRS = -I../Shared -I../Server
+# TopoText's libraries from the tree they are built in.
+TT_ROOT = $(CURDIR)/../../..
+SimpleNotesTests_INCLUDE_DIRS = -I../Shared -I../Server -I$(TT_ROOT)/Sources/TopoText/include -I$(TT_ROOT)/Sources/TopoTextSync/include
+SimpleNotesTests_LIB_DIRS = -L$(TT_ROOT)/obj
 SimpleNotesTests_OBJCFLAGS = -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 -fconstant-string-class=NSConstantString \
 	-fobjc-exceptions -Wall -Wno-unused-parameter
 SimpleNotesTests_BUNDLE_LIBS += -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
@@ -32,7 +35,7 @@ XVFB := $(shell command -v xvfb-run >/dev/null 2>&1 && [ -z "$$DISPLAY" ] && ech
 
 .PHONY: run-tests
 run-tests: all
-	$(XVFB) $(XCTEST) SimpleNotesTests.bundle
+	LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" $(XVFB) $(XCTEST) SimpleNotesTests.bundle
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/bundle.make

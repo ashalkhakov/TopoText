@@ -28,17 +28,21 @@
 			isa = PBXBuildFile;
 			fileRef = 2EE2740DC254B7BD3665216B;
 		};
-		4FDA7364E48D4FAAABE03EA0 /* ODataKit.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 347C854B35A734E70F2656EA;
-		};
 		521092704420AC7F8C36E5E4 /* TopoText.framework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 515993F8858B85D4E55083DF;
 		};
+		5E00C493E0CF4B7B95CC46AA /* ODataSync.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 8B287CB36E9F72402B464525;
+		};
 		90834DB971D67B6CDEA6CC0B /* TTCoding.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = D0B40C2B20EF04636BE16429;
+		};
+		91C9896CB3DCA1049BBD2B6C /* ODataKit.xcframework in Frameworks */ = {
+			isa = PBXBuildFile;
+			fileRef = 2F50DA6F54A030CAE23E163E;
 		};
 		94EB7AB6D891AF9CCF722377 /* TTSyncResolver.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -47,10 +51,6 @@
 		DFD300DA2EDA848287F99541 /* TopoText.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 2F53ECBD97F866E69A41DA12;
-		};
-		EEEE90F466D8DC52BEDB7353 /* ODataSync.framework in Frameworks */ = {
-			isa = PBXBuildFile;
-			fileRef = 52542F566BF9256A1C2190AA;
 		};
 		FC18911D831273A760AF5569 /* TopoTextSync.h in Headers */ = {
 			isa = PBXBuildFile;
@@ -64,40 +64,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		4762AFE7E1D61620D5BEB19C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 747CA6429987EEC4598737C9;
-			proxyType = 1;
-			remoteGlobalIDString = AA0000000000000000000006;
-			remoteInfo = ODataKit;
-		};
-		54FC3BEBD04BDB95B642F4C3 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 747CA6429987EEC4598737C9;
-			proxyType = 2;
-			remoteGlobalIDString = 5C30F5597E6C2517354354B7;
-			remoteInfo = ODataSync;
-		};
 		60DE367165F6293969C77414 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 7C4F16420FCCAF5436F9A67B;
 			proxyType = 1;
 			remoteGlobalIDString = C839008E10C63F4A3A7690DB;
 			remoteInfo = TopoText;
-		};
-		7827991C62FB03BED70615FE /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 747CA6429987EEC4598737C9;
-			proxyType = 1;
-			remoteGlobalIDString = 7F1CE30E03D845ACEF6B15CD;
-			remoteInfo = ODataSync;
-		};
-		D3130B5044A6402260541401 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 747CA6429987EEC4598737C9;
-			proxyType = 2;
-			remoteGlobalIDString = AA0000000000000000000007;
-			remoteInfo = ODataKit;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -137,6 +109,13 @@
 			sourceTree = "<group>";
 			name = TTSyncMerger.m;
 		};
+		2F50DA6F54A030CAE23E163E /* ODataKit.xcframework */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataKit.xcframework;
+			path = .deps/ODataKit.xcframework;
+			sourceTree = "<group>";
+		};
 		2F53ECBD97F866E69A41DA12 /* TopoText.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -158,11 +137,11 @@
 			path = TopoText.framework;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
-		747CA6429987EEC4598737C9 /* ODataKit.xcodeproj */ = {
+		8B287CB36E9F72402B464525 /* ODataSync.xcframework */ = {
 			isa = PBXFileReference;
-			lastKnownFileType = "wrapper.pb-project";
-			name = ODataKit.xcodeproj;
-			path = ../ODataKit/ODataKit.xcodeproj;
+			lastKnownFileType = wrapper.xcframework;
+			name = ODataSync.xcframework;
+			path = .deps/ODataSync.xcframework;
 			sourceTree = "<group>";
 		};
 		A22BA84B1B8A24432D0B43E8 /* Release.xcconfig */ = {
@@ -208,8 +187,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				521092704420AC7F8C36E5E4,
-				4FDA7364E48D4FAAABE03EA0,
-				EEEE90F466D8DC52BEDB7353,
+				91C9896CB3DCA1049BBD2B6C,
+				5E00C493E0CF4B7B95CC46AA,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,20 +231,12 @@
 			sourceTree = "<group>";
 			name = TopoTextSync;
 		};
-		A0819EA5063AC8CC4B2B9F25 /* Libraries */ = {
-			isa = PBXGroup;
-			children = (
-				747CA6429987EEC4598737C9,
-			);
-			sourceTree = "<group>";
-			name = Libraries;
-		};
 		A94D56C4B5B548D54485A1A2 /* TopoText */ = {
 			isa = PBXGroup;
 			children = (
 				190A7664ACD1CC970DC5E7AD,
 				7E8886880B44E89BC1E3F316,
-				A0819EA5063AC8CC4B2B9F25,
+				F3AE8056B53553FA4FC18242,
 				DCB591B277BE5870DC5B1595,
 			);
 			sourceTree = "<group>";
@@ -280,15 +251,6 @@
 			sourceTree = "<group>";
 			name = Products;
 		};
-		EFF227B306E45B50ECB27E55 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				347C854B35A734E70F2656EA,
-				52542F566BF9256A1C2190AA,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F07E9158E4A6A6CFFF1C1839 /* TopoText-files */ = {
 			isa = PBXGroup;
 			children = (
@@ -300,6 +262,15 @@
 			);
 			sourceTree = "<group>";
 			name = TopoText;
+		};
+		F3AE8056B53553FA4FC18242 /* Dependencies */ = {
+			isa = PBXGroup;
+			children = (
+				2F50DA6F54A030CAE23E163E,
+				8B287CB36E9F72402B464525,
+			);
+			sourceTree = "<group>";
+			name = Dependencies;
 		};
 /* End PBXGroup section */
 
@@ -336,8 +307,6 @@
 			);
 			dependencies = (
 				1F213C32EE1DDEFBDD80C56B,
-				AF19834D01A13D2C6693D9A7,
-				43817BF9E4C8486E328E8CCD,
 			);
 			name = TopoTextSync;
 			productName = TopoTextSync;
@@ -381,12 +350,6 @@
 			mainGroup = A94D56C4B5B548D54485A1A2;
 			productRefGroup = DCB591B277BE5870DC5B1595;
 			projectDirPath = "";
-			projectReferences = (
-				{
-					ProductGroup = EFF227B306E45B50ECB27E55;
-					ProjectRef = 747CA6429987EEC4598737C9;
-				},
-			);
 			projectRoot = "";
 			targets = (
 				C839008E10C63F4A3A7690DB,
@@ -394,23 +357,6 @@
 			);
 		};
 /* End PBXProject section */
-
-/* Begin PBXReferenceProxy section */
-		347C854B35A734E70F2656EA /* ODataKit.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataKit.framework;
-			remoteRef = D3130B5044A6402260541401;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		52542F566BF9256A1C2190AA /* ODataSync.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = ODataSync.framework;
-			remoteRef = 54FC3BEBD04BDB95B642F4C3;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-/* End PBXReferenceProxy section */
 
 /* Begin PBXSourcesBuildPhase section */
 		44D23F30F1E8A067B173A1DC /* Sources */ = {
@@ -439,16 +385,6 @@
 			isa = PBXTargetDependency;
 			target = C839008E10C63F4A3A7690DB;
 			targetProxy = 60DE367165F6293969C77414;
-		};
-		43817BF9E4C8486E328E8CCD /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataSync;
-			targetProxy = 7827991C62FB03BED70615FE;
-		};
-		AF19834D01A13D2C6693D9A7 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = ODataKit;
-			targetProxy = 4762AFE7E1D61620D5BEB19C;
 		};
 /* End PBXTargetDependency section */
 

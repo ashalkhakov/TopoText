@@ -1,6 +1,6 @@
 # TopoText
 
-[![CI](https://github.com/ashalkhakov/TopoText/actions/workflows/ci.yml/badge.svg)](https://github.com/ashalkhakov/TopoText/actions/workflows/ci.yml)
+[![Build](https://github.com/ashalkhakov/TopoText/actions/workflows/build.yml/badge.svg)](https://github.com/ashalkhakov/TopoText/actions/workflows/build.yml)
 
 A rich text that merges itself. Copies of a text edited apart, on devices
 that are offline or on either side of a server, become the same text again by
@@ -59,10 +59,10 @@ How: [How TopoText works](docs/how-it-works.md).
 ## Build
 
 ```sh
-# macOS, with ODataKit checked out beside this repository
-make odatakit && make && make test
-# GNUstep (clang, libobjc2), with FreeCoreData and ODataKit installed for TopoTextSync
-make && make test && make install
+# Apple's platforms, with ODataKit's XCFrameworks in .deps/ (.github/pins.env)
+make -f Makefile.apple && make -f Makefile.apple check
+# GNUstep (clang, libobjc2), with FreeCoreData and ODataKit installed
+make && make check && make install
 make WITH_SYNC=no      # TopoText alone: Foundation, nothing else
 ```
 
