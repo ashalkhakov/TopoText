@@ -99,7 +99,7 @@ jobs:
       # unsigned, and named so.
       - name: Sign
         id: sign
-        uses: ashalkhakov/gnustep-release-actions/macos-sign@main
+        uses: ashalkhakov/gnustep-release-actions/macos-sign@v1
         with:
           app: ${{ env.APP }}
           certificate: ${{ secrets.MACOS_CERTIFICATE }}
@@ -114,7 +114,7 @@ jobs:
 
       - name: Notarize
         if: steps.sign.outputs.signed == 'true'
-        uses: ashalkhakov/gnustep-release-actions/macos-notarize@main
+        uses: ashalkhakov/gnustep-release-actions/macos-notarize@v1
         with:
           app: ${{ env.APP }}
           apple-id: ${{ secrets.NOTARY_APPLE_ID }}
@@ -132,7 +132,7 @@ jobs:
       # for a release only.
       - name: Appcast
         if: steps.sign.outputs.signed == 'true'
-        uses: ashalkhakov/gnustep-release-actions/sparkle-appcast@main
+        uses: ashalkhakov/gnustep-release-actions/sparkle-appcast@v1
         with:
           archive: ${{ github.workspace }}/source/SimpleNotes-macOS-${{ env.APP_VERSION }}.zip
           output: ${{ github.workspace }}/source/appcast.xml
@@ -285,7 +285,7 @@ jobs:
       # the app's defaults). Beyond the stack's packages: FreeCoreData's
       # stores' (SQLite, PostgreSQL, MariaDB) and peer sync's (dns-sd).
       - name: GNUstep
-        uses: ashalkhakov/gnustep-release-actions/gnustep-stack@main
+        uses: ashalkhakov/gnustep-release-actions/gnustep-stack@v1
         with:
           patches: ${{ github.workspace }}/gnustep-patches
           extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
@@ -294,7 +294,7 @@ jobs:
         run: .github/scripts/build-libraries.sh
 
       - name: linuxdeploy and the AppImage runtime
-        uses: ashalkhakov/gnustep-release-actions/appimage-tools@main
+        uses: ashalkhakov/gnustep-release-actions/appimage-tools@v1
 
       - name: Stamp the version
         run: ./Scripts/stamp-version.sh "$APP_VERSION"
@@ -306,7 +306,7 @@ jobs:
       # AppImageUpdate, Gear Lever and the like), by the .zsync attached
       # beside it; a pre-release's does not.
       - name: Update information
-        uses: ashalkhakov/gnustep-release-actions/appimage-update-info@main
+        uses: ashalkhakov/gnustep-release-actions/appimage-update-info@v1
         with:
           tag: ${{ env.TAG }}
           zsync: SimpleNotes-*x86_64.AppImage.zsync
