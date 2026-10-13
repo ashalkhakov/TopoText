@@ -1,14 +1,16 @@
 name: Build
 
-# SimpleNotes on macOS, iOS and Linux (an AppImage), and its server's image,
-# by gnustep-release-actions' workflows, the same as every app's: every push
-# is built, tested and uploaded as artifacts; a v* tag (or a run started by
-# hand with one) is also released: the Mac app signed and notarized with its
-# Sparkle appcast, the iOS app unsigned, the AppImage with its update
-# information, attached to the tag's release (a pre-release when the tag has
-# a '-'), and the server's image pushed to the GitHub Container Registry.
-# What is SimpleNotes' own is in .github/release/ (build, test, the image's
-# configuration); the commits it builds on in .github/pins.env.
+# TopoText and SimpleNotes, built, tested and installed the familiar way
+# (make, make check, make install; Makefile.apple on Apple's platforms) by
+# gnustep-release-actions' workflows, the same as every repository's. Every
+# push builds and tests them and uploads what is installed: SimpleNotes for
+# macOS, for iOS (unsigned) and for Linux (an AppImage, with its server),
+# and the server's image. A v* tag (or a run started by hand with one) also
+# releases them: the Mac app signed and notarized with its Sparkle appcast,
+# the iOS app unsigned, the AppImage with its update information, attached
+# to the tag's release (a pre-release when the tag has a '-'), and the
+# server's image pushed to the GitHub Container Registry. What it builds on
+# is in .github/pins.env.
 on:
   push:
     branches: ['**']
@@ -20,10 +22,9 @@ on:
         required: false
         default: ''
 
-# Pushes only, not pull requests too: a push to a branch of this repository
-# already shows its checks on the branch's pull request, and both would run
-# every commit twice. A newer push to a branch supersedes the run before it;
-# a release is never cancelled.
+# Pushes only: a push to a branch already shows its checks on the branch's
+# pull request. A newer push supersedes the run before it; a release is
+# never cancelled.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
@@ -32,31 +33,28 @@ permissions:
   contents: write
 
 jobs:
-  macos:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos-release.yml@v1
+  linux:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/linux.yml@v1
     with:
       tag: ${{ inputs.tag }}
-      apps: SimpleNotes=SimpleNotes
-      dependencies: ODataKit
-    secrets: inherit
-
-  ios:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios-release.yml@v1
-    with:
-      tag: ${{ inputs.tag }}
-      apps: SimpleNotes-iOS=SimpleNotes
-      dependencies: ODataKit
-
-  appimage:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/appimage-release.yml@v1
-    with:
-      tag: ${{ inputs.tag }}
-      dependencies: FreeCoreData ODataKit
       extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
       databases: postgres mariadb
 
+  macos:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes=SimpleNotes
+    secrets: inherit
+
+  ios:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes-iOS=SimpleNotes
+
   docker:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/docker-release.yml@v1
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/docker.yml@v1
     with:
       tag: ${{ inputs.tag }}
       dockerfile: Docker/server.Dockerfile

@@ -11,18 +11,14 @@
 #   ./obj/simplenotes-server -StoreURL notes.sqlite -Port 8080 -Localhost NO
 #   make SN_SERVER_ONLY=yes  the server alone, on Foundation only (no
 #                            gnustep-gui: Docker/server.Dockerfile)
+#   make install             the app, and the server with its model beside it
 #
-# macOS: the same commands without GNUSTEP_MAKEFILES set go to
-# Makefile.apple (the server and the tests; the apps are the Xcode
+# macOS: Makefile.apple (the server and the tests; the apps are the Xcode
 # project's, TopoText.xcworkspace).
 
 ifeq ($(GNUSTEP_MAKEFILES),)
-ifeq ($(shell uname -s),Darwin)
-include Makefile.apple
-else
-$(error Set GNUSTEP_MAKEFILES (source GNUstep.sh).)
+$(error Set GNUSTEP_MAKEFILES (source GNUstep.sh). macOS: make -f Makefile.apple)
 endif
-else
 
 include $(GNUSTEP_MAKEFILES)/common.make
 
@@ -31,7 +27,12 @@ OBJC = clang
 
 SN_FLAGS = -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 -fconstant-string-class=NSConstantString \
 	-fobjc-exceptions -Wall -Wno-unused-parameter
-SN_INCLUDES = -IShared -IAppKit
+# TopoText's libraries from the tree they are built in (the root's
+# GNUmakefile builds them first), headers and all.
+TT_ROOT = $(CURDIR)/../..
+SN_INCLUDES = -IShared -IAppKit -I$(TT_ROOT)/Sources/TopoText/include -I$(TT_ROOT)/Sources/TopoTextSync/include
+SN_LIB_DIRS = -L$(TT_ROOT)/obj
+SN_RUN = LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
 SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
 	-lOTelKit -lODataKit -lCoreData -ldispatch
 
@@ -42,6 +43,7 @@ SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowC
 	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNThumbnails.m Shared/SNShares.m Shared/SNMarkdownEscape.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNMigration.m \
 	Shared/SNMarkdown.m Shared/SNZip.m Shared/SNTransfer.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
+SimpleNotes_LIB_DIRS = $(SN_LIB_DIRS)
 SimpleNotes_OBJCFLAGS = $(SN_FLAGS)
 SimpleNotes_GUI_LIBS += $(SN_SYNC_LIBS) -lz
 SimpleNotes_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
@@ -55,6 +57,7 @@ simplenotes-server_OBJC_FILES = Server/SNServer.m Server/SNNotebooks.m Server/SN
 simplenotes-server_XCDATAMODELD_FILES = SimpleNotes.xcdatamodeld
 simplenotes-server_COREDATA_CODEGEN = yes
 simplenotes-server_INCLUDE_DIRS = $(SN_INCLUDES)
+simplenotes-server_LIB_DIRS = $(SN_LIB_DIRS)
 simplenotes-server_OBJCFLAGS = $(SN_FLAGS)
 simplenotes-server_TOOL_LIBS += $(SN_SYNC_LIBS)
 
@@ -67,15 +70,18 @@ endif
 include $(GNUSTEP_MAKEFILES)/tool.make
 -include GNUmakefile.postamble
 
-# The server finds the model beside itself.
+# The server finds the model beside itself: built, and installed.
 after-all::
 	rm -rf obj/SimpleNotes.momd && momc SimpleNotes.xcdatamodeld obj/SimpleNotes.momd
+
+after-install::
+	@server=$$(find "$(GNUSTEP_TOOLS)" -type f -name simplenotes-server -perm -u+x | head -n 1); \
+	  [ -n "$$server" ] || { echo "install: no simplenotes-server under $(GNUSTEP_TOOLS)"; exit 1; }; \
+	  rm -rf "$$(dirname "$$server")/SimpleNotes.momd" && cp -R obj/SimpleNotes.momd "$$(dirname "$$server")/"
 
 
 check:: all
 	$(MAKE) -C Tests run-tests
-	Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
-	Tests/move-and-check.sh ./obj/simplenotes-server
-	Tests/self-test.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes
-
-endif
+	$(SN_RUN) Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check
+	$(SN_RUN) Tests/move-and-check.sh ./obj/simplenotes-server
+	$(SN_RUN) Tests/self-test.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes

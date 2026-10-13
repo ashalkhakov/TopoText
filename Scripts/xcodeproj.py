@@ -5,10 +5,12 @@
                                             for macOS and iOS
   Examples/SimpleNotes/SimpleNotes.xcodeproj  SimpleNotes for macOS and iOS, and
                                             simplenotes-server
-  TopoText.xcworkspace                      both, and ODataKit's project beside
-                                            this checkout (../ODataKit)
+  TopoText.xcworkspace                      both
 
-and their shared schemes. Object IDs are made from names, so running it
+and their shared schemes. What they build on (ODataKit's frameworks,
+Sparkle) is in .deps/, as XCFrameworks: gnustep-release-actions'
+scripts/deps.sh apple puts them there, by the versions .github/pins.env
+names. Object IDs are made from names, so running it
 again writes the same files: change this, run it, commit what it wrote.
 
   python3 Scripts/xcodeproj.py
@@ -17,15 +19,7 @@ import hashlib, os, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ODataKit.xcodeproj's targets and their products, by name (its IDs are fixed).
-ODATAKIT = {
-    'ODataKit': ('AA0000000000000000000006', 'AA0000000000000000000007'),
-    'ODataIncrementalStore': ('AA0000000000000000000002', 'AA0000000000000000000003'),
-    'ODataService': ('AA000000000000000000000A', 'AA000000000000000000000B'),
-    'OTelKit': ('4CBB61F9CEEAF8A9C5A1F7CF', 'D7BA1954D987FDFF19FEE609'),
-    'HTTPServerKit': ('9828CC078A88AE7706B232C7', 'A21CEFC6F685318B7798AD60'),
-    'ODataSync': ('7F1CE30E03D845ACEF6B15CD', '5C30F5597E6C2517354354B7'),
-}
+# ODataKit's frameworks, in the order they depend on each other.
 ODATAKIT_ORDER = ['ODataKit', 'OTelKit', 'ODataIncrementalStore', 'HTTPServerKit', 'ODataService', 'ODataSync']
 
 
@@ -174,24 +168,18 @@ class Remote:
                      {'isa': 'PBXTargetDependency', 'name': t, 'targetProxy': proxy})
 
 
-class Package:
-    """A Swift package the project takes products from, at an exact version."""
-    def __init__(self, p, name, url, version):
-        self.p, self.name = p, name
-        self.ref = p.add(oid(p.name, 'package', name), 'XCRemoteSwiftPackageReference "%s"' % name,
-                         {'isa': 'XCRemoteSwiftPackageReference', 'repositoryURL': url,
-                          'requirement': {'kind': 'exactVersion', 'version': version}})
-
-    def product(self, target, product):
-        return self.p.add(oid(self.p.name, 'package', self.name, target, product), product,
-                          {'isa': 'XCSwiftPackageProductDependency', 'package': self.ref, 'productName': product})
-
-    def build_file(self, target, phase, product_dep, product):
-        return self.p.add(oid(self.p.name, 'buildfile', target, phase, 'package', product), '%s in %s' % (product, phase),
-                          {'isa': 'PBXBuildFile', 'productRef': product_dep})
+class XCFrameworks:
+    """What the project builds on, in .deps/ at the repository's root (deps,
+    from the project's directory): each an XCFramework, by its name."""
+    def __init__(self, p, deps, names):
+        self.products = {n: p.add(oid(p.name, 'xcframework', n), n + '.xcframework',
+                                  {'isa': 'PBXFileReference', 'lastKnownFileType': 'wrapper.xcframework',
+                                   'name': n + '.xcframework', 'path': '%s/%s.xcframework' % (deps, n), 'sourceTree': '<group>'})
+                         for n in names}
+        self.group = group(p, 'Dependencies', [self.products[n] for n in names])
 
 
-def native_target(p, name, product_type, product_name, product_ext, phases, deps, configlist, explicit_type, packages=None):
+def native_target(p, name, product_type, product_name, product_ext, phases, deps, configlist, explicit_type):
     product = p.add(oid(p.name, 'product', name), product_name + product_ext,
                     {'isa': 'PBXFileReference', 'explicitFileType': explicit_type, 'includeInIndex': '0',
                      'path': product_name + product_ext, 'sourceTree': 'BUILT_PRODUCTS_DIR'})
@@ -199,21 +187,19 @@ def native_target(p, name, product_type, product_name, product_ext, phases, deps
     target = {'isa': 'PBXNativeTarget', 'buildConfigurationList': configlist, 'buildPhases': phases, 'buildRules': [],
               'dependencies': deps, 'name': name, 'productName': product_name, 'productReference': product,
               'productType': product_type}
-    if packages:
-        target['packageProductDependencies'] = packages
     p.add(tid, name, target)
     return tid, product
 
 
-def project_object(p, main_group, products_group, targets, remotes, configlist, packages=None):
+def project_object(p, main_group, products_group, targets, remotes, configlist):
     obj = {'isa': 'PBXProject', 'attributes': {'BuildIndependentTargetsInParallel': '1', 'LastUpgradeCheck': '1600'},
            'buildConfigurationList': configlist, 'compatibilityVersion': 'Xcode 14.0', 'developmentRegion': 'en',
            'hasScannedForEncodings': '0', 'knownRegions': ['en', 'Base'], 'mainGroup': main_group,
            'productRefGroup': products_group, 'projectDirPath': '',
            'projectReferences': [{'ProductGroup': r.group, 'ProjectRef': r.ref} for r in remotes],
            'projectRoot': '', 'targets': targets}
-    if packages:
-        obj['packageReferences'] = [k.ref for k in packages]
+    if not remotes:
+        del obj['projectReferences']
     p.root = p.add(oid(p.name, 'project'), 'Project object', obj)
 
 
@@ -231,7 +217,7 @@ FRAMEWORK_SETTINGS = {
 
 def topotext():
     p = Project('TopoText', 'TopoText.xcodeproj')
-    odk = Remote(p, 'ODataKit', '../ODataKit/ODataKit.xcodeproj', {k: ODATAKIT[k] for k in ('ODataKit', 'ODataSync')})
+    odk = XCFrameworks(p, '.deps', ['ODataKit', 'ODataSync'])
     configs = [file_ref(p, 'Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
     tt = {f: file_ref(p, 'Sources/TopoText/' + f) for f in ('TopoText.m', 'TTCoding.m', 'TTTable.m', 'TTInternal.h', 'include/TopoText/TopoText.h')}
     sy = {f: file_ref(p, 'Sources/TopoTextSync/' + f) for f in ('TTSyncResolver.m', 'TTSyncMerger.m', 'include/TopoTextSync/TopoTextSync.h')}
@@ -261,7 +247,7 @@ def topotext():
     src = phase(p, 'TopoTextSync', 'PBXSourcesBuildPhase', 'Sources', [build_file(p, 'TopoTextSync', 'Sources', sy[f], f) for f in ('TTSyncResolver.m', 'TTSyncMerger.m')])
     fw = phase(p, 'TopoTextSync', 'PBXFrameworksBuildPhase', 'Frameworks',
                [build_file(p, 'TopoTextSync', 'Frameworks', topotext_product, 'TopoText.framework')] +
-               [build_file(p, 'TopoTextSync', 'Frameworks', odk.products[k], k + '.framework') for k in ('ODataKit', 'ODataSync')])
+               [build_file(p, 'TopoTextSync', 'Frameworks', odk.products[k], k + '.xcframework') for k in ('ODataKit', 'ODataSync')])
     proxy = p.add(oid(p.name, 'dep', 'TopoTextSync', 'TopoText', 'proxy'), 'PBXContainerItemProxy',
                   {'isa': 'PBXContainerItemProxy', 'containerPortal': oid(p.name, 'project'), 'proxyType': '1',
                    'remoteGlobalIDString': topotext_target, 'remoteInfo': 'TopoText'})
@@ -270,17 +256,17 @@ def topotext():
     s = dict(FRAMEWORK_SETTINGS, PRODUCT_BUNDLE_IDENTIFIER='io.github.ashalkhakov.TopoTextSync',
              HEADER_SEARCH_PATHS=['$(SRCROOT)/Sources/TopoTextSync/include/TopoTextSync'])
     tid, prod = native_target(p, 'TopoTextSync', 'com.apple.product-type.framework', 'TopoTextSync', '.framework', [hdr, src, fw],
-                              [local, odk.dependency('TopoTextSync', 'ODataKit'), odk.dependency('TopoTextSync', 'ODataSync')],
+                              [local],
                               config_list(p, 'TopoTextSync', s, s), 'wrapper.framework')
     targets.append(tid); products.append(prod)
 
     products_group = group(p, 'Products', products)
     main = group(p, 'TopoText', [
         group(p, 'Sources', [group(p, 'TopoText-files', list(tt.values()), None), group(p, 'TopoTextSync-files', list(sy.values()), None)]),
-        group(p, 'Configs', configs), group(p, 'Libraries', [odk.ref]), products_group])
+        group(p, 'Configs', configs), odk.group, products_group])
     p.objects[oid(p.name, 'group', 'TopoText-files')]['name'] = 'TopoText'
     p.objects[oid(p.name, 'group', 'TopoTextSync-files')]['name'] = 'TopoTextSync'
-    project_object(p, main, products_group, targets, [odk],
+    project_object(p, main, products_group, targets, [],
                    config_list(p, 'project', {}, {}, configs[1], configs[2]))
     p.write()
     scheme('TopoText.xcodeproj', 'TopoText', targets[0], 'TopoText.framework', 'TopoText.xcodeproj')
@@ -293,7 +279,8 @@ def topotext():
 def simplenotes(topotext_ids):
     p = Project('SimpleNotes', 'Examples/SimpleNotes/SimpleNotes.xcodeproj')
     tt = Remote(p, 'TopoText', '../../TopoText.xcodeproj', topotext_ids)
-    odk = Remote(p, 'ODataKit', '../../../ODataKit/ODataKit.xcodeproj', ODATAKIT)
+    # ODataKit's frameworks; Sparkle, the Mac app's updates (AppKit/SNUpdater.h).
+    odk = XCFrameworks(p, '../../.deps', ODATAKIT_ORDER + ['Sparkle'])
     configs = [file_ref(p, '../../Xcode/Configs/%s.xcconfig' % c, '%s.xcconfig' % c) for c in ('Common', 'Debug', 'Release')]
     F = lambda path: file_ref(p, path, os.path.basename(path))
     shared = {n: F('Shared/' + n) for n in ('SNModel.h', 'SNModel.m', 'SNNote.h', 'SNNote.m', 'SNFolder.h', 'SNFolder.m', 'SNAttachment.h', 'SNAttachment.m', 'SNNotes.h',
@@ -318,26 +305,24 @@ def simplenotes(topotext_ids):
     frameworks = ['TopoText', 'TopoTextSync'] + ODATAKIT_ORDER
     def fw_ref(name):
         return (tt if name in tt.products else odk).products[name]
+    def fw_name(name):
+        return name + ('.framework' if name in tt.products else '.xcframework')
     def deps(target):
-        return [(tt if n in tt.products else odk).dependency(target, n) for n in frameworks]
+        return [tt.dependency(target, n) for n in frameworks if n in tt.products]
 
-    # Sparkle, the Mac app's updates (AppKit/SNUpdater.h); Xcode fetches it,
-    # and embeds it as it does any package's framework.
-    sparkle = Package(p, 'Sparkle', 'https://github.com/sparkle-project/Sparkle', '2.10.0')
-
-    def app(target, sources, resources, xcconfig, embed=True, packages=()):
+    def app(target, sources, resources, xcconfig, embed=True, extra=()):
+        linked = frameworks + list(extra)
         src = phase(p, target, 'PBXSourcesBuildPhase', 'Sources',
                     [build_file(p, target, 'Sources', ref, comment) for ref, comment in sources])
         fw = phase(p, target, 'PBXFrameworksBuildPhase', 'Frameworks',
-                   [build_file(p, target, 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks] +
-                   [pkg.build_file(target, 'Frameworks', pkg.product(target, name), name) for pkg, name in packages])
+                   [build_file(p, target, 'Frameworks', fw_ref(n), fw_name(n)) for n in linked])
         res = phase(p, target, 'PBXResourcesBuildPhase', 'Resources',
                     [build_file(p, target, 'Resources', ref, comment) for ref, comment in resources])
         phases = [src, fw, res]
         if embed:
             phases.append(phase(p, target, 'PBXCopyFilesBuildPhase', 'Embed Frameworks',
-                                [build_file(p, target, 'Embed Frameworks', fw_ref(n), n + '.framework',
-                                            {'ATTRIBUTES': ['CodeSignOnCopy', 'RemoveHeadersOnCopy']}) for n in frameworks],
+                                [build_file(p, target, 'Embed Frameworks', fw_ref(n), fw_name(n),
+                                            {'ATTRIBUTES': ['CodeSignOnCopy', 'RemoveHeadersOnCopy']}) for n in linked],
                                 {'dstPath': '', 'dstSubfolderSpec': '10', 'name': 'Embed Frameworks'}))
         return phases
 
@@ -349,11 +334,10 @@ def simplenotes(topotext_ids):
     mac_phases = app('SimpleNotes', sources_of(appkit, ['main.m', 'SNAppController.m', 'SNWindowController.m', 'SNTextView.m', 'SNTextSystem.m', 'SNTableGrid+System.m', 'SNSmartFolderPanel.m', 'SNSyncPanel.m', 'SNPeersWindow.m', 'SNTransferPanel.m', 'SNGallery.m', 'SNVersionsPanel.m', 'SNMemory-Apple.m', 'SNWatchdog-Apple.m', 'SNUpdater-Apple.m', 'SNSecretStore.m', 'SNSelfTest.m'])
                      + sources_of(shared, ['SNCheck.m']) + common,
                      sources_of(appkit, ['MainMenu.xib', 'NotesWindow.xib', 'TextPanel.xib', 'SmartFolderPanel.xib', 'SyncPanel.xib', 'DevicesNearby.xib', 'TransferPanel.xib', 'UpdatePanel.xib', 'AttachmentsWindow.xib', 'VersionsPanel.xib']) + sources_of(icons, ['SimpleNotes.icns']),
-                     appkit['SimpleNotes-macOS.xcconfig'], packages=[(sparkle, 'Sparkle')])
+                     appkit['SimpleNotes-macOS.xcconfig'], extra=['Sparkle'])
     tid, mac_product = native_target(p, 'SimpleNotes', 'com.apple.product-type.application', 'SimpleNotes', '.app', mac_phases,
                                      deps('SimpleNotes'), config_list(p, 'SimpleNotes', {}, {}, appkit['SimpleNotes-macOS.xcconfig'],
-                                                                      appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application',
-                                     packages=[sparkle.product('SimpleNotes', 'Sparkle')])
+                                                                      appkit['SimpleNotes-macOS.xcconfig']), 'wrapper.application')
     targets.append(('SimpleNotes', tid, 'SimpleNotes.app'))
 
     # The Share extension: what other apps share, into the inbox the app
@@ -387,7 +371,7 @@ def simplenotes(topotext_ids):
                 [build_file(p, 'simplenotes-server', 'Sources', ref, c) for ref, c in
                  sources_of(server, ['SNServer.m', 'SNNotebooks.m', 'SNVersions.m']) + sources_of(shared, ['SNModel.m', 'SNNote.m', 'SNFolder.m', 'SNAttachment.m', 'SNMigration.m']) + [(model, 'SimpleNotes.xcdatamodeld')]])
     fw = phase(p, 'simplenotes-server', 'PBXFrameworksBuildPhase', 'Frameworks',
-               [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), n + '.framework') for n in frameworks])
+               [build_file(p, 'simplenotes-server', 'Frameworks', fw_ref(n), fw_name(n)) for n in frameworks])
     s = {'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'PRODUCT_NAME': 'simplenotes-server', 'SKIP_INSTALL': 'YES',
          'GENERATE_INFOPLIST_FILE': 'NO', 'HEADER_SEARCH_PATHS': ['$(SRCROOT)/Shared'],
          'LD_RUNPATH_SEARCH_PATHS': ['@executable_path', '@loader_path']}
@@ -403,10 +387,10 @@ def simplenotes(topotext_ids):
         group(p, 'Server', list(server.values())),
         group(p, 'Tests', list(tests.values())),
         group(p, 'Configs', configs),
-        group(p, 'Libraries', [tt.ref, odk.ref]),
+        group(p, 'Libraries', [tt.ref]), odk.group,
         products_group])
-    project_object(p, main, products_group, [t[1] for t in targets], [tt, odk],
-                   config_list(p, 'project', {}, {}, configs[1], configs[2]), packages=[sparkle])
+    project_object(p, main, products_group, [t[1] for t in targets], [tt],
+                   config_list(p, 'project', {}, {}, configs[1], configs[2]))
     p.write()
     for name, tid, product in targets:
         if name == 'SimpleNotes-Share':
@@ -458,9 +442,6 @@ def workspace():
    </FileRef>
    <FileRef
       location = "group:Examples/SimpleNotes/SimpleNotes.xcodeproj">
-   </FileRef>
-   <FileRef
-      location = "group:../ODataKit/ODataKit.xcodeproj">
    </FileRef>
 </Workspace>
 ''')

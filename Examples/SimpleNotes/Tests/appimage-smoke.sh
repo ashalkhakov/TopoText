@@ -1,6 +1,9 @@
 #!/bin/bash
-# In a clean Ubuntu (no GNUstep, no fonts): the image's own server started
+# The AppImage on a clean Ubuntu (no GNUstep, no fonts), as
+# gnustep-release-actions' appimage-test runs it (.github/release/appimage.conf,
+# SMOKE_SCRIPT), from the repository's root: the image's own server started
 # and seeded, and the app's self-test driving the window against it.
+#   Examples/SimpleNotes/Tests/appimage-smoke.sh <SimpleNotes AppImage>
 set -euo pipefail
 image=$1
 "$image" --server -StoreURL Temporary -Port 18090 -AccessLog NO > /tmp/server.log 2>&1 &

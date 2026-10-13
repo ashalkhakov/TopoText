@@ -2,9 +2,11 @@
 #
 # simplenotes-server in an image of its own: the server, its model, and the
 # shared libraries it runs on, nothing else (no shell, no package manager).
-# Built on gnustep-patches' GNUstep stack image, from source: FreeCoreData
-# with its PostgreSQL and MySQL stores, ODataKit and TopoText, at the pins CI
-# tests.
+# Built on the releases .github/pins.env names, as CI builds: the GNUstep
+# stack, FreeCoreData with its PostgreSQL and MySQL stores, GCDWebServer and
+# ODataKit, each an archive unpacked at / (gnustep-release-actions'
+# docker.yml passes their versions as build arguments of the same names;
+# built by hand, pins.env's are taken); TopoText and the server from here.
 #
 #   docker build -f Docker/server.Dockerfile -t simplenotes-server .
 #   docker run -p 8080:8080 -v notes:/data simplenotes-server
@@ -23,52 +25,46 @@
 # data, the same on musl. The final stage is FROM scratch: the libraries are
 # glibc's and the stack's, copied from where they were built.
 
-# The patched GNUstep stack, gnustep-patches' image (its newest; --build-arg
-# STACK=ghcr.io/ashalkhakov/gnustep:<version> for another), and what the
-# server links beyond it: FreeCoreData's SQLite, PostgreSQL and MySQL clients.
-ARG STACK=ghcr.io/ashalkhakov/gnustep:latest
+ARG UBUNTU=22.04
 
-FROM ${STACK} AS stack
+FROM ubuntu:${UBUNTU} AS libraries
 ARG DEBIAN_FRONTEND=noninteractive
+ARG GNUSTEP_PATCHES_VERSION
+ARG FREECOREDATA_VERSION
+ARG GCDWEBSERVER_VERSION
+ARG ODATAKIT_VERSION
 # Through caching proxies that answer with stale indexes: no pipelining, no
 # proxy caches, retries (as ODataKit's images).
 RUN printf 'Acquire::http::No-Cache "true";\nAcquire::BrokenProxy "true";\nAcquire::http::Pipeline-Depth "0";\nAcquire::Retries "3";\n' \
-      > /etc/apt/apt.conf.d/99-simplenotes \
- && apt-get update && apt-get install -y --no-install-recommends \
-      libsqlite3-dev libpq-dev libmariadb-dev tzdata \
- && rm -rf /var/lib/apt/lists/*
+      > /etc/apt/apt.conf.d/99-simplenotes
 COPY .github/pins.env /tmp/pins.env
-
-# FreeCoreData and ODataKit, at .github/pins.env's commits.
-FROM stack AS libraries
-ARG FREECOREDATA_REF
-ARG ODATAKIT_REF
-SHELL ["/bin/bash", "-c"]
-RUN set -e; fcd=$FREECOREDATA_REF; odk=$ODATAKIT_REF; . /tmp/pins.env; \
-    FREECOREDATA_REF=${fcd:-$FREECOREDATA_REF}; ODATAKIT_REF=${odk:-$ODATAKIT_REF}; \
-    . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
-    mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \
-    git init -q && git remote add origin https://github.com/ashalkhakov/FreeCoreData.git; \
-    git fetch -q --depth 1 origin "$FREECOREDATA_REF" && git checkout -q FETCH_HEAD; \
-    make -j"$(nproc)" && make install; \
-    make -C Tools/momc && make -C Tools/momc install; \
-    make -C Backends/PostgreSQL && make -C Backends/PostgreSQL install; \
-    make -C Backends/MySQL && make -C Backends/MySQL install; \
-    mkdir -p /tmp/src/ODataKit && cd /tmp/src/ODataKit; \
-    git init -q && git remote add origin https://github.com/ashalkhakov/ODataKit.git; \
-    git fetch -q --depth 1 origin "$ODATAKIT_REF" && git checkout -q FETCH_HEAD; \
-    make -j"$(nproc)" && make install; \
-    cd / && rm -rf /tmp/src
+# The archives, the stack first; then the packages building on the stack
+# needs (its own list, beside it), and the server's: FreeCoreData's SQLite,
+# PostgreSQL and MySQL clients, and the time zones.
+RUN set -e; \
+    apt-get update; apt-get install -y --no-install-recommends ca-certificates curl xz-utils; \
+    for name in GNUSTEP_PATCHES FREECOREDATA GCDWEBSERVER ODATAKIT; do \
+      eval "version=\${${name}_VERSION:-}"; \
+      [ -n "$version" ] || version=$(sed -n "s/^${name}_VERSION=//p" /tmp/pins.env); \
+      repo=$(echo "$name" | tr 'A-Z_' 'a-z-'); \
+      curl -fsSL "https://github.com/ashalkhakov/$repo/releases/download/v$version/$repo-$version-ubuntu22.04-$(uname -m).tar.xz" \
+        | tar -C / -xJ; \
+    done; \
+    grep -v '^#' /opt/gnustep/share/gnustep-patches/packages-ubuntu.txt \
+      | xargs apt-get install -y --no-install-recommends libsqlite3-dev libpq-dev libmariadb-dev tzdata; \
+    update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 10; \
+    rm -rf /var/lib/apt/lists/*
+ENV CC=clang CXX=clang++ LIBRARY_COMBO=ng-gnu-gnu RUNTIME_VERSION=gnustep-2.0
 
 # TopoText and the server.
 FROM libraries AS build
 ARG VERSION=0.0.0
 COPY . /usr/src/topotext
 WORKDIR /usr/src/topotext
+# The libraries and the server alone (SN_SERVER_ONLY: no gnustep-gui).
 RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     rm -rf build obj Examples/SimpleNotes/obj; \
-    make -j"$(nproc)" && make install; \
-    make -C Examples/SimpleNotes SN_SERVER_ONLY=yes -j"$(nproc)"
+    make -j"$(nproc)" SN_SERVER_ONLY=yes && make install SN_SERVER_ONLY=yes
 
 # What the server needs at run time, at the paths it was built with
 # (Docker/collect-server.sh), into /rootfs.

@@ -5,8 +5,9 @@ Running the apps from source, the checks, and how releases are made.
 ## The apps, from source
 
 
-- **macOS**: open `TopoText.xcworkspace` (ODataKit checked out beside this
-  repository, at `../ODataKit`) and run the **SimpleNotes** scheme. Then
+- **macOS**: open `TopoText.xcworkspace` (with ODataKit's XCFrameworks and
+  Sparkle's in `.deps/`: [building](../../../docs/building.md)) and run the
+  **SimpleNotes** scheme. Then
   choose **SimpleNotes > Server…** and give `http://127.0.0.1:8080/odata/`.
 - **iPhone or iPad**: the **SimpleNotes-iOS** scheme. Set the address with
   the server button at the top left. The simulator reaches the Mac at

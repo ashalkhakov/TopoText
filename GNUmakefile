@@ -1,25 +1,22 @@
 # TopoText, a rich text CRDT, and TopoTextSync, its part in an ODataSync
-# store (ODataKit).
+# store (ODataKit); and SimpleNotes (Examples/SimpleNotes), the app and its
+# server, on them.
 #
 # GNUstep: clang, libobjc2 (the gnustep-2.0 runtime) and gnustep-make; for
-# TopoTextSync, FreeCoreData and ODataKit installed
-# (https://github.com/ashalkhakov/ODataKit, make install there):
+# TopoTextSync and SimpleNotes, FreeCoreData and ODataKit installed (the
+# releases .github/pins.env names):
 #
-#   . /usr/GNUstep/System/Library/Makefiles/GNUstep.sh
-#   make && make install
-#   make test
-#   make WITH_SYNC=no      TopoText alone: Foundation, nothing else
+#   . /path/to/GNUstep.sh
+#   make                 the libraries, then SimpleNotes and its server
+#   make check           the tests (below)
+#   make install         the libraries, SimpleNotes and its server
+#   make WITH_SYNC=no    TopoText alone: Foundation, nothing else
 #
-# macOS: the same commands, without GNUSTEP_MAKEFILES set, go to
-# Makefile.apple (clang, Apple's Foundation, Xcode's xctest).
+# Apple's platforms: Makefile.apple.
 
 ifeq ($(GNUSTEP_MAKEFILES),)
-ifeq ($(shell uname -s),Darwin)
-include Makefile.apple
-else
-$(error Set GNUSTEP_MAKEFILES (source GNUstep.sh).)
+$(error Set GNUSTEP_MAKEFILES (source GNUstep.sh). Apple's platforms: make -f Makefile.apple)
 endif
-else
 
 include $(GNUSTEP_MAKEFILES)/common.make
 
@@ -74,4 +71,46 @@ TopoTextSync.all.library.variables: TopoText.all.library.variables
 test: all
 	$(MAKE) -C Tests run-tests WITH_SYNC=$(WITH_SYNC)
 
+# SimpleNotes, on the libraries (with TopoTextSync only).
+ifeq ($(WITH_SYNC),yes)
+after-all::
+	$(MAKE) -C Examples/SimpleNotes
+
+after-install::
+	$(MAKE) -C Examples/SimpleNotes install
+
+after-clean::
+	$(MAKE) -C Examples/SimpleNotes clean
 endif
+
+# make check:
+#   TopoText alone (WITH_SYNC=no), built apart, in build/alone
+#   the libraries' unit tests
+#   SimpleNotes': its unit tests, two devices through its server, the
+#     server moved from one store to another, and the app driven from
+#     within (Xvfb when there is no display)
+#   its server on PostgreSQL and MariaDB, given by their URLs (POSTGRES_URL,
+#     MARIADB_URL); without one, skipped, but not in CI, where a missing
+#     server is a failure. The move onto PostgreSQL needs a database made
+#     for it: by docker exec, when POSTGRES_CONTAINER names the server's.
+SN = Examples/SimpleNotes
+SN_RUN = LD_LIBRARY_PATH="$(CURDIR)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
+check::
+	$(MAKE) WITH_SYNC=no GNUSTEP_BUILD_DIR=$(CURDIR)/build/alone
+	$(MAKE) -C Tests run-tests WITH_SYNC=$(WITH_SYNC)
+	$(MAKE) -C $(SN) check
+	@for server in POSTGRES_URL MARIADB_URL; do \
+	  if [ -z "$$(printenv $$server)" ]; then \
+	    if [ -n "$$CI" ]; then echo "check: $$server is not set; the server's database checks need it in CI"; exit 1; fi; \
+	    echo "check: no $$server: the server's checks on it are skipped"; \
+	  fi; \
+	done
+	@if [ -n "$$POSTGRES_URL" ]; then cd $(SN) && \
+	  $(SN_RUN) SN_STORE_ARGS="-StoreType PostgreSQL -StoreURL $$POSTGRES_URL" \
+	    Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check || exit 1; fi
+	@if [ -n "$$MARIADB_URL" ]; then cd $(SN) && \
+	  $(SN_RUN) SN_STORE_ARGS="-StoreType MariaDB -StoreURL $$MARIADB_URL" SN_CHECK_PORT=18081 \
+	    Tests/serve-and-check.sh ./obj/simplenotes-server ./SimpleNotes.app/SimpleNotes --check || exit 1; fi
+	@if [ -n "$$POSTGRES_URL" ] && [ -n "$$POSTGRES_CONTAINER" ]; then \
+	  docker exec "$$POSTGRES_CONTAINER" psql -U postgres -c 'DROP DATABASE IF EXISTS moved' -c 'CREATE DATABASE moved' > /dev/null && \
+	  cd $(SN) && $(SN_RUN) Tests/move-and-check.sh ./obj/simplenotes-server -StoreType PostgreSQL -StoreURL "$${POSTGRES_URL%/*}/moved" || exit 1; fi

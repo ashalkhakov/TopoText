@@ -59,10 +59,10 @@ How: [How TopoText works](docs/how-it-works.md).
 ## Build
 
 ```sh
-# macOS, with ODataKit checked out beside this repository
-make odatakit && make && make test
-# GNUstep (clang, libobjc2), with FreeCoreData and ODataKit installed for TopoTextSync
-make && make test && make install
+# Apple's platforms, with ODataKit's XCFrameworks in .deps/ (.github/pins.env)
+make -f Makefile.apple && make -f Makefile.apple check
+# GNUstep (clang, libobjc2), with FreeCoreData and ODataKit installed
+make && make check && make install
 make WITH_SYNC=no      # TopoText alone: Foundation, nothing else
 ```
 

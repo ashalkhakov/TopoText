@@ -7,7 +7,4 @@
    <FileRef
       location = "group:Examples/SimpleNotes/SimpleNotes.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:../ODataKit/ODataKit.xcodeproj">
-   </FileRef>
 </Workspace>

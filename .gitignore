@@ -7,3 +7,4 @@ obj/
 xcuserdata/
 Local.xcconfig
 .claude/scheduled_tasks.lock
+.deps/
