@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   macos:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos-release.yml@v1
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos-release.yml@stamp-version
     with:
       tag: ${{ inputs.tag }}
       apps: SimpleNotes=SimpleNotes
@@ -32,14 +32,14 @@ jobs:
     secrets: inherit
 
   ios:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios-release.yml@v1
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios-release.yml@stamp-version
     with:
       tag: ${{ inputs.tag }}
       apps: SimpleNotes-iOS=SimpleNotes
       dependencies: ODataKit
 
   appimage:
-    uses: ashalkhakov/gnustep-release-actions/.github/workflows/appimage-release.yml@v1
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/appimage-release.yml@stamp-version
     with:
       tag: ${{ inputs.tag }}
       dependencies: FreeCoreData ODataKit

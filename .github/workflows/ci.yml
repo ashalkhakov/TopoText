@@ -334,7 +334,7 @@ jobs:
       # this job's Ubuntu, so it needs a glibc as new; release.yml's, built on
       # an older one, runs on more.
       - name: Stamp the version
-        uses: ashalkhakov/gnustep-release-actions/stamp-version@v1
+        uses: ashalkhakov/gnustep-release-actions/stamp-version@stamp-version
         with:
           version: 0.0.0-${{ github.run_number }}-${{ github.sha }}
           working-directory: ${{ env.SRC_PATH }}
