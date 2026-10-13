@@ -34,18 +34,21 @@ several copies edit and sync at random until they agree; each copy keeps an
 editor's attributed string, updated only by its own edits and the `TTEdit`s
 its merges report, and that string must match the text at every step.
 
-CI (`.github/workflows/ci.yml`) is ported from ODataKit's. On macOS it builds
-ODataKit's frameworks, runs the suites, runs a long fuzz, and compiles for
-iOS. On Ubuntu it builds the same pinned gnustep-patches stack (cached),
-FreeCoreData and ODataKit, then builds and tests TopoText, also checking that
-TopoText builds alone.
+One workflow, `.github/workflows/build.yml`, builds, tests and releases
+everything, by gnustep-release-actions' workflows (the same as every app's)
+and the hooks in `.github/release/`. On macOS it builds ODataKit's frameworks,
+runs the suites and a long fuzz, and SimpleNotes' tests, then the app; for iOS,
+the libraries and the app, its self-test in a simulator. On Linux it takes
+the patched GNUstep stack gnustep-patches publishes (its newest image), builds
+FreeCoreData and ODataKit, then builds and tests TopoText (also alone) and
+SimpleNotes, its server on PostgreSQL and MariaDB too, and checks the AppImage
+on a clean Ubuntu.
 
-The commits it builds on (ODataKit, gnustep-patches, FreeCoreData) are named
-in one place, `.github/pins.env`, which CI, the release and the Dockerfiles
-all read. To move one, change it there.
+The commits it builds on (ODataKit, FreeCoreData) are named in one place,
+`.github/pins.env`, which the workflows and the Dockerfiles read. To move
+one, change it there.
 
-Releases (`release.yml`, `docker.yml`, ported from ODataKit's, XFormsKit's
-and RDLKit's) package SimpleNotes from a `v*` tag: the macOS app (signed and
-notarized when the secrets are set), a Linux AppImage, unsigned iOS builds,
+A `v*` tag releases SimpleNotes: the macOS app (signed and notarized when the
+secrets are set), a Linux AppImage, unsigned iOS builds,
 and the server's image on the GitHub Container Registry. See
 [SimpleNotes' releases](../Examples/SimpleNotes/docs/development.md#releases).

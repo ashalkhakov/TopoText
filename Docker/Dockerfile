@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 #
 # TopoText and SimpleNotes on GNUstep, built and tested in ODataKit's sdk
-# image (the GNUstep stack, FreeCoreData and ODataKit installed; ODataKit's
-# Docker/Dockerfile), with gnustep-gui and -back added for the app:
+# image (gnustep-patches' GNUstep stack image, with FreeCoreData and ODataKit
+# installed; ODataKit's Docker/Dockerfile):
 #
 #   docker build -f Docker/Dockerfile --target check .
 #   docker build -f Docker/Dockerfile --target check --build-context freecoredata=../FreeCoreData .
@@ -25,25 +25,11 @@ RUN set -e; ref=$FREECOREDATA_REF; . /tmp/pins.env; FREECOREDATA_REF=${ref:-$FRE
 FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /
 
-# The sdk has Foundation only: AppKit (gui, back on cairo) built into its
-# prefix by the same script, for SimpleNotes, with the Eau theme the app
-# looks as on any of our Linux apps (XFormsKit, RDLKit, ODataKit's); and
-# Foundation again, at this pin, which may be ahead of the sdk's.
+# The sdk is gnustep-patches' stack (AppKit, the Eau theme and all) with
+# FreeCoreData and ODataKit installed; FreeCoreData again, at this pin, which
+# may be ahead of the sdk's.
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GNUSTEP_PATCHES_REF
-COPY .github/pins.env /tmp/pins.env
-RUN apt-get update && apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-      libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev libfreetype-dev libfontconfig1-dev \
-      libxrender-dev libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
-      xvfb xauth fonts-dejavu-core \
- && rm -rf /var/lib/apt/lists/*
-RUN set -e; ref=$GNUSTEP_PATCHES_REF; . /tmp/pins.env; GNUSTEP_PATCHES_REF=${ref:-$GNUSTEP_PATCHES_REF}; \
-    mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
-    git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
-    git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
-    PREFIX=/opt/gnustep SOURCES=/tmp/src/gnustep COMPONENTS="libs-base libs-gui libs-back eau" Scripts/build-gnustep.sh; \
-    rm -rf /tmp/src
 COPY --from=freecoredata / /tmp/freecoredata/
 RUN set -e; cd /tmp/freecoredata; make clean >/dev/null 2>&1 || true; \
     make -j"$(nproc)" && make install && make -C Tools/momc && make -C Tools/momc install; \

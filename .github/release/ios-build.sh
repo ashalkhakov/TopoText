@@ -2,7 +2,10 @@
 # The iOS app, unsigned, for a device and for the simulator, into
 # $RELEASE_DIR; and the server its simulator self-test runs against, left
 # where Xcode built it, beside its frameworks (ios-test.sh).
+# First the libraries for iOS (Makefile.apple), as CI built them.
 set -euo pipefail
+make odatakit-ios ODATAKIT=../ODataKit
+make ios
 xcodebuild -workspace TopoText.xcworkspace -scheme SimpleNotes-iOS \
   -destination 'generic/platform=iOS' -configuration Release \
   -derivedDataPath "$RUNNER_TEMP/DerivedData" \

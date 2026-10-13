@@ -1,6 +1,6 @@
 # TopoText
 
-[![CI](https://github.com/ashalkhakov/TopoText/actions/workflows/ci.yml/badge.svg)](https://github.com/ashalkhakov/TopoText/actions/workflows/ci.yml)
+[![Build](https://github.com/ashalkhakov/TopoText/actions/workflows/build.yml/badge.svg)](https://github.com/ashalkhakov/TopoText/actions/workflows/build.yml)
 
 A rich text that merges itself. Copies of a text edited apart, on devices
 that are offline or on either side of a server, become the same text again by

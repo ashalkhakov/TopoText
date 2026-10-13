@@ -1,0 +1,66 @@
+name: Build
+
+# SimpleNotes on macOS, iOS and Linux (an AppImage), and its server's image,
+# by gnustep-release-actions' workflows, the same as every app's: every push
+# and pull request is built, tested and uploaded as artifacts; a v* tag (or
+# a run started by hand with one) is also released: the Mac app signed and
+# notarized with its Sparkle appcast, the iOS app unsigned, the AppImage with
+# its update information, attached to the tag's release (a pre-release when
+# the tag has a '-'), and the server's image pushed to the GitHub Container
+# Registry. What is SimpleNotes' own is in .github/release/ (build, test,
+# the image's configuration); the commits it builds on in .github/pins.env.
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A v* tag to build and release (empty: this branch, as artifacts)'
+        required: false
+        default: ''
+
+# A push and the pull request for the same branch share one run; a release
+# is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/macos-release.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes=SimpleNotes
+      dependencies: ODataKit
+    secrets: inherit
+
+  ios:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/ios-release.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      apps: SimpleNotes-iOS=SimpleNotes
+      dependencies: ODataKit
+
+  appimage:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/appimage-release.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      dependencies: FreeCoreData ODataKit
+      extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
+      databases: postgres mariadb
+
+  docker:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/docker-release.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      dockerfile: Docker/server.Dockerfile
+      images: =simplenotes-server
+      description: "SimpleNotes' server: notes that sync, and merge what was written apart"
+    permissions:
+      contents: read
+      packages: write

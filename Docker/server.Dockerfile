@@ -2,9 +2,9 @@
 #
 # simplenotes-server in an image of its own: the server, its model, and the
 # shared libraries it runs on, nothing else (no shell, no package manager).
-# Built from source, as ODataKit's images are: the GNUstep stack (Foundation
-# only), FreeCoreData with its PostgreSQL and MySQL stores, ODataKit and
-# TopoText, at the pins CI tests.
+# Built on gnustep-patches' GNUstep stack image, from source: FreeCoreData
+# with its PostgreSQL and MySQL stores, ODataKit and TopoText, at the pins CI
+# tests.
 #
 #   docker build -f Docker/server.Dockerfile -t simplenotes-server .
 #   docker run -p 8080:8080 -v notes:/data simplenotes-server
@@ -23,38 +23,21 @@
 # data, the same on musl. The final stage is FROM scratch: the libraries are
 # glibc's and the stack's, copied from where they were built.
 
-ARG UBUNTU=24.04
+# The patched GNUstep stack, gnustep-patches' image (its newest; --build-arg
+# STACK=ghcr.io/ashalkhakov/gnustep:<version> for another), and what the
+# server links beyond it: FreeCoreData's SQLite, PostgreSQL and MySQL clients.
+ARG STACK=ghcr.io/ashalkhakov/gnustep:latest
 
-FROM ubuntu:${UBUNTU} AS toolchain
+FROM ${STACK} AS stack
 ARG DEBIAN_FRONTEND=noninteractive
 # Through caching proxies that answer with stale indexes: no pipelining, no
 # proxy caches, retries (as ODataKit's images).
 RUN printf 'Acquire::http::No-Cache "true";\nAcquire::BrokenProxy "true";\nAcquire::http::Pipeline-Depth "0";\nAcquire::Retries "3";\n' \
-      > /etc/apt/apt.conf.d/99-simplenotes
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git make cmake patch pkg-config clang lld binutils \
-      libgnutls28-dev libffi-dev libicu-dev libxml2-dev libxslt1-dev libssl-dev zlib1g-dev \
-      libcurl4-gnutls-dev libgmp-dev libsqlite3-dev libpq-dev libmariadb-dev libavahi-compat-libdnssd-dev \
-      tzdata \
- && rm -rf /var/lib/apt/lists/* \
- # The gnustep-2.0 runtime needs ld.gold or lld.
- && update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld 10
-ENV PREFIX=/opt/gnustep \
-    CC=clang CXX=clang++ \
-    LIBRARY_COMBO=ng-gnu-gnu RUNTIME_VERSION=gnustep-2.0 \
-    COMPONENTS="libobjc2 libdispatch tools-make libs-base"
-
-# The stack: gnustep-patches' build, at .github/pins.env's commit
-# (--build-arg GNUSTEP_PATCHES_REF=... for another).
-FROM toolchain AS stack
-ARG GNUSTEP_PATCHES_REF
+      > /etc/apt/apt.conf.d/99-simplenotes \
+ && apt-get update && apt-get install -y --no-install-recommends \
+      libsqlite3-dev libpq-dev libmariadb-dev tzdata \
+ && rm -rf /var/lib/apt/lists/*
 COPY .github/pins.env /tmp/pins.env
-RUN set -e; ref=$GNUSTEP_PATCHES_REF; . /tmp/pins.env; GNUSTEP_PATCHES_REF=${ref:-$GNUSTEP_PATCHES_REF}; \
-    mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
-    git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
-    git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
-    SOURCES=/tmp/src/gnustep Scripts/build-gnustep.sh; \
-    rm -rf /tmp/src
 
 # FreeCoreData and ODataKit, at .github/pins.env's commits.
 FROM stack AS libraries

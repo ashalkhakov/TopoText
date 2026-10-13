@@ -1,8 +1,8 @@
 #!/bin/bash
 # FreeCoreData (momc, the PostgreSQL and MySQL stores), ODataKit and
-# TopoText, built and installed into a GNUstep prefix whose stack is built
-# already (gnustep-patches' build-gnustep.sh), as ci.yml's GNUstep job does
-# step by step. For release.yml's AppImage.
+# TopoText, built and installed into a GNUstep prefix that has the stack
+# (gnustep-patches' image, which gnustep-release-actions copies onto the
+# runner). For .github/release/linux-build.sh.
 #
 #   PREFIX=/path/to/prefix .github/scripts/build-libraries.sh
 #
