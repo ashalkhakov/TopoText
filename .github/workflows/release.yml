@@ -194,10 +194,25 @@ jobs:
             echo "::error::notarization was not accepted (status: ${status:-none})"
             exit 1
           fi
-          xcrun stapler staple "$APP"
-          xcrun stapler validate "$APP"
-          # What a downloaded copy meets: Gatekeeper's own assessment.
-          spctl --assess --type execute --verbose=2 "$APP"
+          # Stapling fetches the ticket from Apple's CloudKit service, whose
+          # connection the runner has lost mid-release, again and again ("The
+          # network connection was lost", error 68). Tried three times; then
+          # the app ships notarized but unstapled, which Gatekeeper accepts
+          # by fetching the ticket itself when the app is first opened.
+          stapled=false
+          for attempt in 1 2 3; do
+            if xcrun stapler staple "$APP" && xcrun stapler validate "$APP"; then
+              stapled=true
+              break
+            fi
+            [ "$attempt" = 3 ] || { echo "::warning::stapling failed (attempt $attempt of 3); trying again in 60 s"; sleep 60; }
+          done
+          if [ "$stapled" = true ]; then
+            # What a downloaded copy meets: Gatekeeper's own assessment.
+            spctl --assess --type execute --verbose=2 "$APP"
+          else
+            echo "::warning::the ticket could not be stapled; shipping notarized but unstapled (Gatekeeper fetches the ticket online)"
+          fi
 
       - name: Package
         run: |
