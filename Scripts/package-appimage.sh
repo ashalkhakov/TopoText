@@ -3,7 +3,7 @@
 # (after XFormsKit's).
 #
 #   APP_VERSION=1.2.3 GNUSTEP_PREFIX=... ./Scripts/package-appimage.sh
-#   UPDATE_INFORMATION='gh-releases-zsync|...' ...   (and a .zsync beside it)
+#   LDAI_UPDATE_INFORMATION='gh-releases-zsync|...' ...   (and a .zsync beside it)
 set -euo pipefail
 
 WORKSPACE_DIR=$(pwd)
@@ -55,12 +55,9 @@ export NO_VALIDATE=1
 # worth far more with them.
 export NO_STRIP="${NO_STRIP:-1}"
 export LDAI_RUNTIME_FILE="${LDAI_RUNTIME_FILE:-/tmp/appimage-runtime/runtime-${arch}}"
-# UPDATE_INFORMATION (release.yml sets it for a release): embedded, so that
-# AppImageUpdate, Gear Lever and the like update the image, and a .zsync
-# written beside it for them to fetch only the blocks that changed.
-if [ -n "${UPDATE_INFORMATION:-}" ]; then
-  export LDAI_UPDATE_INFORMATION="$UPDATE_INFORMATION"
-fi
+# LDAI_UPDATE_INFORMATION, when set (gnustep-release-actions'
+# appimage-update-info, for a release), is embedded, and a .zsync written
+# beside the image.
 
 # Local before System, as GNUstep.sh orders them: a library installed in
 # both (FreeCoreData, updated) is the Local one.

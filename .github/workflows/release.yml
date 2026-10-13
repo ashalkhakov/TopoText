@@ -93,126 +93,33 @@ jobs:
 
       # Signing is skipped, loudly, when the certificate secrets are absent, so
       # a fork or a dry run still produces artifacts -- unsigned, and named so.
+      # Signing, notarizing and the appcast are gnustep-release-actions',
+      # the same in every app's release. Each step skips itself, saying so,
+      # when its secrets are absent (a fork, a dry run): the build is then
+      # unsigned, and named so.
       - name: Sign
         id: sign
-        env:
-          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
-        run: |
-          if [ -z "$CERTIFICATE" ]; then
-            echo "::warning::MACOS_CERTIFICATE not set; shipping unsigned"
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          keychain=$RUNNER_TEMP/signing.keychain-db
-          password=$(uuidgen)
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
-            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$password" "$keychain" > /dev/null
-          security list-keychain -d user -s "$keychain" login.keychain-db
-          rm -f "$RUNNER_TEMP/cert.p12"
-          # codesign takes only an identity it can chain to Apple's root, and
-          # a runner need not have the Developer ID intermediate.
-          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" || true
+        uses: ashalkhakov/gnustep-release-actions/macos-sign@main
+        with:
+          app: ${{ env.APP }}
+          certificate: ${{ secrets.MACOS_CERTIFICATE }}
+          certificate-password: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          identity: ${{ secrets.MACOS_SIGN_IDENTITY }}
 
-          # The identity is read out of the keychain, not matched by name
-          # (ODataKit's and RDLKit's experience): only a Developer ID
-          # Application certificate can be notarized; MACOS_SIGN_IDENTITY, if
-          # set, chooses between several. Signed by hash, which is unambiguous.
-          echo "identities in the signing keychain:"
-          security find-identity -p codesigning "$keychain"
-          valid=$(security find-identity -v -p codesigning "$keychain")
-          candidates=$(printf '%s\n' "$valid" | awk -F'"' '/"Developer ID Application: /{print $2}' | sort -u)
-          if [ -z "$candidates" ]; then
-            echo "::error::MACOS_CERTIFICATE holds no valid Developer ID Application certificate (listed above); notarization accepts no other kind"
-            exit 1
-          fi
-          chosen=$(printf '%s\n' "$candidates" | { [ -n "$IDENTITY" ] && grep -Fx "$IDENTITY" || true; } | head -1)
-          if [ -z "$chosen" ]; then
-            [ -z "$IDENTITY" ] || echo "::warning::MACOS_SIGN_IDENTITY names no Developer ID identity in MACOS_CERTIFICATE; signing with the one it holds"
-            chosen=$(printf '%s\n' "$candidates" | head -1)
-          fi
-          echo "signing as: $chosen"
-          IDENTITY=$(printf '%s\n' "$valid" | grep -F "\"$chosen\"" | head -1 | awk '{print $2}')
-
-          # --timestamp and --options runtime are what notarization requires.
-          # Signed inside out: every framework embedded (what is there, not a
-          # list), then the app, whose signature seals theirs; not --deep,
-          # which Apple deprecates.
-          # Sparkle's helpers first, as its documentation has it for a
-          # Developer ID app (the downloader keeps its entitlements); its
-          # framework is then signed with the others.
-          sparkle="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
-          if [ -d "$sparkle" ]; then
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/XPCServices/Installer.xpc"
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" --preserve-metadata=entitlements "$sparkle/XPCServices/Downloader.xpc"
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/Autoupdate"
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$sparkle/Updater.app"
-          fi
-          for fw in "$APP"/Contents/Frameworks/*.framework; do
-            codesign --force --timestamp --options runtime --sign "$IDENTITY" "$fw"
-          done
-          codesign --force --timestamp --options runtime --sign "$IDENTITY" "$APP"
-          codesign --verify --strict --verbose=2 "$APP"
-          # The hardened runtime loads only frameworks signed by the same
-          # team: the signed app has to start and pass again.
-          Examples/SimpleNotes/Tests/self-test.sh "$SERVER" "$APP/Contents/MacOS/SimpleNotes"
-          echo "signed=true" >> "$GITHUB_OUTPUT"
+      # The hardened runtime loads only frameworks signed by the same team:
+      # the signed app has to start and pass again.
+      - name: Self-test, signed
+        if: steps.sign.outputs.signed == 'true'
+        run: Examples/SimpleNotes/Tests/self-test.sh "$SERVER" "$APP/Contents/MacOS/SimpleNotes"
 
       - name: Notarize
         if: steps.sign.outputs.signed == 'true'
-        env:
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-        run: |
-          # Checked here rather than in `if:`, where a step's own env block is
-          # not reliably visible to its own condition.
-          if [ -z "$NOTARY_APPLE_ID" ] || [ -z "$NOTARY_TEAM_ID" ] || [ -z "$NOTARY_PASSWORD" ]; then
-            echo "::warning::NOTARY_* secrets not set; signed but not notarized"
-            exit 0
-          fi
-          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/SimpleNotes-notarize.zip"
-          # A submission Apple finds invalid still ends the wait: the status
-          # says whether it was accepted, and the log says why not.
-          xcrun notarytool submit "$RUNNER_TEMP/SimpleNotes-notarize.zip" \
-            --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" \
-            --password "$NOTARY_PASSWORD" --wait --output-format json > "$RUNNER_TEMP/notary.json" || true
-          cat "$RUNNER_TEMP/notary.json"
-          id=$(plutil -extract id raw -o - "$RUNNER_TEMP/notary.json" 2>/dev/null || true)
-          status=$(plutil -extract status raw -o - "$RUNNER_TEMP/notary.json" 2>/dev/null || true)
-          if [ "$status" != "Accepted" ]; then
-            [ -n "$id" ] && xcrun notarytool log "$id" \
-              --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD" || true
-            echo "::error::notarization was not accepted (status: ${status:-none})"
-            exit 1
-          fi
-          # Stapling fetches the ticket from Apple's CloudKit service, whose
-          # connection the runner has lost mid-release, again and again ("The
-          # network connection was lost", error 68). Tried three times; then
-          # the app ships notarized but unstapled, which Gatekeeper accepts
-          # by fetching the ticket itself when the app is first opened.
-          stapled=false
-          for attempt in 1 2 3; do
-            if xcrun stapler staple "$APP" && xcrun stapler validate "$APP"; then
-              stapled=true
-              break
-            fi
-            [ "$attempt" = 3 ] || { echo "::warning::stapling failed (attempt $attempt of 3); trying again in 60 s"; sleep 60; }
-          done
-          if [ "$stapled" = true ]; then
-            # What a downloaded copy meets: Gatekeeper's own assessment.
-            spctl --assess --type execute --verbose=2 "$APP"
-          else
-            echo "::warning::the ticket could not be stapled; shipping notarized but unstapled (Gatekeeper fetches the ticket online)"
-          fi
+        uses: ashalkhakov/gnustep-release-actions/macos-notarize@main
+        with:
+          app: ${{ env.APP }}
+          apple-id: ${{ secrets.NOTARY_APPLE_ID }}
+          team-id: ${{ secrets.NOTARY_TEAM_ID }}
+          password: ${{ secrets.NOTARY_PASSWORD }}
 
       - name: Package
         run: |
@@ -221,29 +128,16 @@ jobs:
           ditto -c -k --keepParent "$APP" "SimpleNotes-macOS-${APP_VERSION}${suffix}.zip"
 
       # The appcast the app's Sparkle reads (SUFeedURL: the newest release's
-      # appcast.xml): this release's zip, signed with the EdDSA key whose
-      # public half is SUPublicEDKey. A release only, signed and notarized:
-      # a pre-release is offered to no one.
+      # appcast.xml), signed with the key whose public half is SUPublicEDKey;
+      # for a release only.
       - name: Appcast
-        if: steps.sign.outputs.signed == 'true' && env.TAG != '' && !contains(env.TAG, '-')
-        env:
-          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          SPARKLE_VERSION: 2.10.0   # as Scripts/xcodeproj.py
-        run: |
-          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "::warning::SPARKLE_PRIVATE_KEY not set; no appcast, so the Mac app will not be offered this release"
-            exit 0
-          fi
-          curl -fsSL -o "$RUNNER_TEMP/sparkle.tar.xz" \
-            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
-          mkdir -p "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/updates"
-          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
-          cp "SimpleNotes-macOS-${APP_VERSION}.zip" "$RUNNER_TEMP/updates/"
-          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$RUNNER_TEMP/sparkle/bin/generate_appcast" --ed-key-file - \
-            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
-            -o appcast.xml "$RUNNER_TEMP/updates"
-          cat appcast.xml
-          grep -q 'sparkle:edSignature' appcast.xml || { echo "::error::the appcast's update is not signed"; exit 1; }
+        if: steps.sign.outputs.signed == 'true'
+        uses: ashalkhakov/gnustep-release-actions/sparkle-appcast@main
+        with:
+          archive: ${{ github.workspace }}/source/SimpleNotes-macOS-${{ env.APP_VERSION }}.zip
+          output: ${{ github.workspace }}/source/appcast.xml
+          tag: ${{ env.TAG }}
+          private-key: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -349,19 +243,8 @@ jobs:
     # experience). Raise this only when that release leaves support.
     runs-on: ubuntu-22.04
     timeout-minutes: 150
-    env:
-      PREFIX: ${{ github.workspace }}/build
-      SOURCES: ${{ github.workspace }}/dependencies
-      CC: clang
-      CXX: clang++
-      LIBRARY_COMBO: ng-gnu-gnu
-      RUNTIME_VERSION: gnustep-2.0
-      # Foundation, gui and back for the app, and the Eau theme it looks as
-      # with (AppRun sets it in the app's defaults).
-      COMPONENTS: libobjc2 libdispatch tools-make libs-base libs-gui libs-back eau
-      # libobjc2 and libdispatch land in the prefix's plain lib/, which the
-      # gnustep layout does not treat as a library root.
-      LD_LIBRARY_PATH: ${{ github.workspace }}/build/lib
+    # The stack's settings (PREFIX, COMPONENTS, the toolchain) are
+    # gnustep-release-actions/gnustep-stack's.
     defaults:
       run:
         working-directory: ${{ github.workspace }}/source
@@ -397,62 +280,21 @@ jobs:
             echo "APP_VERSION=0.0.0-build${{ github.run_number }}" >> "$GITHUB_ENV"
           fi
 
-      - name: Install packages
-        run: |
-          ./.github/scripts/apt-update.sh
-          sudo apt-get -q -y install \
-            pkg-config libgnutls28-dev libffi-dev libicu-dev libxml2-dev libxslt1-dev \
-            libssl-dev zlib1g-dev libcurl4-gnutls-dev libgmp-dev libsqlite3-dev \
-            libavahi-compat-libdnssd-dev libpthread-workqueue-dev libpq-dev libmariadb-dev \
-            libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev \
-            libfreetype6-dev libfontconfig1-dev libxrender-dev \
-            libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
-            clang file fuse libfuse2 desktop-file-utils fonts-dejavu fonts-liberation python3-pip
-          if [ -x /usr/bin/ld.gold ]; then
-            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 10
-          else
-            sudo apt-get -q -y install lld
-            sudo update-alternatives --install /usr/bin/ld ld /usr/bin/ld.lld 10
-          fi
-
-      # libdispatch wants CMake 3.26 or newer, and 22.04's is 3.22: from pip,
-      # the same on a runner (which has its own) and in a container.
-      - name: CMake
-        run: |
-          python3 -m pip install --user --quiet 'cmake>=3.26'
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/cmake" --version | head -1
-
-      # The recipe hash covers the build script, COMPONENTS, the toolchain and
-      # every patch. Restored and saved apart, so the cache holds the stack
-      # before anything is installed into it for packaging.
-      - name: GNUstep recipe
-        id: recipe
-        run: echo "hash=$(../gnustep-patches/Scripts/build-gnustep.sh --print-recipe-hash)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore GNUstep
-        id: gnustep-cache
-        uses: actions/cache/restore@v4
+      # The patched stack, cached by its recipe; Foundation, gui and back
+      # for the app, and the Eau theme it looks as with (AppRun sets it in
+      # the app's defaults). Beyond the stack's packages: FreeCoreData's
+      # stores' (SQLite, PostgreSQL, MariaDB) and peer sync's (dns-sd).
+      - name: GNUstep
+        uses: ashalkhakov/gnustep-release-actions/gnustep-stack@main
         with:
-          path: ${{ env.PREFIX }}
-          key: gnustep-appimage-ubuntu-22.04-${{ steps.recipe.outputs.hash }}
-
-      - name: Build GNUstep
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: ../gnustep-patches/Scripts/build-gnustep.sh
-
-      - name: Save GNUstep
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.PREFIX }}
-          key: gnustep-appimage-ubuntu-22.04-${{ steps.recipe.outputs.hash }}
+          patches: ${{ github.workspace }}/gnustep-patches
+          extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
 
       - name: FreeCoreData, ODataKit and TopoText
         run: .github/scripts/build-libraries.sh
 
-      - name: Fetch linuxdeploy and the AppImage runtime
-        run: ./Scripts/install-linuxdeploy.sh
+      - name: linuxdeploy and the AppImage runtime
+        uses: ashalkhakov/gnustep-release-actions/appimage-tools@main
 
       - name: Stamp the version
         run: ./Scripts/stamp-version.sh "$APP_VERSION"
@@ -462,14 +304,15 @@ jobs:
 
       # A release's image updates itself from the newest release (through
       # AppImageUpdate, Gear Lever and the like), by the .zsync attached
-      # beside it. A pre-release's does not: "latest" would offer it the
-      # release before it.
+      # beside it; a pre-release's does not.
+      - name: Update information
+        uses: ashalkhakov/gnustep-release-actions/appimage-update-info@main
+        with:
+          tag: ${{ env.TAG }}
+          zsync: SimpleNotes-*x86_64.AppImage.zsync
+
       - name: Package the AppImage
-        run: |
-          if [ -n "$TAG" ] && [[ "$TAG" != *-* ]]; then
-            export UPDATE_INFORMATION="gh-releases-zsync|${GITHUB_REPOSITORY%%/*}|${GITHUB_REPOSITORY#*/}|latest|SimpleNotes-*x86_64.AppImage.zsync"
-          fi
-          GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
+        run: GNUSTEP_PREFIX="$PREFIX" ./Scripts/package-appimage.sh
 
       # Where it will run: a plain Ubuntu with no GNUstep, and only the
       # libraries every desktop has (AppImage leaves those to the host). The
