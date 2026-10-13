@@ -16,9 +16,12 @@ ARG SDK=odatakit-sdk:latest
 
 # FreeCoreData, rebuilt over the sdk's: a commit of it, or a checkout of
 # one's own (--build-context freecoredata=../FreeCoreData).
+# The commit is .github/pins.env's (--build-arg FREECOREDATA_REF=... for another).
 FROM alpine/git AS freecoredata-git
-ARG FREECOREDATA_REF=5bfd5a87179cff43e0a8a55622fc00f01951c88a
-RUN git clone -q https://github.com/ashalkhakov/FreeCoreData.git /src && cd /src && git checkout -q "$FREECOREDATA_REF"
+ARG FREECOREDATA_REF
+COPY .github/pins.env /tmp/pins.env
+RUN set -e; ref=$FREECOREDATA_REF; . /tmp/pins.env; FREECOREDATA_REF=${ref:-$FREECOREDATA_REF}; \
+    git clone -q https://github.com/ashalkhakov/FreeCoreData.git /src && cd /src && git checkout -q "$FREECOREDATA_REF"
 FROM scratch AS freecoredata
 COPY --from=freecoredata-git /src /
 
@@ -28,13 +31,14 @@ COPY --from=freecoredata-git /src /
 # Foundation again, at this pin, which may be ahead of the sdk's.
 FROM ${SDK} AS gui
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GNUSTEP_PATCHES_REF=d39a393fbcfc8082f23444fbd1d6f236d42f62b4
+ARG GNUSTEP_PATCHES_REF
+COPY .github/pins.env /tmp/pins.env
 RUN apt-get update && apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
       libcairo2-dev libjpeg-dev libtiff-dev libpng-dev libicns-dev libfreetype-dev libfontconfig1-dev \
       libxrender-dev libxt-dev libxmu-dev libxft-dev libxrandr-dev libxfixes-dev libxcursor-dev \
       xvfb xauth fonts-dejavu-core \
  && rm -rf /var/lib/apt/lists/*
-RUN set -e; \
+RUN set -e; ref=$GNUSTEP_PATCHES_REF; . /tmp/pins.env; GNUSTEP_PATCHES_REF=${ref:-$GNUSTEP_PATCHES_REF}; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
     git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
