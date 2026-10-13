@@ -44,22 +44,26 @@ ENV PREFIX=/opt/gnustep \
     LIBRARY_COMBO=ng-gnu-gnu RUNTIME_VERSION=gnustep-2.0 \
     COMPONENTS="libobjc2 libdispatch tools-make libs-base"
 
-# The stack: gnustep-patches' build, at CI's pin.
+# The stack: gnustep-patches' build, at .github/pins.env's commit
+# (--build-arg GNUSTEP_PATCHES_REF=... for another).
 FROM toolchain AS stack
-ARG GNUSTEP_PATCHES_REF=d39a393fbcfc8082f23444fbd1d6f236d42f62b4
-RUN set -e; \
+ARG GNUSTEP_PATCHES_REF
+COPY .github/pins.env /tmp/pins.env
+RUN set -e; ref=$GNUSTEP_PATCHES_REF; . /tmp/pins.env; GNUSTEP_PATCHES_REF=${ref:-$GNUSTEP_PATCHES_REF}; \
     mkdir -p /tmp/src/gnustep-patches && cd /tmp/src/gnustep-patches; \
     git init -q && git remote add origin https://github.com/ashalkhakov/gnustep-patches.git; \
     git fetch -q --depth 1 origin "$GNUSTEP_PATCHES_REF" && git checkout -q FETCH_HEAD; \
     SOURCES=/tmp/src/gnustep Scripts/build-gnustep.sh; \
     rm -rf /tmp/src
 
-# FreeCoreData and ODataKit, at CI's pins.
+# FreeCoreData and ODataKit, at .github/pins.env's commits.
 FROM stack AS libraries
-ARG FREECOREDATA_REF=5bfd5a87179cff43e0a8a55622fc00f01951c88a
-ARG ODATAKIT_REF=de46fce3540bd20ddb36907c869f526aa4f96db1
+ARG FREECOREDATA_REF
+ARG ODATAKIT_REF
 SHELL ["/bin/bash", "-c"]
-RUN set -e; . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
+RUN set -e; fcd=$FREECOREDATA_REF; odk=$ODATAKIT_REF; . /tmp/pins.env; \
+    FREECOREDATA_REF=${fcd:-$FREECOREDATA_REF}; ODATAKIT_REF=${odk:-$ODATAKIT_REF}; \
+    . /opt/gnustep/System/Library/Makefiles/GNUstep.sh; export LD_LIBRARY_PATH=/opt/gnustep/lib:$LD_LIBRARY_PATH; \
     mkdir -p /tmp/src/FreeCoreData && cd /tmp/src/FreeCoreData; \
     git init -q && git remote add origin https://github.com/ashalkhakov/FreeCoreData.git; \
     git fetch -q --depth 1 origin "$FREECOREDATA_REF" && git checkout -q FETCH_HEAD; \

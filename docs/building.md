@@ -40,6 +40,10 @@ iOS. On Ubuntu it builds the same pinned gnustep-patches stack (cached),
 FreeCoreData and ODataKit, then builds and tests TopoText, also checking that
 TopoText builds alone.
 
+The commits it builds on (ODataKit, gnustep-patches, FreeCoreData) are named
+in one place, `.github/pins.env`, which CI, the release and the Dockerfiles
+all read. To move one, change it there.
+
 Releases (`release.yml`, `docker.yml`, ported from ODataKit's, XFormsKit's
 and RDLKit's) package SimpleNotes from a `v*` tag: the macOS app (signed and
 notarized when the secrets are set), a Linux AppImage, unsigned iOS builds,
