@@ -7,8 +7,7 @@ set -euo pipefail
 for scheme in SimpleNotes simplenotes-server; do
   xcodebuild -workspace TopoText.xcworkspace -scheme "$scheme" \
     -destination 'generic/platform=macOS' -configuration Release \
-    -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-    MARKETING_VERSION="${APP_VERSION%%-*}" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build
+    -derivedDataPath "$RUNNER_TEMP/DerivedData" build
 done
 products=$RUNNER_TEMP/DerivedData/Build/Products/Release
 for fw in TopoText TopoTextSync ODataKit ODataSync; do

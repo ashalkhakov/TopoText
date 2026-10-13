@@ -334,7 +334,10 @@ jobs:
       # this job's Ubuntu, so it needs a glibc as new; release.yml's, built on
       # an older one, runs on more.
       - name: Stamp the version
-        run: ./Scripts/stamp-version.sh "0.0.0-${{ github.run_number }}-${{ github.sha }}"
+        uses: ashalkhakov/gnustep-release-actions/stamp-version@v1
+        with:
+          version: 0.0.0-${{ github.run_number }}-${{ github.sha }}
+          working-directory: ${{ env.SRC_PATH }}
 
       # gnustep-release-actions' appimage and appimage-test, as release.yml's:
       # .github/release/linux-install.sh and appimage.conf, the image, and
