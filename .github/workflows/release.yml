@@ -42,6 +42,5 @@ jobs:
     uses: ashalkhakov/gnustep-release-actions/.github/workflows/appimage-release.yml@v1
     with:
       tag: ${{ inputs.tag }}
-      appimage: SimpleNotes
       dependencies: FreeCoreData ODataKit
       extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
