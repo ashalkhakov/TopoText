@@ -603,6 +603,25 @@
         [[NSAttributedString alloc] initWithString:@"x" attributes:typing]];
     [_binding textDidChange];
     XCTAssertNil([_editor.text attributesAtIndex:2 effectiveRange:NULL][SNAttachmentKey], @"a letter is no attachment");
+
+    /* UIKit's typing attributes after an image carry its very view
+       attachment: a newline typed so is still no attachment, and the
+       image keeps its id. */
+    NSDictionary *image = [_storage attributesAtIndex:0 effectiveRange:NULL];
+    [_storage replaceCharactersInRange:NSMakeRange(1, 0) withAttributedString:
+        [[NSAttributedString alloc] initWithString:@"\n" attributes:image]];
+    [_binding textDidChange];
+    XCTAssertNil([_editor.text attributesAtIndex:1 effectiveRange:NULL][SNAttachmentKey], @"a newline typed after it is no attachment");
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL][SNAttachmentKey], firstID);
+
+#ifndef GNUSTEP
+    /* UIKit edits an attachment character's attributes with its view
+       attachment gone for a moment: the character keeps its id. (gnustep-gui
+       takes a U+FFFC with no attachment out of the text instead.) */
+    [_storage removeAttribute:NSAttachmentAttributeName range:NSMakeRange(0, 1)];
+    [_binding textDidChange];
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL][SNAttachmentKey], firstID, @"its id kept");
+#endif
 }
 
 /* A note with an image opened, and an image merged in from elsewhere: the

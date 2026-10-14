@@ -243,15 +243,48 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if (SNColorNameOf(view[SNColorAttributeName])) t[SNColorKey] = view[SNColorAttributeName];
     if (SNColorNameOf(view[SNHighlightAttributeName])) t[SNHighlightKey] = view[SNHighlightAttributeName];
     if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
-    /* An attachment's id, only on the character that shows it, and the one
-       its view attachment says: never one taken from a neighbour (the
-       typing attributes after an image carry its id, and so would a second
-       image pasted after it, or a letter typed). An image pasted has no id
-       yet: storageEdited: makes it an attachment. */
+    /* An attachment's id: the one its view attachment says. A view
+       attachment of someone else's is an image pasted, which has none yet
+       (storageEdited: makes it an attachment of its own): the id it came
+       with is its neighbour's, from the typing attributes after an image.
+       With no view attachment at all (UIKit has none on the character for
+       a moment while it edits its attributes), the id the view has. Which
+       characters may have one at all: SNTextAttributesOfRun. */
     id shown = view[NSAttachmentAttributeName];
-    if ([shown isKindOfClass:[SNTextAttachment class]] && ((SNTextAttachment *)shown).attachmentID.length)
-        t[SNAttachmentKey] = ((SNTextAttachment *)shown).attachmentID;
+    if ([shown isKindOfClass:[SNTextAttachment class]]) {
+        if (((SNTextAttachment *)shown).attachmentID.length) t[SNAttachmentKey] = ((SNTextAttachment *)shown).attachmentID;
+    } else if (!shown && [view[SNAttachmentAttributeName] isKindOfClass:[NSString class]]) {
+        t[SNAttachmentKey] = view[SNAttachmentAttributeName];
+    }
     return t;
+}
+
+/* The parts of a run of the view's string an edit is told to the text in:
+   each attachment character (U+FFFC) apart, the rest together. The typing
+   attributes after an image are its (UIKit's carry even its view
+   attachment), so a run can hold an image and what was typed after it. */
+static NSArray<NSValue *> *SNAttachmentParts(NSString *string, NSRange run) {
+    NSMutableArray *parts = [NSMutableArray array];
+    NSUInteger start = run.location;
+    for (NSUInteger i = run.location; i < NSMaxRange(run); i++) {
+        if ([string characterAtIndex:i] != SNAttachmentCharacter) continue;
+        if (i > start) [parts addObject:[NSValue valueWithRange:NSMakeRange(start, i - start)]];
+        [parts addObject:[NSValue valueWithRange:NSMakeRange(i, 1)]];
+        start = i + 1;
+    }
+    if (NSMaxRange(run) > start) [parts addObject:[NSValue valueWithRange:NSMakeRange(start, NSMaxRange(run) - start)]];
+    return parts;
+}
+
+/* TopoText's attributes for a part of a run (SNAttachmentParts): an
+   attachment's id on its character only, never on what was typed after
+   it, whose attributes say it too. */
+static NSDictionary *SNTextAttributesOfRun(NSDictionary *view, NSString *string, NSRange part) {
+    NSDictionary *t = SNTextAttributes(view);
+    if (!t[SNAttachmentKey] || (part.length == 1 && [string characterAtIndex:part.location] == SNAttachmentCharacter)) return t;
+    NSMutableDictionary *m = [t mutableCopy];
+    [m removeObjectForKey:SNAttachmentKey];
+    return m;
 }
 
 /* The view's attributes that are ours, made from TopoText's: others (a
@@ -545,13 +578,14 @@ static __weak TTUndoStep *SNLastUndoStep;
         [t deleteCharactersInRange:old];
         NSUInteger at = old.location;
         NSString *string = _storage.string;
-        for (NSValue *v in SNAttributeRuns(_storage, r)) {
-            NSRange run = v.rangeValue;
+        for (NSValue *v in SNAttributeRuns(_storage, r)) for (NSValue *p in SNAttachmentParts(string, v.rangeValue)) {
+            NSRange run = p.rangeValue;
             NSDictionary *view = [_storage attributesAtIndex:run.location effectiveRange:NULL];
-            NSMutableDictionary *attrs = [SNTextAttributes(view) mutableCopy];
+            NSMutableDictionary *attrs = [SNTextAttributesOfRun(view, string, run) mutableCopy];
             NSTextAttachment *pasted = view[NSAttachmentAttributeName];
             /* An image pasted or dropped: one of the note's attachments now. */
-            if (pasted && !attrs[SNAttachmentKey]) {
+            BOOL character = run.length == 1 && [string characterAtIndex:run.location] == SNAttachmentCharacter;
+            if (pasted && character && !attrs[SNAttachmentKey]) {
                 NSString *made = [self attachmentForPasted:pasted];
                 if (made) attrs[SNAttachmentKey] = made;
             }
@@ -562,9 +596,10 @@ static __weak TTUndoStep *SNLastUndoStep;
     } else if (mask & NSTextStorageEditedAttributes) {
         /* Only the keys that changed: the others' registers are left to
            whoever wrote them last. */
-        for (NSValue *v in SNAttributeRuns(_storage, r)) {
-            NSRange run = v.rangeValue;
-            NSDictionary *want = SNTextAttributes([_storage attributesAtIndex:run.location effectiveRange:NULL]);
+        NSString *string = _storage.string;
+        for (NSValue *v in SNAttributeRuns(_storage, r)) for (NSValue *p in SNAttachmentParts(string, v.rangeValue)) {
+            NSRange run = p.rangeValue;
+            NSDictionary *want = SNTextAttributesOfRun([_storage attributesAtIndex:run.location effectiveRange:NULL], string, run);
             NSUInteger i = run.location;
             while (i < NSMaxRange(run)) {
                 NSRange have;
@@ -589,9 +624,9 @@ static __weak TTUndoStep *SNLastUndoStep;
        text is made the storage's again. */
     if (![t.string isEqualToString:_storage.string]) {
         NSMutableAttributedString *mapped = [[NSMutableAttributedString alloc] initWithString:_storage.string];
-        for (NSValue *v in SNAttributeRuns(_storage, NSMakeRange(0, _storage.length))) {
-            NSRange run = v.rangeValue;
-            [mapped setAttributes:SNTextAttributes([_storage attributesAtIndex:run.location effectiveRange:NULL]) range:run];
+        for (NSValue *v in SNAttributeRuns(_storage, NSMakeRange(0, _storage.length))) for (NSValue *p in SNAttachmentParts(_storage.string, v.rangeValue)) {
+            NSRange run = p.rangeValue;
+            [mapped setAttributes:SNTextAttributesOfRun([_storage attributesAtIndex:run.location effectiveRange:NULL], _storage.string, run) range:run];
         }
         [self recordEditOf:NSMakeRange(0, _storage.length) replacing:NSMakeRange(0, t.length) characters:NO];
         [t setAttributedString:mapped];

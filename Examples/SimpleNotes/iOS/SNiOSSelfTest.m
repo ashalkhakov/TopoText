@@ -298,9 +298,14 @@ void SNStartSelfTest(SNNotes *notes, UINavigationController *navigation) {
         }
         SNSay([seen isEqual:@[ @"-", @"check", @"check", @"check+", @"-", @"-", @"-", @"-", @"-" ]],
               [NSString stringWithFormat:@"the second device has the checklist, the ticked item at the bottom (%@)", [seen componentsJoinedByString:@" "]]);
-        NSString *photoID = wt.length > 2 ? [wt attributesAtIndex:wt.length - 3 effectiveRange:NULL][SNAttachmentKey] : nil;
+        /* The photo and the table, by their characters: text was typed after
+           them (Packing, and the section under it). */
+        NSMutableArray<NSString *> *shown = [NSMutableArray array];
+        for (NSUInteger q = 0; q < wt.length; q++)
+            if ([wt.string characterAtIndex:q] == 0xFFFC) [shown addObject:[wt attributesAtIndex:q effectiveRange:NULL][SNAttachmentKey] ?: @""];
+        NSString *photoID = shown.count == 2 ? shown[0] : nil;
         SNSay([other attachmentWithID:photoID].data.length > 0, [NSString stringWithFormat:@"and the photo (%@)", photoID]);
-        NSString *tableThere = wt.length ? [wt attributesAtIndex:wt.length - 1 effectiveRange:NULL][SNAttachmentKey] : nil;
+        NSString *tableThere = shown.count == 2 ? shown[1] : nil;
         SNSay([[other tableOfAttachment:[other attachmentWithID:tableThere]].strings isEqual:cells], @"and the table");
         SNSay([[[[other tableOfAttachment:[other attachmentWithID:tableThere]] textAtRow:0 column:0] attributesAtIndex:0 effectiveRange:NULL][SNBoldKey] boolValue],
               @"its cell's bold too");
