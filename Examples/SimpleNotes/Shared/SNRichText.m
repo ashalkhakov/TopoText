@@ -243,7 +243,14 @@ NSDictionary *SNTextAttributes(NSDictionary *view) {
     if (SNColorNameOf(view[SNColorAttributeName])) t[SNColorKey] = view[SNColorAttributeName];
     if (SNColorNameOf(view[SNHighlightAttributeName])) t[SNHighlightKey] = view[SNHighlightAttributeName];
     if ([view[SNLinkAttributeName] isKindOfClass:[NSString class]]) t[SNLinkKey] = view[SNLinkAttributeName];
-    if ([view[SNAttachmentAttributeName] isKindOfClass:[NSString class]]) t[SNAttachmentKey] = view[SNAttachmentAttributeName];
+    /* An attachment's id, only on the character that shows it, and the one
+       its view attachment says: never one taken from a neighbour (the
+       typing attributes after an image carry its id, and so would a second
+       image pasted after it, or a letter typed). An image pasted has no id
+       yet: storageEdited: makes it an attachment. */
+    id shown = view[NSAttachmentAttributeName];
+    if ([shown isKindOfClass:[SNTextAttachment class]] && ((SNTextAttachment *)shown).attachmentID.length)
+        t[SNAttachmentKey] = ((SNTextAttachment *)shown).attachmentID;
     return t;
 }
 

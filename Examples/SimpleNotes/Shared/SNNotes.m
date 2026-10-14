@@ -949,14 +949,17 @@ static NSPredicate *SNAnd(NSPredicate *a, NSPredicate *b) {
    SNAttachmentKey: the device's code has it without the view system's). */
 static NSString * const SNTextAttachmentKey = @"attachment";
 
-/* The ids of the attachments a text has, in order. */
+/* The ids of the attachments a text has, in order: each one's character's
+   (U+FFFC). Other characters' ids are not theirs: text typed after an
+   image once took its id along, and an image whose character was deleted
+   would stay counted by them. */
 static NSArray<NSString *> *SNAttachmentIDsIn(TopoText *text) {
     NSMutableArray *ids = [NSMutableArray array];
-    for (NSUInteger i = 0; i < text.length; ) {
-        NSRange run;
-        id a = [text attributesAtIndex:i effectiveRange:&run][SNTextAttachmentKey];
+    NSString *string = text.string;
+    for (NSUInteger i = 0; i < string.length; i++) {
+        if ([string characterAtIndex:i] != 0xFFFC) continue;
+        id a = [text attributesAtIndex:i effectiveRange:NULL][SNTextAttachmentKey];
         if ([a isKindOfClass:[NSString class]] && ![ids containsObject:a]) [ids addObject:a];
-        i = NSMaxRange(run) > i ? NSMaxRange(run) : i + 1;
     }
     return ids;
 }

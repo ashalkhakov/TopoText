@@ -565,6 +565,46 @@
     XCTAssertEqualObjects([_storage attribute:SNAttachmentAttributeName atIndex:0 effectiveRange:NULL], attachmentID, @"and its view knows it");
 }
 
+/* Two images pasted one after the other: the second comes with the
+   typing attributes the first left (its attachment id among them), as
+   NSTextView pastes an image. Each is an attachment of its own, in the text
+   as in the view; and a letter typed after an image is no attachment. */
+- (void)testImagesPastedOneAfterAnotherAreEachTheirOwn {
+    unichar c = 0xFFFC;
+    NSString *character = [NSString stringWithCharacters:&c length:1];
+    NSTextAttachment *first = [[NSTextAttachment alloc] init], *second = [[NSTextAttachment alloc] init];
+#if TARGET_OS_IPHONE
+    first.image = [UIImage imageWithData:[self png]];
+    second.image = [UIImage imageWithData:[self png]];
+#else
+    first.fileWrapper = [[NSFileWrapper alloc] initRegularFileWithContents:[self png]];
+    second.fileWrapper = [[NSFileWrapper alloc] initRegularFileWithContents:[self png]];
+#endif
+    [_storage replaceCharactersInRange:NSMakeRange(0, 0) withAttributedString:
+        [[NSAttributedString alloc] initWithString:character attributes:@{ NSAttachmentAttributeName: first }]];
+    [_binding textDidChange];
+    [_binding performSelector:@selector(idsForPastedAttachments)];
+    NSString *firstID = [_storage attribute:SNAttachmentAttributeName atIndex:0 effectiveRange:NULL];
+    XCTAssertNotNil(firstID);
+
+    NSMutableDictionary *typing = [[_storage attributesAtIndex:0 effectiveRange:NULL] mutableCopy];
+    typing[NSAttachmentAttributeName] = second;
+    [_storage replaceCharactersInRange:NSMakeRange(1, 0) withAttributedString:
+        [[NSAttributedString alloc] initWithString:character attributes:typing]];
+    [_binding textDidChange];
+    NSString *secondID = [_editor.text attributesAtIndex:1 effectiveRange:NULL][SNAttachmentKey];
+    XCTAssertNotNil(secondID);
+    XCTAssertNotEqualObjects(secondID, firstID, @"the second image is an attachment of its own");
+    XCTAssertNotNil([_editor attachmentWithID:secondID], @"saved: %@", secondID);
+    XCTAssertEqualObjects([_editor.text attributesAtIndex:0 effectiveRange:NULL][SNAttachmentKey], firstID, @"the first keeps its own");
+
+    [typing removeObjectForKey:NSAttachmentAttributeName];
+    [_storage replaceCharactersInRange:NSMakeRange(2, 0) withAttributedString:
+        [[NSAttributedString alloc] initWithString:@"x" attributes:typing]];
+    [_binding textDidChange];
+    XCTAssertNil([_editor.text attributesAtIndex:2 effectiveRange:NULL][SNAttachmentKey], @"a letter is no attachment");
+}
+
 /* A note with an image opened, and an image merged in from elsewhere: the
    view keeps its character (gnustep-gui takes a U+FFFC with no attachment
    out of a text storage). */
