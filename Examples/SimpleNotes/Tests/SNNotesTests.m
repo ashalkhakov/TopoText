@@ -953,6 +953,23 @@
     XCTAssertNil([a firstImageIDOfNote:[a addNoteInFolder:nil]], @"none in an empty note");
 }
 
+/* An image's id on the text after it (a note's text took it along, once):
+   the image's character deleted, it is gone from the note, whatever the
+   other characters still say. */
+- (void)testAnImageDeletedIsGoneThoughTextAfterItHasItsID {
+    SNNotes *a = [self device];
+    NSData *png = [NSData dataWithBytes:"\x89PNG not really" length:16];
+    SNNote *note = [a addNoteInFolder:nil];
+    SNAttachment *image = [a addImageToNote:note data:png type:@"image/png" width:4 height:3];
+    [self edit:note on:a with:^(TopoText *t) {
+        [t insertString:@"\uFFFCafter" atIndex:0 attributes:@{ @"attachment": image.id }];
+    }];
+    XCTAssertEqualObjects([a firstImageIDOfNote:note], image.id);
+    [self edit:note on:a with:^(TopoText *t) { [t deleteCharactersInRange:NSMakeRange(0, 1)]; }];
+    XCTAssertNil([a firstImageIDOfNote:note], @"its character is gone");
+    XCTAssertEqual([a attachmentsOfKind:SNAttachmentKindImage].count, 0u, @"and so is it, from the list");
+}
+
 - (void)testAFileGoesToTheOtherDevice {
     SNNotes *a = [self device], *b = [self device];
     SNNote *note = [a addNoteInFolder:nil];
