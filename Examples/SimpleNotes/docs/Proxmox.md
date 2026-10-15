@@ -51,6 +51,16 @@ forwards to it.
 `/data`. The notes (`notes.sqlite`, with `-wal` and `-shm`) and the key peer
 tokens are signed with (`SimpleNotes-peer-key.json`) live there, and a mount
 point moves from one container to the next when updating (step 6).
+Proxmox does not make one from the image's `VOLUME`: without this,
+`/data` is not there at all.
+
+A new mount point belongs to the container's root, and the server runs as
+user 10001, which an unprivileged container maps to 110001 on the host.
+Give it to that user before the first start:
+
+```sh
+pct mount 100 && chown 110001:110001 /var/lib/lxc/100/rootfs/data && pct unmount 100
+```
 
 **Environment** (Options › Environment):
 
@@ -206,4 +216,5 @@ new server and a new device sync an empty notebook.
 | Not synced, 401, after signing in | The token's audience is not `SN_JWT_AUDIENCE` | Add Keycloak's audience mapper, or remove `SN_JWT_AUDIENCE` |
 | Not synced: client error (on an iPhone; the Mac syncs) | The proxy answers 421: HTTP/2 is on for Keycloak's host and off for the notes host, which share a certificate | HTTP/2 on for both hosts (step 4) |
 | A TLS error, or the sign-in page times out, on an iPhone at home | iCloud Private Relay or Limit IP Address Tracking: Safari's requests go through Apple's relays, which cannot reach a LAN address | Turn both off for the home Wi-Fi |
+| The container stops at once; `lxc-start -n <id> -F` shows `the peer signing key cannot be written at /data/…` (before 0.4.8: `simplenotes-server: error:` and nothing more) | `/data` is missing, or a new mount point the server's user does not own | Step 3: a `/data` mount point, owned by 110001 |
 | Synced, and no notes | The notes are no one's, or the container's `/data` is new | Step 7, or move the old `/data` over (step 6) |

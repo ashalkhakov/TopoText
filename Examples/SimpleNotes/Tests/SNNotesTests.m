@@ -1222,6 +1222,13 @@
     XCTAssertEqualObjects(SNPeerSigningKeyAt(file, NULL), signing, @"made once, then kept");
     NSDictionary *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:file.path error:NULL];
     XCTAssertEqual([attributes[NSFilePosixPermissions] integerValue], 0600);
+    /* Where none can be made (a mount point the server's user cannot
+       write): the error names the file, and why. */
+    NSURL *nowhere = [[self temporaryStore] URLByAppendingPathComponent:@"SimpleNotes-peer-key.json"];
+    XCTAssertNil(SNPeerSigningKeyAt(nowhere, &error));
+    XCTAssertTrue([error.localizedDescription containsString:nowhere.path], @"%@", error.localizedDescription);
+    XCTAssertTrue([error.localizedDescription containsString:@(strerror(ENOENT))], @"%@", error.localizedDescription);
+    error = nil;
 
     NSDictionary *key = [self serveNotebooksPerUser];
     SNIssuePeerTokens(_histories, signing);
