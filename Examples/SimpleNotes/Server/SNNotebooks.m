@@ -98,10 +98,25 @@ NSDictionary *SNPeerSigningKeyAt(NSURL *file, NSError **error) {
     NSDictionary *made = HSGenerateSigningKey(error);
     if (!made) return nil;
     data = [NSJSONSerialization dataWithJSONObject:made options:0 error:error];
-    /* The server's user's alone, from the first byte. */
-    if (!data || ![[NSFileManager defaultManager] createFileAtPath:file.path contents:nil attributes:@{ NSFilePosixPermissions: @0600 }] ||
-        ![data writeToURL:file options:0 error:error])
+    if (!data) return nil;
+    /* The server's user's alone, from the first byte. Not made: said with
+       the file and why, as the file manager says neither (a directory the
+       server's user cannot write, as a new mount point is). */
+    NSError *failure = nil;
+    errno = 0;
+    if (![[NSFileManager defaultManager] createFileAtPath:file.path contents:nil attributes:@{ NSFilePosixPermissions: @0600 }]) {
+        failure = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+    } else if (![data writeToURL:file options:0 error:&failure]) {
+        failure = failure ?: [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+    }
+    if (failure) {
+        NSString *why = failure.domain == NSPOSIXErrorDomain && failure.code ? @(strerror((int)failure.code)) : failure.localizedDescription;
+        if (error) *error = [NSError errorWithDomain:failure.domain code:failure.code
+                                            userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"the peer signing key cannot be written at %@: %@ (does the server's user own %@?)",
+                                                                                    file.path, why.length ? why : @"no reason given", file.path.stringByDeletingLastPathComponent],
+                                                        NSUnderlyingErrorKey: failure }];
         return nil;
+    }
     return made;
 }
 
