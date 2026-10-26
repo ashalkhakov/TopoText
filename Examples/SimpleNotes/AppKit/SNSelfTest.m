@@ -133,8 +133,13 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         NSTextView *tv = window.textView;
         SNSay([tv.string hasPrefix:@"Groceries"], @"its text is in the window's text view");
         [window.window makeFirstResponder:tv];
+        fprintf(stderr, "DIAG before: tv %p storage %p length %lu first %s\n", (void *)tv, (void *)tv.textStorage, (unsigned long)tv.string.length, [window.window.firstResponder description].UTF8String);
         tv.selectedRange = NSMakeRange(tv.string.length, 0);
+        fprintf(stderr, "DIAG selected %s\n", NSStringFromRange(tv.selectedRange).UTF8String);
         [tv insertText:@" and tea"];
+        fprintf(stderr, "DIAG after: tv %p storage %p length %lu selected %s text [%s]\n", (void *)window.textView, (void *)window.textView.textStorage, (unsigned long)window.textView.string.length, NSStringFromRange(window.textView.selectedRange).UTF8String, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
+        SNWait(1, ^BOOL { return NO; });
+        fprintf(stderr, "DIAG a second on: tv %p length %lu text [%s]\n", (void *)window.textView, (unsigned long)window.textView.string.length, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
         tv.selectedRange = NSMakeRange(0, 9);
         /* From the text view up, as the menu's Bold goes when the window is
            key (an app started from a terminal may have no key window). */
