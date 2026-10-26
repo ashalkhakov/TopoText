@@ -132,23 +132,9 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([window selectNoteTitled:@"Groceries"], [NSString stringWithFormat:@"the note is in the list, and chosen (%@)", [window shownText]]);
         NSTextView *tv = window.textView;
         SNSay([tv.string hasPrefix:@"Groceries"], @"its text is in the window's text view");
-        {
-            SNNote *dn = [window selectedNote];
-            NSData *bt = dn.bodyText;
-            TopoText *dt = bt.length ? [TopoText textWithData:bt replica:0 error:NULL] : nil;
-            fprintf(stderr, "DIAG note %s fault %d body %lu bodyText %lu (%s) decoded %ld [%s] text %lu\n", dn.objectID.URIRepresentation.absoluteString.UTF8String, dn.isFault,
-                    (unsigned long)dn.body.length, (unsigned long)bt.length, bt ? NSStringFromClass([bt class]).UTF8String : "nil",
-                    dt ? (long)dt.length : -1L, [[dt.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] ?: @"" UTF8String], (unsigned long)dn.text.length);
-        }
         [window.window makeFirstResponder:tv];
-        fprintf(stderr, "DIAG before: tv %p storage %p length %lu first %s\n", (__bridge void *)tv, (__bridge void *)tv.textStorage, (unsigned long)tv.string.length, [window.window.firstResponder description].UTF8String);
         tv.selectedRange = NSMakeRange(tv.string.length, 0);
-        fprintf(stderr, "DIAG selected %s\n", NSStringFromRange(tv.selectedRange).UTF8String);
         [tv insertText:@" and tea"];
-        fprintf(stderr, "DIAG after: tv %p storage %p length %lu selected %s text [%s]\n", (__bridge void *)window.textView, (__bridge void *)window.textView.textStorage, (unsigned long)window.textView.string.length, NSStringFromRange(window.textView.selectedRange).UTF8String, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
-        fprintf(stderr, "DIAG editor's text after typing: [%s]\n", [((SNNoteEditor *)[window valueForKey:@"_editor"]).text.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"].UTF8String);
-        SNWait(1, ^BOOL { return NO; });
-        fprintf(stderr, "DIAG a second on: tv %p length %lu text [%s]\n", (__bridge void *)window.textView, (unsigned long)window.textView.string.length, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
         tv.selectedRange = NSMakeRange(0, 9);
         /* From the text view up, as the menu's Bold goes when the window is
            key (an app started from a terminal may have no key window). */
