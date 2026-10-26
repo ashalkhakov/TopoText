@@ -1,13 +1,20 @@
 #import "SNMigration.h"
 #import "SNModel.h"
 
-NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdURL) {
-    NSMutableArray *versions = [NSMutableArray array];
+/* Each version's compiled file in a .momd, in order. */
+static NSArray<NSURL *> *SNModelVersionURLs(NSURL *momdURL) {
+    NSMutableArray *urls = [NSMutableArray array];
     NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:momdURL.path error:NULL]
                          sortedArrayUsingSelector:@selector(compare:)];
-    for (NSString *f in files) {
-        if (![f.pathExtension isEqual:@"mom"]) continue;
-        NSManagedObjectModel *m = SNModelAt([momdURL URLByAppendingPathComponent:f]);
+    for (NSString *f in files)
+        if ([f.pathExtension isEqual:@"mom"]) [urls addObject:[momdURL URLByAppendingPathComponent:f]];
+    return urls;
+}
+
+NSArray<NSManagedObjectModel *> *SNModelVersions(NSURL *momdURL) {
+    NSMutableArray *versions = [NSMutableArray array];
+    for (NSURL *url in SNModelVersionURLs(momdURL)) {
+        NSManagedObjectModel *m = SNModelAt(url);
         if (m) [versions addObject:m];
     }
     return versions;
@@ -40,14 +47,14 @@ static NSManagedObjectModel *SNVersionAsStored(NSManagedObjectModel *version, Cl
 
 /* A version's model as a store was made before ODataSync let synced Binary
    values be kept outside the store (allowsExternalBinaryDataStorage, which
-   is part of an entity's version hash): none allowed. */
+   is part of an entity's version hash): none allowed. The model changed, a
+   fresh one (SNModelAt), not a copy. */
 static NSManagedObjectModel *SNWithoutExternalStorage(NSManagedObjectModel *model) {
-    NSManagedObjectModel *before = [model copy];
-    for (NSEntityDescription *entity in before.entities)
+    for (NSEntityDescription *entity in model.entities)
         for (NSPropertyDescription *property in entity.properties)
             if ([property isKindOfClass:[NSAttributeDescription class]])
                 ((NSAttributeDescription *)property).allowsExternalBinaryDataStorage = NO;
-    return before;
+    return model;
 }
 
 BOOL SNStoreNeedsMigration(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkeeper) {
@@ -76,11 +83,13 @@ BOOL SNMigrateStore(NSURL *storeURL, NSURL *momdURL, Class<SNBookkeeper> bookkee
     if ([current isConfiguration:nil compatibleWithStoreMetadata:metadata]) return YES;
 
     NSManagedObjectModel *source = nil;
-    for (NSManagedObjectModel *version in SNModelVersions(momdURL)) {
+    for (NSURL *url in SNModelVersionURLs(momdURL)) {
+        NSManagedObjectModel *version = SNModelAt(url);
+        if (!version) continue;
         NSManagedObjectModel *stored = SNVersionAsStored(version, bookkeeper, metadata);
         if ([stored isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = stored;
         else {
-            NSManagedObjectModel *before = SNWithoutExternalStorage(stored);
+            NSManagedObjectModel *before = SNWithoutExternalStorage(SNVersionAsStored(SNModelAt(url), bookkeeper, metadata));
             if ([before isConfiguration:nil compatibleWithStoreMetadata:metadata]) source = before;
         }
     }
