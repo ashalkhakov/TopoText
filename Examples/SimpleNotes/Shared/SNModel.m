@@ -17,10 +17,11 @@ NSURL *SNModelURLInBundle(NSBundle *bundle) {
 }
 
 NSManagedObjectModel *SNModelAt(NSURL *url) {
-    NSManagedObjectModel *model = url ? [[NSManagedObjectModel alloc] initWithContentsOfURL:url] : nil;
-    /* A copy: Apple's Core Data hands the same model to every load of a
-       URL, and one a coordinator has used takes no more entities. */
-    return model.entities.count ? [model copy] : nil;
+    /* Read from the file, ODataSync's way: Apple's Core Data hands the same
+       model to every load of a URL, which a coordinator's use makes
+       unchangeable, and a copy of it can point into it once it is freed. */
+    NSManagedObjectModel *model = url ? ODataSyncModelAtURL(url, NULL) : nil;
+    return model.entities.count ? model : nil;
 }
 
 NSManagedObjectModel *SNModel(void) {

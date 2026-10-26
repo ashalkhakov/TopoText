@@ -123,7 +123,11 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
                 [self exportAllNotes:nil];
             }] ]],
         /* Every image and file in the notes (Apple Notes' View Attachments). */
-        SNMenuAction(@"View Attachments", [UIImage systemImageNamed:@"paperclip"], @selector(viewAttachments:), self) ]];
+        SNMenuAction(@"View Attachments", [UIImage systemImageNamed:@"paperclip"], @selector(viewAttachments:), self),
+        /* The repair the Mac's Sync menu has: every note's text exchanged
+           with the server again, and what it refused sent again. */
+        [UIMenu menuWithTitle:@"" image:nil identifier:nil options:UIMenuOptionsDisplayInline children:@[
+            SNMenuAction(@"Send All Notes Again", [UIImage systemImageNamed:@"arrow.triangle.2.circlepath"], @selector(resendAllNotes:), self) ]] ]];
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"folder.badge.plus"] menu:add];
     self.navigationItem.leftBarButtonItems = @[
         [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"server.rack"] style:UIBarButtonItemStylePlain
@@ -191,6 +195,16 @@ static NSString * const SNOpenFoldersDefaultsKey = @"SNOpenFolders";
         return;
     }
     [_notes sync];
+}
+
+/* With no server, it is asked for first (as a pull to refresh is); while
+   a sync runs, it waits for none. */
+- (IBAction)resendAllNotes:(id)sender {
+    if (!_notes.serviceRoot) {
+        [self server:nil];
+        return;
+    }
+    if (!_notes.syncing) [_notes resendAllNotes];
 }
 
 /* A folder, a zip or Markdown files, from Files. */
