@@ -1377,6 +1377,7 @@ static NSUInteger SNAttachmentCharacters(NSString *body) {
     /* This session's own replica: two editors never write as one. */
     _text = note.text;
     _seen = note.bodyText;
+    fprintf(stderr, "DIAG editor made: note %s fault %d body %lu bodyText %lu text %lu\n", note.objectID.URIRepresentation.absoluteString.UTF8String, note.isFault, (unsigned long)note.body.length, (unsigned long)note.bodyText.length, (unsigned long)_text.length);
     return self;
 }
 

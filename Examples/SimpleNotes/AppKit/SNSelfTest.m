@@ -146,6 +146,7 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         fprintf(stderr, "DIAG selected %s\n", NSStringFromRange(tv.selectedRange).UTF8String);
         [tv insertText:@" and tea"];
         fprintf(stderr, "DIAG after: tv %p storage %p length %lu selected %s text [%s]\n", (__bridge void *)window.textView, (__bridge void *)window.textView.textStorage, (unsigned long)window.textView.string.length, NSStringFromRange(window.textView.selectedRange).UTF8String, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
+        fprintf(stderr, "DIAG editor's text after typing: [%s]\n", [((SNNoteEditor *)[window valueForKey:@"_editor"]).text.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"].UTF8String);
         SNWait(1, ^BOOL { return NO; });
         fprintf(stderr, "DIAG a second on: tv %p length %lu text [%s]\n", (__bridge void *)window.textView, (unsigned long)window.textView.string.length, [[window.textView.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] UTF8String]);
         tv.selectedRange = NSMakeRange(0, 9);
