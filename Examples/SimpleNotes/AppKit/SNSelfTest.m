@@ -132,6 +132,14 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         SNSay([window selectNoteTitled:@"Groceries"], [NSString stringWithFormat:@"the note is in the list, and chosen (%@)", [window shownText]]);
         NSTextView *tv = window.textView;
         SNSay([tv.string hasPrefix:@"Groceries"], @"its text is in the window's text view");
+        {
+            SNNote *dn = [window selectedNote];
+            NSData *bt = dn.bodyText;
+            TopoText *dt = bt.length ? [TopoText textWithData:bt replica:0 error:NULL] : nil;
+            fprintf(stderr, "DIAG note %s fault %d body %lu bodyText %lu (%s) decoded %ld [%s] text %lu\n", dn.objectID.URIRepresentation.absoluteString.UTF8String, dn.isFault,
+                    (unsigned long)dn.body.length, (unsigned long)bt.length, bt ? NSStringFromClass([bt class]).UTF8String : "nil",
+                    dt ? (long)dt.length : -1L, [[dt.string stringByReplacingOccurrencesOfString:@"\n" withString:@"|"] ?: @"" UTF8String], (unsigned long)dn.text.length);
+        }
         [window.window makeFirstResponder:tv];
         fprintf(stderr, "DIAG before: tv %p storage %p length %lu first %s\n", (__bridge void *)tv, (__bridge void *)tv.textStorage, (unsigned long)tv.string.length, [window.window.firstResponder description].UTF8String);
         tv.selectedRange = NSMakeRange(tv.string.length, 0);
