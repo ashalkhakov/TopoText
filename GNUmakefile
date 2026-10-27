@@ -60,6 +60,15 @@ TopoTextSync_LIB_DIRS = -L./obj
 TopoTextSync_OBJCFLAGS += $(TT_OBJCFLAGS)
 TopoTextSync_LIBRARIES_DEPEND_UPON += -lTopoText -lODataSync -lODataKit -lCoreData -ldispatch
 
+# Windows: a DLL exports what it marks, and once the runtime marks its
+# classes, its C functions and constants too must be: each library's macro
+# (<NAME>_EXPORT in its header) is "export" while it is built, and
+# FOUNDATION_EXPORT's import everywhere else.
+ifneq ($(filter mingw% windows%,$(GNUSTEP_TARGET_OS)),)
+TopoText_CPPFLAGS += "-DTOPOTEXT_EXPORT=__declspec(dllexport) extern"
+TopoTextSync_CPPFLAGS += "-DTOPOTEXTSYNC_EXPORT=__declspec(dllexport) extern"
+endif
+
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make
 -include GNUmakefile.postamble
@@ -94,7 +103,7 @@ endif
 #     server is a failure. The move onto PostgreSQL needs a database made
 #     for it: by docker exec, when POSTGRES_CONTAINER names the server's.
 SN = Examples/SimpleNotes
-SN_RUN = LD_LIBRARY_PATH="$(CURDIR)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
+SN_RUN = LD_LIBRARY_PATH="$(CURDIR)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" PATH="$(CURDIR)/obj:$$PATH"
 check::
 	$(MAKE) WITH_SYNC=no GNUSTEP_BUILD_DIR=$(CURDIR)/build/alone
 	$(MAKE) -C Tests run-tests WITH_SYNC=$(WITH_SYNC)

@@ -4,10 +4,10 @@ name: Build
 # (make, make check, make install; Makefile.apple on Apple's platforms) by
 # gnustep-release-actions' workflows, the same as every repository's. Every
 # push builds and tests them and uploads what is installed: SimpleNotes for
-# macOS, for iOS (unsigned) and for Linux (an AppImage, with its server),
-# and the server's image. A v* tag (or a run started by hand with one) also
+# macOS, for iOS (unsigned), for Linux (an AppImage, with its server) and
+# for Windows (an installer, with its server), and the server's image. A v* tag (or a run started by hand with one) also
 # releases them: the Mac app signed and notarized with its Sparkle appcast,
-# the iOS app unsigned, the AppImage with its update information, attached
+# the iOS app unsigned, the AppImage with its update information, the Windows installer, attached
 # to the tag's release (a pre-release when the tag has a '-'), and the
 # server's image pushed to the GitHub Container Registry. What it builds on
 # is in .github/pins.env.
@@ -38,6 +38,13 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       extra-packages: libsqlite3-dev libpq-dev libmariadb-dev
+      databases: postgres mariadb
+
+  windows:
+    uses: ashalkhakov/gnustep-release-actions/.github/workflows/windows.yml@v1
+    with:
+      tag: ${{ inputs.tag }}
+      extra-packages: sqlite3 postgresql libmariadbclient dlfcn
       databases: postgres mariadb
 
   macos:

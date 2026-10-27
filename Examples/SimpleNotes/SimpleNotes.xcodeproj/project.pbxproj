@@ -554,6 +554,10 @@
 			isa = PBXBuildFile;
 			fileRef = 99E1B2886F448CC0C50995D2;
 		};
+		D0DA81E95C1341A72EA15F26 /* SNLocalAddress.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F2A66E45AF8129525755752D;
+		};
 		D0EFBF4E8A299CC4F4ED3DBD /* SNRichText.m in Sources */ = {
 			isa = PBXBuildFile;
 			fileRef = 4BE397C044903B570E6795E6;
@@ -635,6 +639,10 @@
 		EFE35D39429C00D7DFA2C872 /* OTelKit.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = 2BA4898D4DC3BDA0E3CAE83B;
+		};
+		F0A8C535F8F27F218B8023F6 /* SNLocalAddress.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F2A66E45AF8129525755752D;
 		};
 		F48063A33E82F7318AC1D2FF /* SNModel.m in Sources */ = {
 			isa = PBXBuildFile;
@@ -1661,6 +1669,13 @@
 			sourceTree = "<group>";
 			name = SNTextSystem.m;
 		};
+		DE3C4074C3817310E9EE5A04 /* SNMemory-Windows.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNMemory-Windows.m";
+			sourceTree = "<group>";
+			name = "SNMemory-Windows.m";
+		};
 		DEA5B0CE6DF1EE709FE2B2EA /* SNSyncPanel.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1765,6 +1780,13 @@
 			path = SimpleNotesShare.appex;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		EBD835AFB5C3747E98BE986F /* SNLocalAddress-Windows.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "Shared/SNLocalAddress-Windows.m";
+			sourceTree = "<group>";
+			name = "SNLocalAddress-Windows.m";
+		};
 		EBF4039D9DB14DFD733691CF /* SimpleNotes 6.xcdatamodel */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = wrapper.xcdatamodel;
@@ -1783,6 +1805,13 @@
 			path = Shared/SNPeers.m;
 			sourceTree = "<group>";
 			name = SNPeers.m;
+		};
+		F2A66E45AF8129525755752D /* SNLocalAddress.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = Shared/SNLocalAddress.m;
+			sourceTree = "<group>";
+			name = SNLocalAddress.m;
 		};
 		F311510A21AD054DB71F2A08 /* DevicesNearby.xib */ = {
 			isa = PBXFileReference;
@@ -1811,6 +1840,13 @@
 			path = Shared/SNNotes.m;
 			sourceTree = "<group>";
 			name = SNNotes.m;
+		};
+		FDF573C94853FEBC58DD44E2 /* SNWatchdog-Windows.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNWatchdog-Windows.m";
+			sourceTree = "<group>";
+			name = "SNWatchdog-Windows.m";
 		};
 		FE6690DC46D2B8C234FD7525 /* SNiOSSelfTest.m */ = {
 			isa = PBXFileReference;
@@ -1898,9 +1934,11 @@
 				870E686C4171EC7BDA75A2FC,
 				DED814D7F908B806E51A135D,
 				088AFD2695E6A139D1C77D40,
+				DE3C4074C3817310E9EE5A04,
 				E7A8EDB5A94723692AC7105C,
 				72D55CAC2AA66123CA56C5D5,
 				4D230DE7818CE35266E10216,
+				FDF573C94853FEBC58DD44E2,
 				5F63153E1910A7B6931749CF,
 				5918F5A15C378AA644F04157,
 				BBC9C0DF84268509E8BCF6B6,
@@ -1976,6 +2014,8 @@
 				E432D0D1BDAEABC5F8DE44B6,
 				7BE055293592C706F9CD7F11,
 				EC831ABEA7538032BF787133,
+				F2A66E45AF8129525755752D,
+				EBD835AFB5C3747E98BE986F,
 				719BCFED3ECD01936BB14F74,
 				848C622D1A0C34A6F10D548E,
 				47029EC1BB7F394FB43D846A,
@@ -2313,6 +2353,7 @@
 				1AEA465EF57405F1763F16F7,
 				25879058FDC79CC840CE424F,
 				CC4B057F37426811B1569081,
+				D0DA81E95C1341A72EA15F26,
 				AC28625FEB238C24115CFE5A,
 				9150902D96BD108E39F1894E,
 				336FCFFAB7D77D6C156362E2,
@@ -2373,6 +2414,7 @@
 				31315B895C7B07BAF6DA0F94,
 				62A2E8AABDEEBB81A24162A0,
 				08F47A52C6068AE0E8AC7B10,
+				F0A8C535F8F27F218B8023F6,
 				029C0375BBB48CBAAD4B77F8,
 				1A945E05E70FCA2A80B9CF90,
 				4F515619848A8383B89CB03C,

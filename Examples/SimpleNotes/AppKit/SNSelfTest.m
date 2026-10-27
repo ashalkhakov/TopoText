@@ -358,8 +358,12 @@ void SNStartSelfTest(SNNotes *notes, SNWindowController *window, NSURL *root) {
         NSError *peersError = nil;
         SNPeers *peers = [[SNPeers alloc] initWithNotes:notes directory:peersDir error:&peersError];
         SNPeersWindow *nearby = peers ? [[SNPeersWindow alloc] initWithPeers:peers] : nil;
-        SNSay(nearby.window && nearby.devicesTable.dataSource == nearby && nearby.serveButton.state == NSControlStateValueOff && nearby.tokenButton.isEnabled,
-              [NSString stringWithFormat:@"the Devices Nearby window loads (%@)", peersError.localizedDescription ?: @"an identity made"]);
+        /* Or the system has no devices nearby (Windows, for now), as the
+           app then says when Devices Nearby is chosen. */
+        BOOL none = !peers && [peersError.domain isEqual:NSCocoaErrorDomain] && peersError.code == NSFeatureUnsupportedError;
+        SNSay(none || (nearby.window && nearby.devicesTable.dataSource == nearby && nearby.serveButton.state == NSControlStateValueOff && nearby.tokenButton.isEnabled),
+              [NSString stringWithFormat:none ? @"no Devices Nearby here, and why (%@)" : @"the Devices Nearby window loads (%@)",
+                                         peersError.localizedDescription ?: @"an identity made"]);
         [nearby close];
         [peers stop];
         [peers.trust.identity removeWithError:NULL];

@@ -44,7 +44,7 @@ XCTEST ?= xctest
 .PHONY: run-tests
 run-tests: all
 	set -e; for b in $(BUNDLE_NAME); do \
-	  LD_LIBRARY_PATH="$(CURDIR)/../obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" $(XCTEST) "$$b.bundle"; \
+	  LD_LIBRARY_PATH="$(CURDIR)/../obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" PATH="$(CURDIR)/../obj:$$PATH" $(XCTEST) "$$b.bundle"; \
 	done
 
 -include GNUmakefile.preamble

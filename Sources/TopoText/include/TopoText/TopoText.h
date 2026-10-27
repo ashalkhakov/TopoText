@@ -33,7 +33,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef uint64_t TTReplica; /* 0 is none: the document start, and birth registers */
 
-FOUNDATION_EXPORT NSString * const TopoTextErrorDomain;
+/* TopoText's own: exported where TopoText is built for Windows (the
+   GNUmakefile), imported everywhere else, as FOUNDATION_EXPORT. */
+#ifndef TOPOTEXT_EXPORT
+#define TOPOTEXT_EXPORT FOUNDATION_EXPORT
+#endif
+
+TOPOTEXT_EXPORT NSString * const TopoTextErrorDomain;
 typedef NS_ENUM(NSInteger, TopoTextError) {
     TopoTextErrorCorrupt = 1,     /* not TopoText data, or damaged */
     TopoTextErrorFormat,          /* written by a newer TopoText */
@@ -285,7 +291,7 @@ typedef NS_ENUM(NSInteger, TTEditKind) {
    ranges, in from and in to (a deletion's in to and an insertion's in from
    empty), in order; none splits a surrogate pair. For showing what differs
    (a version beside the text as it is). */
-FOUNDATION_EXPORT NSArray<NSArray<NSValue *> *> *TTStringChanges(NSString *from, NSString *to);
+TOPOTEXT_EXPORT NSArray<NSArray<NSValue *> *> *TTStringChanges(NSString *from, NSString *to);
 
 NS_ASSUME_NONNULL_END
 
