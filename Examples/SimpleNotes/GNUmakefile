@@ -89,8 +89,8 @@ after-all::
 	rm -rf obj/SimpleNotes.momd && momc SimpleNotes.xcdatamodeld obj/SimpleNotes.momd
 
 after-install::
-	@server=$$(find "$(GNUSTEP_TOOLS)" -type f -name simplenotes-server -perm -u+x | head -n 1); \
-	  [ -n "$$server" ] || { echo "install: no simplenotes-server under $(GNUSTEP_TOOLS)"; exit 1; }; \
+	@server=$$(find "$(GNUSTEP_TOOLS)" -type f -name simplenotes-server$(EXEEXT) -perm -u+x | head -n 1); \
+	  [ -n "$$server" ] || { echo "install: no simplenotes-server$(EXEEXT) under $(GNUSTEP_TOOLS)"; exit 1; }; \
 	  rm -rf "$$(dirname "$$server")/SimpleNotes.momd" && cp -R obj/SimpleNotes.momd "$$(dirname "$$server")/"
 
 
