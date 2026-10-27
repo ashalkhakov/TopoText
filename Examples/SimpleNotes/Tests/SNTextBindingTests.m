@@ -679,7 +679,7 @@
     XCTAssertEqualObjects(grid.table.strings, both);
     XCTAssertEqualObjects([grid textViewAtRow:2 column:0].string, @"Grandma", @"a row come is shown");
     NSFont *font = [[grid textViewAtRow:1 column:1].textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
-    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSBoldFontMask, @"bold come, shown bold");
+    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSBoldFontMask, @"bold come, shown bold (%@)", font.fontName);
     [grid save];
     XCTAssertEqualObjects([_notes tableOfAttachment:a].strings, both);
 }
@@ -702,7 +702,7 @@
     XCTAssertEqualObjects(cell.string, @"green tea");
     XCTAssertEqual(cell.selectedRange.location, 9u, @"still after tea");
     NSFont *font = [cell.textStorage attribute:NSFontAttributeName atIndex:0 effectiveRange:NULL];
-    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSItalicFontMask);
+    XCTAssertTrue([[NSFontManager sharedFontManager] traitsOfFont:font] & NSItalicFontMask, @"italic come, shown italic (%@)", font.fontName);
 }
 
 /* An image as wide as the text, when the text is narrower: the text made
