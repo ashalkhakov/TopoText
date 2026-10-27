@@ -103,6 +103,8 @@
             XCTAssertNil([note.entity.attributesByName objectForKey:@"owner"], @"before version 6, no owners");
         XCTAssertNil(note.managedObjectContext.persistentStoreCoordinator.managedObjectModel.entitiesByName[SNNoteVersionEntity],
                      @"before version 7, no versions");
+        /* The app quit: its store let go before the update replaces it. */
+        [old close];
     }
 
     /* The app updated: the device opened with the current model migrates

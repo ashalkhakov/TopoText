@@ -1134,6 +1134,16 @@ static NSUInteger SNAttachmentCharacters(NSString *body) {
     [self save];
 }
 
+- (void)close {
+    for (SNNoteEditor *e in _editors.allObjects) [e close];
+    [self saveNow];
+    self.syncInterval = 0;
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    [_context reset];
+    for (NSPersistentStore *store in [_coordinator.persistentStores copy])
+        [_coordinator removePersistentStore:store error:NULL];
+}
+
 - (id)insert:(NSString *)entity {
     NSManagedObject *o = [NSEntityDescription insertNewObjectForEntityForName:entity inManagedObjectContext:_context];
     [o setValue:[NSUUID UUID].UUIDString forKey:@"id"];

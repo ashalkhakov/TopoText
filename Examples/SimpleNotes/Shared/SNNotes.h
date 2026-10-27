@@ -273,6 +273,11 @@ FOUNDATION_EXPORT NSNotificationName const SNNotesDidChangeNotification;
 // What the open editors have written, then saved: before the app goes to
 // the background, or quits.
 - (void)saveAll;
+// Saved, then its store let go, the store's files closed: before another
+// opens or updates the same store (on Windows a file still open can be
+// neither replaced nor deleted). Not while a sync runs; nothing of it used
+// after.
+- (void)close;
 
 #pragma mark Editing
 

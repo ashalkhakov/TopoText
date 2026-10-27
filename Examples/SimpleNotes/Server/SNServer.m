@@ -99,6 +99,16 @@ static NSString *SNShown(NSURL *url) {
                                                          withString:@":***"];
 }
 
+/* A store library's file, from its type, as the platform names it: the
+   build says so where it is not lib<type>.so (Windows: <type>-0.dll). */
+#ifndef SN_STORE_LIBRARY_FORMAT
+#if defined(__APPLE__)
+#define SN_STORE_LIBRARY_FORMAT @"lib%@.dylib"
+#else
+#define SN_STORE_LIBRARY_FORMAT @"lib%@.so"
+#endif
+#endif
+
 /* A store type by its short name; one nothing registered, its library
    loaded by name (libCDPostgreSQLStore), which registers it as it loads. */
 static NSString *SNStoreType(NSString *name) {
@@ -107,19 +117,18 @@ static NSString *SNStoreType(NSString *name) {
     NSString *type = known[name ?: @"SQLite"] ?: name;
     if (![NSPersistentStoreCoordinator registeredStoreTypes][type] &&
         [type rangeOfCharacterFromSet:[[NSCharacterSet alphanumericCharacterSet] invertedSet]].location == NSNotFound) {
-#if defined(__APPLE__)
-        NSString *library = [NSString stringWithFormat:@"lib%@.dylib", type];
-#else
-        NSString *library = [NSString stringWithFormat:@"lib%@.so", type];
-#endif
-        dlopen(library.fileSystemRepresentation, RTLD_NOW | RTLD_GLOBAL);
+        NSString *library = [NSString stringWithFormat:SN_STORE_LIBRARY_FORMAT, type];
+        /* By its UTF-8 name: -fileSystemRepresentation is UTF-16 on Windows. */
+        dlopen(library.UTF8String, RTLD_NOW | RTLD_GLOBAL);
     }
     return type;
 }
 
+/* A path is a file's: an absolute one too, which on Windows (C:/notes)
+   would otherwise be read as a URL whose scheme is its drive. */
 static NSURL *SNURL(id value) {
     if (![value isKindOfClass:[NSString class]] || ![value length]) return nil;
-    NSURL *url = [NSURL URLWithString:value];
+    NSURL *url = [value isAbsolutePath] ? nil : [NSURL URLWithString:value];
     return url.scheme ? url : [NSURL fileURLWithPath:value];
 }
 
