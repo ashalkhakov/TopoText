@@ -29,8 +29,14 @@ NS_ASSUME_NONNULL_BEGIN
    is the devices'. It is the same whichever side makes it, which is what a
    peer's conflict needs (ODataSyncConflict.withPeer). */
 
-FOUNDATION_EXPORT NSString * const TTSyncTextKey;   /* @"TopoText.text": YES on the Binary attribute */
-FOUNDATION_EXPORT NSString * const TTSyncStringKey; /* @"TopoText.string": the String attribute it is mirrored in */
+/* TopoTextSync's own: exported where it is built for Windows (the
+   GNUmakefile), imported everywhere else, as FOUNDATION_EXPORT. */
+#ifndef TOPOTEXTSYNC_EXPORT
+#define TOPOTEXTSYNC_EXPORT FOUNDATION_EXPORT
+#endif
+
+TOPOTEXTSYNC_EXPORT NSString * const TTSyncTextKey;   /* @"TopoText.text": YES on the Binary attribute */
+TOPOTEXTSYNC_EXPORT NSString * const TTSyncStringKey; /* @"TopoText.string": the String attribute it is mirrored in */
 
 /* A conflict's TopoText attributes merged, the rest left to the fallback. When
    the fallback defers and nothing else differs, the merge stands alone. */
@@ -57,7 +63,7 @@ FOUNDATION_EXPORT NSString * const TTSyncStringKey; /* @"TopoText.string": the S
 
    It works on states and deltas as TopoText writes them (-data,
    -deltaSinceVersion:); versions are TTVersion's data. */
-FOUNDATION_EXPORT NSString * const TTSyncMergerName; /* @"TopoText" */
+TOPOTEXTSYNC_EXPORT NSString * const TTSyncMergerName; /* @"TopoText" */
 
 @interface TTSyncMerger : NSObject <ODataSyncMerging>
 /* After a merge: the attribute's plain-text copy (TopoText.string) set

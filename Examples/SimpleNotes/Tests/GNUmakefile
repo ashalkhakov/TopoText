@@ -15,7 +15,7 @@ OBJC = clang
 
 BUNDLE_NAME = SimpleNotesTests
 SimpleNotesTests_NEEDS_GUI = yes
-SimpleNotesTests_OBJC_FILES = SNNotesTests.m SNTextBindingTests.m SNMigrationTests.m SNSignInTests.m SNTransferTests.m ../Server/SNNotebooks.m ../Server/SNVersions.m ../Shared/SNSignIn.m ../Shared/SNPeers.m ../AppKit/SNSecretStore.m \
+SimpleNotesTests_OBJC_FILES = SNNotesTests.m $(SN_PEER_TESTS) SNTextBindingTests.m SNMigrationTests.m SNSignInTests.m SNTransferTests.m ../Server/SNNotebooks.m ../Server/SNVersions.m ../Shared/SNSignIn.m ../Shared/SNPeers.m ../Shared/SNLocalAddress$(SN_SYSTEM).m ../AppKit/SNSecretStore.m \
 	../Shared/SNModel.m ../Shared/SNNote.m ../Shared/SNFolder.m ../Shared/SNAttachment.m ../Shared/SNNotes.m ../Shared/SNSmartFilter.m ../Shared/SNResolver.m ../Shared/SNRichText.m ../Shared/SNMigration.m \
 	../Shared/SNTableGrid.m ../Shared/SNMarkdown.m ../Shared/SNMarkdownEscape.m ../Shared/SNShares.m ../Shared/SNZip.m ../Shared/SNTransfer.m ../AppKit/SNTextSystem.m ../AppKit/SNTableGrid+System.m
 # TopoText's libraries from the tree they are built in.
@@ -26,6 +26,17 @@ SimpleNotesTests_OBJCFLAGS = -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 -fco
 	-fobjc-exceptions -Wall -Wno-unused-parameter
 SimpleNotesTests_BUNDLE_LIBS += -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
 	-lOTelKit -lODataKit -lCoreData -lXCTest -lgnustep-gui -ldispatch -lz
+# The system's half of SNLocalAddress (../GNUmakefile). Devices nearby,
+# and the server's peer tokens: not on Windows yet (ODataSync's peers are
+# not there), so neither are their tests.
+ifneq ($(filter mingw% windows%,$(GNUSTEP_TARGET_OS)),)
+SN_SYSTEM = -Windows
+SN_PEER_TESTS =
+SimpleNotesTests_BUNDLE_LIBS += -liphlpapi -lws2_32
+else
+SN_SYSTEM =
+SN_PEER_TESTS = SNNotesTests+Peers.m
+endif
 SimpleNotesTests_XCDATAMODELD_FILES = ../SimpleNotes.xcdatamodeld
 SimpleNotesTests_COREDATA_CODEGEN = yes
 include $(GNUSTEP_MAKEFILES)/coredata-model.make
@@ -35,7 +46,7 @@ XVFB := $(shell command -v xvfb-run >/dev/null 2>&1 && [ -z "$$DISPLAY" ] && ech
 
 .PHONY: run-tests
 run-tests: all
-	LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" $(XVFB) $(XCTEST) SimpleNotesTests.bundle
+	LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" PATH="$(TT_ROOT)/obj:$$PATH" $(XVFB) $(XCTEST) SimpleNotesTests.bundle
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/bundle.make

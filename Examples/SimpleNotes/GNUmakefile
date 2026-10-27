@@ -32,15 +32,29 @@ SN_FLAGS = -fobjc-arc -fblocks -fobjc-runtime=gnustep-2.0 -fconstant-string-clas
 TT_ROOT = $(CURDIR)/../..
 SN_INCLUDES = -IShared -IAppKit -I$(TT_ROOT)/Sources/TopoText/include -I$(TT_ROOT)/Sources/TopoTextSync/include
 SN_LIB_DIRS = -L$(TT_ROOT)/obj
-SN_RUN = LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
+SN_RUN = LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}" PATH="$(TT_ROOT)/obj:$$PATH"
 SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
 	-lOTelKit -lODataKit -lCoreData -ldispatch
+
+# The system's half of what differs (SNMemory.h, SNWatchdog.h, SNPeers.h's
+# SNLocalAddress): glibc's and POSIX's (SNMemory.m), or Windows' own
+# (SNMemory-Windows.m), whose network adapters are IP Helper's. The server
+# opens FreeCoreData's SQL stores with dlopen: dlfcn-win32 there.
+ifneq ($(filter mingw% windows%,$(GNUSTEP_TARGET_OS)),)
+SN_SYSTEM = -Windows
+SimpleNotes_GUI_LIBS += -liphlpapi -lws2_32
+simplenotes-server_TOOL_LIBS += -ldl
+# FreeCoreData's SQL stores as Windows names their DLLs.
+simplenotes-server_CPPFLAGS += '-DSN_STORE_LIBRARY_FORMAT=@"%@-0.dll"'
+else
+SN_SYSTEM =
+endif
 
 ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
 endif
-SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNVersionsPanel.m AppKit/SNMemory.m AppKit/SNWatchdog.m AppKit/SNUpdater.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
-	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNThumbnails.m Shared/SNShares.m Shared/SNMarkdownEscape.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNMigration.m \
+SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNVersionsPanel.m AppKit/SNMemory$(SN_SYSTEM).m AppKit/SNWatchdog$(SN_SYSTEM).m AppKit/SNUpdater.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
+	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNThumbnails.m Shared/SNShares.m Shared/SNMarkdownEscape.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNLocalAddress$(SN_SYSTEM).m Shared/SNMigration.m \
 	Shared/SNMarkdown.m Shared/SNZip.m Shared/SNTransfer.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
 SimpleNotes_LIB_DIRS = $(SN_LIB_DIRS)
