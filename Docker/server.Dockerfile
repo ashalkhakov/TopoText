@@ -6,7 +6,9 @@
 # stack, FreeCoreData with its PostgreSQL and MySQL stores, GCDWebServer and
 # ODataKit, each an archive unpacked at / (gnustep-release-actions'
 # docker.yml passes their versions as build arguments of the same names;
-# built by hand, pins.env's are taken); TopoText and the server from here.
+# built by hand, pins.env's are taken), and the parts of them pins.env names
+# (FREECOREDATA_PARTS: the stores), each an archive of its own, as deps.sh
+# fetches them; TopoText and the server from here.
 #
 #   docker build -f Docker/server.Dockerfile -t simplenotes-server .
 #   docker run -p 8080:8080 -v notes:/data simplenotes-server
@@ -47,8 +49,11 @@ RUN set -e; \
       eval "version=\${${name}_VERSION:-}"; \
       [ -n "$version" ] || version=$(sed -n "s/^${name}_VERSION=//p" /tmp/pins.env); \
       repo=$(echo "$name" | tr 'A-Z_' 'a-z-'); \
-      curl -fsSL "https://github.com/ashalkhakov/$repo/releases/download/v$version/$repo-$version-ubuntu22.04-$(uname -m).tar.xz" \
-        | tar -C / -xJ; \
+      parts=$(sed -n "s/^${name}_PARTS=\"*\([^\"]*\)\"*$/\1/p" /tmp/pins.env); \
+      for archive in "$repo" $(for part in $parts; do echo "$repo-$part"; done); do \
+        curl -fsSL "https://github.com/ashalkhakov/$repo/releases/download/v$version/$archive-$version-ubuntu22.04-$(uname -m).tar.xz" \
+          | tar -C / -xJ; \
+      done; \
     done; \
     grep -v '^#' /opt/gnustep/share/gnustep-patches/packages-ubuntu.txt \
       | xargs apt-get install -y --no-install-recommends libsqlite3-dev libpq-dev libmariadb-dev tzdata; \
