@@ -2,6 +2,14 @@
     ApplicationDescription = "Notes that sync, and merge what was written apart";
     ApplicationName = SimpleNotes;
     ApplicationRelease = "1.0";
+    /* The About panel's (GSInfoPanel's) too; the release's build stamps
+       ApplicationRelease and FullVersionID. */
+    FullVersionID = "1.0";
+    Authors = ( "Artyom Shalkhakov" );
+    Copyright = "Copyright (C) 2026 Artyom Shalkhakov";
+    CopyrightDescription = "Released under the GNU LGPL, version 2.1 or later";
+    URL = "https://github.com/ashalkhakov/TopoText";
+    ApplicationIcon = "SimpleNotes.png";
     NSExecutable = SimpleNotes;
     NSIcon = "SimpleNotes.png";
     NSMainNibFile = "MainMenu.xib";
