@@ -36,8 +36,8 @@ SN_RUN = LD_LIBRARY_PATH="$(TT_ROOT)/obj$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"
 SN_SYNC_LIBS = -lTopoTextSync -lTopoText -lODataSync -lODataService -lHTTPServerKit -lODataIncrementalStore \
 	-lOTelKit -lODataKit -lCoreData -ldispatch
 
-# The system's half of what differs (SNMemory.h, SNWatchdog.h, SNPeers.h's
-# SNLocalAddress): glibc's and POSIX's (SNMemory.m), or Windows' own
+# The system's half of what differs (SNMemory.h, SNWatchdog.h,
+# SNSingleCopy.h's SNStoreLock, SNPeers.h's SNLocalAddress): glibc's and POSIX's (SNMemory.m), or Windows' own
 # (SNMemory-Windows.m), whose network adapters are IP Helper's. The server
 # opens FreeCoreData's SQL stores with dlopen: dlfcn-win32 there.
 ifneq ($(filter mingw% windows%,$(GNUSTEP_TARGET_OS)),)
@@ -53,7 +53,7 @@ endif
 ifneq ($(SN_SERVER_ONLY),yes)
 APP_NAME = SimpleNotes
 endif
-SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNVersionsPanel.m AppKit/SNMemory$(SN_SYSTEM).m AppKit/SNWatchdog$(SN_SYSTEM).m AppKit/SNUpdater.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
+SimpleNotes_OBJC_FILES = AppKit/main.m AppKit/SNAppController.m AppKit/SNWindowController.m AppKit/SNTextView.m AppKit/SNTextSystem.m AppKit/SNTableGrid+System.m AppKit/SNSmartFolderPanel.m AppKit/SNSyncPanel.m AppKit/SNPeersWindow.m AppKit/SNTransferPanel.m AppKit/SNGallery.m AppKit/SNVersionsPanel.m AppKit/SNMemory$(SN_SYSTEM).m AppKit/SNWatchdog$(SN_SYSTEM).m AppKit/SNSingleCopy.m AppKit/SNStoreLock$(SN_SYSTEM).m AppKit/SNUpdater.m AppKit/SNSecretStore.m AppKit/SNSelfTest.m Shared/SNCheck.m \
 	Shared/SNModel.m Shared/SNNote.m Shared/SNFolder.m Shared/SNAttachment.m Shared/SNNotes.m Shared/SNSmartFilter.m Shared/SNResolver.m Shared/SNRichText.m Shared/SNThumbnails.m Shared/SNShares.m Shared/SNMarkdownEscape.m Shared/SNTableGrid.m Shared/SNSignIn.m Shared/SNPeers.m Shared/SNLocalAddress$(SN_SYSTEM).m Shared/SNMigration.m \
 	Shared/SNMarkdown.m Shared/SNZip.m Shared/SNTransfer.m
 SimpleNotes_INCLUDE_DIRS = $(SN_INCLUDES)
