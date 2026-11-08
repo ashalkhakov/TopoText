@@ -61,6 +61,10 @@
 			isa = PBXBuildFile;
 			fileRef = 3B26A46389F39E72F4597F0F;
 		};
+		14581C0A8703F8EFC2BB0A65 /* SNSingleCopy-Apple.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = F409B7D3EAB36265B83F398C;
+		};
 		14C97BB4D31E28595066D423 /* ODataSync.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
 			fileRef = C402DB6787E73681FBB1897B;
@@ -74,6 +78,10 @@
 					RemoveHeadersOnCopy,
 				);
 			};
+		};
+		1676C6E68CEAFAD662B4A646 /* SNStoreLock.m in Sources */ = {
+			isa = PBXBuildFile;
+			fileRef = 681B54CCA712D83A09D56CE3;
 		};
 		195D638B78FA89D161F97901 /* OTelKit.xcframework in Frameworks */ = {
 			isa = PBXBuildFile;
@@ -833,6 +841,13 @@
 			sourceTree = "<group>";
 			name = SNSmartFolderViewController.m;
 		};
+		069A4F6D94253EA8D3452721 /* SNSingleCopy.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNSingleCopy.m;
+			sourceTree = "<group>";
+			name = SNSingleCopy.m;
+		};
 		088AFD2695E6A139D1C77D40 /* SNMemory-Apple.m */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.objc;
@@ -1145,6 +1160,13 @@
 			sourceTree = "<group>";
 			name = "SNWatchdog-Apple.m";
 		};
+		4D5D45067882DC812A843B99 /* SNStoreLock-Windows.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNStoreLock-Windows.m";
+			sourceTree = "<group>";
+			name = "SNStoreLock-Windows.m";
+		};
 		4D92007E5ECB86344FC8BEA5 /* SNAttachment.h */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.c.h;
@@ -1263,6 +1285,13 @@
 			path = AppKit/AttachmentsWindow.xib;
 			sourceTree = "<group>";
 			name = AttachmentsWindow.xib;
+		};
+		681B54CCA712D83A09D56CE3 /* SNStoreLock.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = AppKit/SNStoreLock.m;
+			sourceTree = "<group>";
+			name = SNStoreLock.m;
 		};
 		6AA409AA9813F275AB6E4342 /* SNShareViewController.h */ = {
 			isa = PBXFileReference;
@@ -1410,6 +1439,13 @@
 			path = AppKit/SNTransferPanel.h;
 			sourceTree = "<group>";
 			name = SNTransferPanel.h;
+		};
+		8BB1F4812BDA2044C7349380 /* SNSingleCopy.h */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.h;
+			path = AppKit/SNSingleCopy.h;
+			sourceTree = "<group>";
+			name = SNSingleCopy.h;
 		};
 		8CA44378B789F5979E110A09 /* SNTransfer.m */ = {
 			isa = PBXFileReference;
@@ -1827,6 +1863,13 @@
 			sourceTree = "<group>";
 			name = SNSelfTest.h;
 		};
+		F409B7D3EAB36265B83F398C /* SNSingleCopy-Apple.m */ = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.c.objc;
+			path = "AppKit/SNSingleCopy-Apple.m";
+			sourceTree = "<group>";
+			name = "SNSingleCopy-Apple.m";
+		};
 		F6BDE6DA93B972D785D3BA0E /* Share.entitlements */ = {
 			isa = PBXFileReference;
 			lastKnownFileType = text;
@@ -1939,6 +1982,11 @@
 				72D55CAC2AA66123CA56C5D5,
 				4D230DE7818CE35266E10216,
 				FDF573C94853FEBC58DD44E2,
+				8BB1F4812BDA2044C7349380,
+				069A4F6D94253EA8D3452721,
+				F409B7D3EAB36265B83F398C,
+				681B54CCA712D83A09D56CE3,
+				4D5D45067882DC812A843B99,
 				5F63153E1910A7B6931749CF,
 				5918F5A15C378AA644F04157,
 				BBC9C0DF84268509E8BCF6B6,
@@ -2397,6 +2445,8 @@
 				EEA04789435666169D25A3C8,
 				40497D75F7964A5FC7470710,
 				ABEE2552CD48F68508F0C985,
+				14581C0A8703F8EFC2BB0A65,
+				1676C6E68CEAFAD662B4A646,
 				B78CA39A9E8041CE0CAC7200,
 				1378C179B8030AFE26E9C29F,
 				AD87D96E34F8E4D3571ECBC0,

@@ -7,6 +7,7 @@
 #import "SNSyncPanel.h"
 #import "SNPeersWindow.h"
 #import "SNUpdater.h"
+#import "SNSingleCopy.h"
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 /* Whether where to keep the notes was chosen once (else Sync… opens). */
@@ -58,6 +59,12 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
                    [NSString stringWithFormat:@"sn-selftest-app-%@.sqlite", [NSProcessInfo processInfo].globallyUniqueString]];
     NSURL *store = path.length ? [NSURL fileURLWithPath:path] : [SNNotes defaultStoreURLNamed:@"SimpleNotes"];
     _store = store;
+    /* Open already (started again from the menu): that copy shown, this
+       one gone (SNSingleCopy.h). */
+    if (!SNHoldStore(store, self, @selector(showNotes:))) {
+        [NSApp terminate:nil];
+        return;
+    }
     /* Made by an older version: brought up to this one off the main thread
        (a minute, with many files), the user told meanwhile; then opened. */
     if ([SNNotes storeNeedsUpdateAt:store]) {
@@ -218,7 +225,10 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
     if (_notes.serviceRoot && !_notes.syncing) [_notes sync];
 }
 
+/* From the menu, or another copy asking (SNSingleCopy.h): the window in
+   front, out of the Dock if it was there. */
 - (IBAction)showNotes:(id)sender {
+    if (_window.window.isMiniaturized) [_window.window deminiaturize:nil];
     [_window showWindow:nil];
 }
 
