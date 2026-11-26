@@ -660,6 +660,30 @@
     XCTAssertEqual([_storage attribute:NSAttachmentAttributeName atIndex:11 effectiveRange:NULL], shown, @"kept, not made again");
 }
 
+/* A table's commands, validated and sent as a XIB's menu and the key
+   bindings make them: from their names, which on GNUstep are not always
+   == the compiler's @selector(). */
+- (void)testATablesCommandsAreKnownByTheirNames {
+    NSString *tableID = [_binding insertTableWithRows:1 columns:2 inRange:NSMakeRange(0, 0)];
+    SNTableGrid *grid = [[SNTableGrid alloc] initWithNotes:_notes attachmentID:tableID];
+    [grid layoutForWidth:300];
+    grid.editable = YES;
+    BOOL (^enabled)(NSString *) = ^BOOL(NSString *action) {
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:action action:NSSelectorFromString(action) keyEquivalent:@""];
+        return [(id)grid validateMenuItem:item];
+    };
+    XCTAssertTrue(enabled(@"addRowBelow:"));
+    XCTAssertTrue(enabled(@"addColumnAfter:"));
+    XCTAssertTrue(enabled(@"deleteColumn:"), @"two columns");
+    XCTAssertFalse(enabled(@"deleteRow:"), @"the last row stays");
+    grid.editable = NO;
+    XCTAssertFalse(enabled(@"addRowBelow:"), @"not while it cannot be typed in");
+
+    NSTextView *first = [grid textViewAtRow:0 column:0];
+    XCTAssertTrue([(id)grid textView:first doCommandBySelector:NSSelectorFromString(@"insertTab:")], @"Tab: the next cell");
+    XCTAssertFalse([(id)grid textView:first doCommandBySelector:NSSelectorFromString(@"insertNewline:")], @"Return: the cell's");
+}
+
 /* Typed into here while another device typed into the same table: what
    was stored meanwhile merged in, both kept, saved together. */
 - (void)testATableTypedIntoHereAndElsewhereMerges {

@@ -6,6 +6,7 @@
 #import "SNSmartFolderPanel.h"
 #import "SNTransfer.h"
 #import "SNTransferPanel.h"
+#import <objc/runtime.h>
 
 @implementation SNTextPanel
 - (IBAction)ok:(id)sender { [NSApp stopModal]; }
@@ -910,7 +911,7 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 /* Shift-Tab: an item outdented. */
 - (BOOL)textView:(NSTextView *)tv doCommandBySelector:(SEL)command {
-    if (tv != _textView || !_binding || command != @selector(insertBacktab:)) return NO;
+    if (tv != _textView || !_binding || !sel_isEqual(command, @selector(insertBacktab:))) return NO;
     if (![_binding paragraphAttributesAt:tv.selectedRange.location][SNListKey]) return NO;
     [self decreaseIndentation:nil];
     return YES;
@@ -1336,53 +1337,53 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
     SEL a = item.action;
-    if (a == @selector(togglePinned:)) {
+    if (sel_isEqual(a, @selector(togglePinned:))) {
         item.title = [self selectedNote].isPinned ? @"Unpin Note" : @"Pin Note";
         return [self selectedNote] != nil && ![self selectedNote].deletedAt;
     }
-    if (a == @selector(deleteNote:)) {
+    if (sel_isEqual(a, @selector(deleteNote:))) {
         item.title = [self selectedNote].deletedAt ? @"Delete Immediately…" : @"Delete Note";
         return [self selectedNote] != nil;
     }
-    if (a == @selector(recoverNote:)) return [self selectedNote].deletedAt != nil;
-    if (a == @selector(emptyRecentlyDeleted:)) return _notes.countOfDeletedNotes > 0;
-    if (a == @selector(moveNoteToFolder:)) return [self selectedNote] != nil;
-    if (a == @selector(moveFolderToFolder:)) return [self selectedFolder] != nil;
-    if (a == @selector(deleteFolder:) || a == @selector(renameFolder:)) return [self selectedFolder] != nil;
-    if (a == @selector(editSmartFolder:)) return [_notes isSmartFolder:[self selectedFolder]];
-    if (a == @selector(sortFolderByDefault:) || a == @selector(sortFolderByDateEdited:) || a == @selector(sortFolderByDateCreated:) ||
-        a == @selector(sortFolderByTitle:)) {
+    if (sel_isEqual(a, @selector(recoverNote:))) return [self selectedNote].deletedAt != nil;
+    if (sel_isEqual(a, @selector(emptyRecentlyDeleted:))) return _notes.countOfDeletedNotes > 0;
+    if (sel_isEqual(a, @selector(moveNoteToFolder:))) return [self selectedNote] != nil;
+    if (sel_isEqual(a, @selector(moveFolderToFolder:))) return [self selectedFolder] != nil;
+    if (sel_isEqual(a, @selector(deleteFolder:)) || sel_isEqual(a, @selector(renameFolder:))) return [self selectedFolder] != nil;
+    if (sel_isEqual(a, @selector(editSmartFolder:))) return [_notes isSmartFolder:[self selectedFolder]];
+    if (sel_isEqual(a, @selector(sortFolderByDefault:)) || sel_isEqual(a, @selector(sortFolderByDateEdited:)) || sel_isEqual(a, @selector(sortFolderByDateCreated:)) ||
+        sel_isEqual(a, @selector(sortFolderByTitle:))) {
         SNFolder *f = [self selectedFolder];
         NSNumber *own = f ? [_notes sortOrderOfFolder:f] : nil;
-        NSNumber *mine = a == @selector(sortFolderByDateEdited:) ? @(SNSortByDateEdited) : a == @selector(sortFolderByDateCreated:) ? @(SNSortByDateCreated)
-                       : a == @selector(sortFolderByTitle:) ? @(SNSortByTitle) : nil;
+        NSNumber *mine = sel_isEqual(a, @selector(sortFolderByDateEdited:)) ? @(SNSortByDateEdited) : sel_isEqual(a, @selector(sortFolderByDateCreated:)) ? @(SNSortByDateCreated)
+                       : sel_isEqual(a, @selector(sortFolderByTitle:)) ? @(SNSortByTitle) : nil;
         item.state = f && (mine ? [own isEqual:mine] : !own) ? NSControlStateValueOn : NSControlStateValueOff;
         return f != nil;
     }
-    if (a == @selector(sync:) || a == @selector(resendAllNotes:)) return _notes.serviceRoot && !_notes.syncing;
-    if (a == @selector(copyNoteLink:)) return [self selectedNote] != nil;
-    if (a == @selector(collapseAllSections:) || a == @selector(expandAllSections:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
-    if (a == @selector(showAsList:) || a == @selector(showAsGallery:)) {
-        item.state = (a == @selector(showAsGallery:)) == !_gallery.view.isHidden ? NSControlStateValueOn : NSControlStateValueOff;
+    if (sel_isEqual(a, @selector(sync:)) || sel_isEqual(a, @selector(resendAllNotes:))) return _notes.serviceRoot && !_notes.syncing;
+    if (sel_isEqual(a, @selector(copyNoteLink:))) return [self selectedNote] != nil;
+    if (sel_isEqual(a, @selector(collapseAllSections:)) || sel_isEqual(a, @selector(expandAllSections:))) return _binding != nil && _textView.isEditable && ![self typingInTable];
+    if (sel_isEqual(a, @selector(showAsList:)) || sel_isEqual(a, @selector(showAsGallery:))) {
+        item.state = (sel_isEqual(a, @selector(showAsGallery:))) == !_gallery.view.isHidden ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;
     }
-    if (a == @selector(printNote:) || a == @selector(exportNoteAsPDF:)) return _editor != nil;
-    if (a == @selector(showVersionHistory:)) return [self selectedNote] != nil;
-    if (a == @selector(performFindPanelAction:) || a == @selector(centerSelectionInVisibleArea:)) return _binding != nil;
-    if (a == @selector(findAndReplace:)) return _binding != nil && _textView.isEditable;
-    if (a == @selector(addLink:)) return _binding != nil && _textView.isEditable;
-    if (a == @selector(attachFile:) || a == @selector(addTable:)) return _binding != nil && _textView.isEditable && ![self typingInTable];
-    if (a == @selector(moveCheckedToBottom:))
+    if (sel_isEqual(a, @selector(printNote:)) || sel_isEqual(a, @selector(exportNoteAsPDF:))) return _editor != nil;
+    if (sel_isEqual(a, @selector(showVersionHistory:))) return [self selectedNote] != nil;
+    if (sel_isEqual(a, @selector(performFindPanelAction:)) || sel_isEqual(a, @selector(centerSelectionInVisibleArea:))) return _binding != nil;
+    if (sel_isEqual(a, @selector(findAndReplace:))) return _binding != nil && _textView.isEditable;
+    if (sel_isEqual(a, @selector(addLink:))) return _binding != nil && _textView.isEditable;
+    if (sel_isEqual(a, @selector(attachFile:)) || sel_isEqual(a, @selector(addTable:))) return _binding != nil && _textView.isEditable && ![self typingInTable];
+    if (sel_isEqual(a, @selector(moveCheckedToBottom:)))
         return _binding != nil && _textView.isEditable && ![self typingInTable] && [_binding checklistRangeAt:_textView.selectedRange.location].location != NSNotFound;
-    if (a == @selector(toggleKeepCheckedAtBottom:)) {
+    if (sel_isEqual(a, @selector(toggleKeepCheckedAtBottom:))) {
         item.state = _notes.movesCheckedToBottom ? NSControlStateValueOn : NSControlStateValueOff;
         return YES;
     }
     SNSortOrder order = _notes.sortOrder;
-    if (a == @selector(sortByDateEdited:)) item.state = order == SNSortByDateEdited ? NSControlStateValueOn : NSControlStateValueOff;
-    if (a == @selector(sortByDateCreated:)) item.state = order == SNSortByDateCreated ? NSControlStateValueOn : NSControlStateValueOff;
-    if (a == @selector(sortByTitle:)) item.state = order == SNSortByTitle ? NSControlStateValueOn : NSControlStateValueOff;
-    if (a == @selector(toggleGroupByDate:)) {
+    if (sel_isEqual(a, @selector(sortByDateEdited:))) item.state = order == SNSortByDateEdited ? NSControlStateValueOn : NSControlStateValueOff;
+    if (sel_isEqual(a, @selector(sortByDateCreated:))) item.state = order == SNSortByDateCreated ? NSControlStateValueOn : NSControlStateValueOff;
+    if (sel_isEqual(a, @selector(sortByTitle:))) item.state = order == SNSortByTitle ? NSControlStateValueOn : NSControlStateValueOff;
+    if (sel_isEqual(a, @selector(toggleGroupByDate:))) {
         item.state = _notes.groupsByDate ? NSControlStateValueOn : NSControlStateValueOff;
         return order != SNSortByTitle;
     }
@@ -1530,19 +1531,19 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
                      NSStringFromSelector(@selector(toggleUnderline:)): SNUnderlineKey, NSStringFromSelector(@selector(toggleStrikethrough:)): SNStrikeKey };
     }
     NSString *name = NSStringFromSelector(a);
-    if (a == @selector(applyHighlightColor:) || a == @selector(applyTextColor:)) {
+    if (sel_isEqual(a, @selector(applyHighlightColor:)) || sel_isEqual(a, @selector(applyTextColor:))) {
         SNTextBinding *binding;
         NSTextView *tv = [self formattedTextView:&binding];
         BOOL enabled = binding != nil && tv.isEditable;
-        NSString *now = enabled ? [binding characterValueForKey:a == @selector(applyTextColor:) ? SNColorKey : SNHighlightKey inRange:tv.selectedRange] : nil;
+        NSString *now = enabled ? [binding characterValueForKey:sel_isEqual(a, @selector(applyTextColor:)) ? SNColorKey : SNHighlightKey inRange:tv.selectedRange] : nil;
         NSUInteger at = now ? [SNColorNames() indexOfObject:now] : NSNotFound;
         NSInteger tag = at == NSNotFound ? 0 : (NSInteger)at + 1;
         item.state = enabled && item.tag == tag ? NSControlStateValueOn : NSControlStateValueOff;
         *enabledOut = enabled;
         return YES;
     }
-    BOOL other = a == @selector(toggleChecked:) || a == @selector(increaseIndentation:) || a == @selector(decreaseIndentation:) ||
-                 a == @selector(toggleBlockQuote:);
+    BOOL other = sel_isEqual(a, @selector(toggleChecked:)) || sel_isEqual(a, @selector(increaseIndentation:)) || sel_isEqual(a, @selector(decreaseIndentation:)) ||
+                 sel_isEqual(a, @selector(toggleBlockQuote:));
     if (!styles[name] && !lists[name] && !inline_[name] && !other) return NO;
     BOOL enabled = _binding != nil && _textView.isEditable;
     if (inline_[name]) {
@@ -1557,12 +1558,12 @@ static const NSInteger SNMoveFolderToMenuTag = 7002;
     BOOL on = NO;
     if (styles[name]) on = [styles[name] length] ? [p[SNStyleKey] isEqual:styles[name]] : (!p[SNStyleKey] && !p[SNListKey]);
     else if (lists[name]) on = [p[SNListKey] isEqual:lists[name]];
-    else if (a == @selector(toggleChecked:)) {
+    else if (sel_isEqual(a, @selector(toggleChecked:))) {
         on = [p[SNCheckedKey] boolValue];
         enabled = enabled && [p[SNListKey] isEqual:SNListCheck];
     }
-    else if (a == @selector(decreaseIndentation:)) enabled = enabled && p[SNIndentKey] != nil;
-    else if (a == @selector(toggleBlockQuote:)) on = p[SNQuoteKey] != nil;
+    else if (sel_isEqual(a, @selector(decreaseIndentation:))) enabled = enabled && p[SNIndentKey] != nil;
+    else if (sel_isEqual(a, @selector(toggleBlockQuote:))) on = p[SNQuoteKey] != nil;
     item.state = on ? NSControlStateValueOn : NSControlStateValueOff;
     *enabledOut = enabled;
     return YES;

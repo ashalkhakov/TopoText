@@ -1,5 +1,6 @@
 #import "SNTableGrid+System.h"
 #import "SNNotes.h"
+#import <objc/runtime.h>
 
 static const unichar SNTableCharacter = 0xFFFC;
 /* A column's narrowest. */
@@ -378,10 +379,10 @@ static SNRect SNGridRect(CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
 
 /* Only while it can be typed in; the last row or column stays. */
 - (BOOL)canDo:(SEL)action {
-    if (action == @selector(deleteRow:)) return _editable && _table.rowCount > 1;
-    if (action == @selector(deleteColumn:)) return _editable && _table.columnCount > 1;
-    if (action == @selector(addRowAbove:) || action == @selector(addRowBelow:) || action == @selector(addColumnBefore:) ||
-        action == @selector(addColumnAfter:))
+    if (sel_isEqual(action, @selector(deleteRow:))) return _editable && _table.rowCount > 1;
+    if (sel_isEqual(action, @selector(deleteColumn:))) return _editable && _table.columnCount > 1;
+    if (sel_isEqual(action, @selector(addRowAbove:)) || sel_isEqual(action, @selector(addRowBelow:)) || sel_isEqual(action, @selector(addColumnBefore:)) ||
+        sel_isEqual(action, @selector(addColumnAfter:)))
         return _editable;
     return NO;
 }

@@ -1,5 +1,6 @@
 #import "SNTextView.h"
 #import "SNRichText.h"
+#import <objc/runtime.h>
 
 /* SN_TYPING_TIMES set: how long each key takes, told every 40 keys on
    stderr (a machine where typing feels slow tells where the time goes):
@@ -88,7 +89,7 @@ static NSString *SNTypingSummary(NSMutableArray<NSNumber *> *ms) {
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
-    if (item.action == @selector(findAndReplace:)) return self.isEditable;
+    if (sel_isEqual(item.action, @selector(findAndReplace:))) return self.isEditable;
     return [super validateMenuItem:item];
 }
 

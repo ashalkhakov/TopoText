@@ -3,6 +3,7 @@
 // Format > Table sends up the responder chain (a cell, then its grid).
 
 #import "SNTableGrid+System.h"
+#import <objc/runtime.h>
 
 @interface SNTableGrid (AppKit) <NSTextViewDelegate>
 @end
@@ -63,11 +64,11 @@
 
 /* Tab: the next cell; Shift-Tab: the one before. */
 - (BOOL)textView:(NSTextView *)tv doCommandBySelector:(SEL)command {
-    if (command == @selector(insertTab:)) {
+    if (sel_isEqual(command, @selector(insertTab:))) {
         [self moveFrom:tv by:1];
         return YES;
     }
-    if (command == @selector(insertBacktab:)) {
+    if (sel_isEqual(command, @selector(insertBacktab:))) {
         [self moveFrom:tv by:-1];
         return YES;
     }
