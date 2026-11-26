@@ -7,6 +7,7 @@
 #import "SNTableGrid+System.h"
 #import "SNUndoTextView.h"
 #import "SNMenuAction.h"
+#import <objc/runtime.h>
 
 @interface SNTableGrid (UIKit) <UITextViewDelegate, UIGestureRecognizerDelegate>
 @end
@@ -115,7 +116,7 @@
 
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
     for (NSArray *a in [SNTableGrid tableActions])
-        if (a.count && NSSelectorFromString(a[1]) == action) return [self canDo:action];
+        if (a.count && sel_isEqual(NSSelectorFromString(a[1]), action)) return [self canDo:action];
     return [super canPerformAction:action withSender:sender];
 }
 

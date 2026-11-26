@@ -8,6 +8,7 @@
 #import "SNPeersWindow.h"
 #import "SNUpdater.h"
 #import "SNSingleCopy.h"
+#import <objc/runtime.h>
 
 NSString * const SNServerDefaultsKey = @"SNServer";
 /* Whether where to keep the notes was chosen once (else Sync… opens). */
@@ -46,7 +47,7 @@ static NSString * const SNSyncChosenDefaultsKey = @"SNSyncChosen";
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
-    if (item.action == @selector(checkForUpdates:)) return _updater.canCheckForUpdates;
+    if (sel_isEqual(item.action, @selector(checkForUpdates:))) return _updater.canCheckForUpdates;
     return YES;
 }
 
